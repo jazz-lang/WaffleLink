@@ -8,7 +8,7 @@ func (v *Point) getX() int {
 }
 
 func main() int {
-	var x: Point
+	var x Point
 
-	var x_point: float32 = x.getX() as float32
+	var x_point float32 = x.getX() as float32
 }

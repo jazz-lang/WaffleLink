@@ -321,9 +321,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_var_type(&mut self) -> Result<Option<Box<Type>>, MsgWithPos> {
-        if self.token.is(TokenKind::Colon) {
-            self.advance_token()?;
-
+        if !self.token.is(TokenKind::Eq) {
             Ok(Some(box self.parse_type()?))
         } else {
             Ok(None)

@@ -594,6 +594,11 @@ impl<'a> TypeChecker<'a> {
                     .insert(expr.id, val_ty.get_subty().unwrap().clone());
                 return val_ty.get_subty().clone().unwrap().clone();
             }
+            ExprKind::SizeOf(_) => {
+                let ty = Type::new(pos,TypeKind::Basic("usize".to_owned()));
+                self.type_info.insert(expr.id,ty.clone());
+                return ty;
+            }
             _ => unimplemented!(),
         };
     }

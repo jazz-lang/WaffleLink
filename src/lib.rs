@@ -87,6 +87,7 @@ impl Context {
                                 eprintln!("{}\n", e);
                                 failed.store(true, std::sync::atomic::Ordering::Relaxed);
                                 fail_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                std::process::exit(-1);
                             }
                         }
                     }
