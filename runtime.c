@@ -1,3 +1,10 @@
+//
+
+// This runtime works if you run compiler like this: waffle file.waffle -lwaffle_runtime --aot
+// How to compile:
+// cc -shared runtime.c -lc -o libwaffle_runtime.so 
+// Then put shared library into /usr/local/lib and run ldconfig
+
 #include <stdlib.h>
 #include <stdio.h>
 
