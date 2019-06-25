@@ -3,16 +3,37 @@ use structopt::StructOpt;
 
 use waffle::codegen::Codegen;
 
+use cranelift::codegen::isa;
+use cranelift::codegen::settings::{self, Configurable};
+use cranelift_faerie::FaerieBackend;
+use cranelift_faerie::FaerieBuilder;
+use cranelift_faerie::FaerieProduct;
 use cranelift_simplejit::SimpleJITBackend;
-use cranelift_simplejit::SimpleJITBuilder;
-//#[global_allocator]
-//static A: mimallocator::Mimalloc = mimallocator::Mimalloc;
 
+use cranelift_simplejit::SimpleJITBuilder;
+use std::str::FromStr;
+use target_lexicon::triple;
 #[derive(StructOpt)]
 #[structopt(name = "waffle", about = "compiler")]
 pub struct Options {
     #[structopt(parse(from_os_str))]
     pub path: PathBuf,
+
+    #[structopt(short = "l", help = "Link with library")]
+    pub libraries: Vec<String>,
+    #[structopt(long = "aot", help = "Use AOT compilation instead of JIT compilation")]
+    pub aot: bool,
+    #[structopt(
+        short = "c",
+        help = "Only output object file if AOT enabled,otherwise code will be executed"
+    )]
+    pub compile_only: bool,
+    #[structopt(short = "o", help = "Set output filename")]
+    pub output: Option<String>,
+    #[structopt(long = "dump-ir", help = "Dump Cranelift IR to stdout")]
+    pub dump_ir: bool,
+    #[structopt(long = "target", help = "Set target triple")]
+    pub target: Option<String>,
 }
 
 fn main() {
@@ -38,18 +59,85 @@ fn main() {
         start.to(end).num_milliseconds()
     );
     let complex = checker.complex.clone();
+    if opts.dump_ir {
+        unsafe {
+            waffle::DUMP_IR = true;
+        }
+    }
+    if opts.aot {
+        let triple_ = if opts.target.is_some() {
+            opts.target.unwrap().clone()
+        } else {
+            "x86_64-unknown-unknown-elf".to_owned()
+        };
+        let mut flag_builder = settings::builder();
+        flag_builder.enable("is_pic").unwrap();
+        let t_ref = &triple_;
+        let isa_builder = isa::lookup(triple!(t_ref)).unwrap();
+        let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+        let mut codegen: Codegen<FaerieBackend> = Codegen::<FaerieBackend>::new(
+            ty_info,
+            FaerieBuilder::new(
+                isa,
+                "waffle".to_owned(),
+                cranelift_faerie::FaerieTrapCollection::Disabled,
+                cranelift_faerie::FaerieBuilder::default_libcall_names(),
+            )
+            .unwrap(),
+            context.merged.unwrap().ast.clone(),
+        );
+        codegen.complex_types = complex;
+        codegen.translate();
+        let product: FaerieProduct = codegen.module.finish();
 
-    let mut codegen: Codegen<SimpleJITBackend> = Codegen::<SimpleJITBackend>::new(
-        ty_info,
-        SimpleJITBuilder::new(),
-        context.merged.unwrap().ast.clone(),
-    );
-    codegen.complex_types = complex;
-    codegen.translate();
+        let file = std::fs::File::create("output.o").expect("faile");
+        product.write(file).unwrap();
 
-    let main_func = codegen.get_function("main").unwrap();
+        if !opts.compile_only {
+            linker(
+                "output.o",
+                &opts.libraries,
+                if opts.output.is_some() {
+                    opts.output.as_ref().unwrap()
+                } else {
+                    "output.exe"
+                },
+            );
+        }
+    } else {
+        let mut codegen: Codegen<SimpleJITBackend> = Codegen::<SimpleJITBackend>::new(
+            ty_info,
+            SimpleJITBuilder::new(),
+            context.merged.unwrap().ast.clone(),
+        );
+        codegen.complex_types = complex;
+        codegen.translate();
 
-    let fun: fn() -> isize = unsafe { std::mem::transmute(main_func) };
+        let func = codegen.get_function("main").unwrap();
 
-    println!("{}", fun());
+        let function: fn() -> isize = unsafe { std::mem::transmute(func) };
+
+        println!("Result: {}", function());
+    }
+}
+
+extern "C" {
+    fn system(s: *const i8) -> i32;
+}
+
+fn linker(filename: &str, libs: &Vec<String>, output: &str) {
+    let mut linker = String::from(&format!("clang {} -o {} ", filename, output));
+    for lib in libs.iter() {
+        linker.push_str(&format!(" -l{} ", lib));
+    }
+
+    let cstr = std::ffi::CString::new(linker);
+
+    unsafe {
+        let exit_code = system(cstr.unwrap().as_ptr());
+
+        if exit_code == -1 {
+            panic!("Linking failed");
+        }
+    }
 }

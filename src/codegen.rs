@@ -69,12 +69,16 @@ pub fn ty_size(ty: &CType) -> usize {
     }
 }
 
+pub static mut PTY: Type = types::INVALID;
+
 pub fn ty_to_cranelift(ty: &CType) -> Type {
     match &ty.kind {
         TypeKind::Pointer(_)
         | TypeKind::Structure(_, _)
         | TypeKind::Optional(_)
-        | TypeKind::Function(_, _) => types::I64,
+        | TypeKind::Function(_, _) => {
+            return unsafe { PTY };
+        }
         TypeKind::Basic(value) => {
             let value: &str = value;
             match value {
@@ -86,22 +90,7 @@ pub fn ty_to_cranelift(ty: &CType) -> Type {
                 "float32" => types::F32,
                 "float64" => types::F64,
                 "usize" | "isize" => {
-                    #[cfg(target_pointer_width = "32")]
-                    {
-                        return types::I32;
-                    }
-                    #[cfg(target_pointer_width = "64")]
-                    {
-                        return types::I64;
-                    }
-                    #[cfg(target_pointer_width = "16")]
-                    {
-                        return types::I16;
-                    }
-                    #[cfg(target_pointer_width = "8")]
-                    {
-                        return types::I8;
-                    }
+                    return unsafe { PTY };
                 }
                 x => panic!("{:?}", x),
             }
@@ -137,7 +126,9 @@ impl<T: Backend> Codegen<T> {
         ast: Vec<Element>,
     ) -> Codegen<T> {
         let module = Module::new(backend);
-
+        unsafe {
+            PTY = module.target_config().pointer_type();
+        }
         Self {
             builder_ctx: FunctionBuilderContext::new(),
             ctx: module.make_context(),
@@ -171,7 +162,14 @@ impl<T: Backend> Codegen<T> {
     }
     pub fn translate(&mut self) {
         let elements = self.elements.clone();
-
+        for elem in elements.iter() {
+            match elem {
+                Element::Func(func) => {
+                    self.func_info.insert(func.name.clone(), func.clone()); // TODO: Mangle function names
+                }
+                _ => ()
+            }
+        }
         for elem in elements.iter() {
             match elem {
                 Element::Func(func) => {
@@ -194,7 +192,7 @@ impl<T: Backend> Codegen<T> {
                             .func
                             .signature
                             .params
-                            .push(AbiParam::new(types::I64));
+                            .push(AbiParam::new(self.module.target_config().pointer_type()));
                     }
 
                     if func.this.is_some() {
@@ -202,7 +200,7 @@ impl<T: Backend> Codegen<T> {
                             .func
                             .signature
                             .params
-                            .push(AbiParam::new(types::I64));
+                            .push(AbiParam::new(self.module.target_config().pointer_type()));
                     }
 
                     let mut ebb_params = vec![];
@@ -222,6 +220,7 @@ impl<T: Backend> Codegen<T> {
                             Ok(_) => {}
                             Err(e) => {
                                 eprintln!("{}", e);
+                                std::process::exit(-1);
                             }
                         }
                     } else {
@@ -242,6 +241,7 @@ impl<T: Backend> Codegen<T> {
                             func_info: &self.func_info,
                             complex_types: &self.complex_types,
                             return_addr: None,
+                            terminated: false
                         };
                         if trans.get_ty(&func.returns).is_struct() {
                             trans.return_addr = Some(trans.builder.ebb_params(entry_ebb)[0]);
@@ -264,12 +264,15 @@ impl<T: Backend> Codegen<T> {
                                 wty: trans.get_ty(&param.1),
                                 on_stack: false,
                                 value: var,
+                                
                             };
                             trans.variables.insert(param.0.clone(), var);
                         }
                         trans.translate_stmt(func.body.as_ref().unwrap());
-                        println!("IR dump of `{}` function:", func.name);
-                        println!("{}", trans.builder.func.display(None));
+                        if unsafe { crate::DUMP_IR } {
+                            println!("IR dump of `{}` function:", func.name);
+                            println!("{}", trans.builder.func.display(None));
+                        }
                         trans.builder.finalize();
                     }
                     let linkage = if func.external {
@@ -277,7 +280,7 @@ impl<T: Backend> Codegen<T> {
                     } else {
                         Linkage::Export
                     };
-                    self.func_info.insert(func.name.clone(), func.clone()); // TODO: Mangle function names
+
                     let id = match self.module.declare_function(
                         &func.name,
                         linkage,
@@ -295,6 +298,7 @@ impl<T: Backend> Codegen<T> {
                             Ok(_) => {}
                             Err(e) => {
                                 eprintln!("{}", e);
+                                std::process::exit(-1);
                             }
                         }
                     }
@@ -320,6 +324,7 @@ pub struct FunctionTranslator<'a, T: Backend> {
     pub variables: HashMap<String, Var>,
     return_addr: Option<Value>,
     complex_types: &'a HashMap<String, CType>,
+    terminated: bool
 }
 
 impl<'a, T: Backend> FunctionTranslator<'a, T> {
@@ -359,9 +364,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                             "<=" => {
                                 return self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, x, y)
                             }
-                            "|" => return self.builder.ins().bor(x,y),
-                            "&" => return self.builder.ins().band(x,y),
-                            "^" => return self.builder.ins().bxor(x,y),
+                            "|" => return self.builder.ins().bor(x, y),
+                            "&" => return self.builder.ins().band(x, y),
+                            "^" => return self.builder.ins().bxor(x, y),
                             "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
                             "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
                             _ => unimplemented!(),
@@ -401,24 +406,32 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             return value;
         }
         if to.is_basic() && from.is_basic() {
-            if to.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize"]) && from.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize","int", "long", "byte", "short", "isize"]) {
+            if to.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize"])
+                && from.is_basic_names(&[
+                    "uint", "ulong", "ubyte", "ushort", "ulong", "usize", "int", "long", "byte",
+                    "short", "isize",
+                ])
+            {
                 if ty_size(to) < ty_size(from) {
-                    return self.builder.ins().ireduce(ty_to_cranelift(to),value);
+                    return self.builder.ins().ireduce(ty_to_cranelift(to), value);
                 } else if ty_size(to) == ty_size(from) {
                     return value;
-                
                 } else {
-                    return self.builder.ins().uextend(ty_to_cranelift(to),value);
+                    return self.builder.ins().uextend(ty_to_cranelift(to), value);
                 }
             }
-            if to.is_basic_names(&["int", "long", "byte", "short", "isize"]) && from.is_basic_names(&["int", "long", "byte", "short", "size","uint", "ulong", "ubyte", "ushort", "ulong", "usize"]) {
+            if to.is_basic_names(&["int", "long", "byte", "short", "isize"])
+                && from.is_basic_names(&[
+                    "int", "long", "byte", "short", "size", "uint", "ulong", "ubyte", "ushort",
+                    "ulong", "usize",
+                ])
+            {
                 if ty_size(to) < ty_size(from) {
-                    return self.builder.ins().ireduce(ty_to_cranelift(to),value);
+                    return self.builder.ins().ireduce(ty_to_cranelift(to), value);
                 } else if ty_size(to) == ty_size(from) {
                     return value;
-                
                 } else {
-                    return self.builder.ins().sextend(ty_to_cranelift(to),value);
+                    return self.builder.ins().sextend(ty_to_cranelift(to), value);
                 }
             }
 
@@ -496,7 +509,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 );
             }
 
-            ExprKind::Bool(val) => (self.builder.ins().bconst(types::B1,*val),None),
+            ExprKind::Bool(val) => (self.builder.ins().bconst(types::B1, *val), None),
             ExprKind::Conv(val, _) => {
                 let output = self.get_ty(&self.ty_info.get(&expr.id).unwrap().clone());
                 let from = self.get_ty(&self.ty_info.get(&val.id).unwrap().clone());
@@ -519,6 +532,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 let local_id = self.module.declare_data_in_func(id, &mut self.builder.func);
                 let pointer = self.module.target_config().pointer_type();
+                self.data_ctx.clear();
                 return (self.builder.ins().symbol_value(pointer, local_id), None);
             }
             ExprKind::Deref(val) => {
@@ -539,12 +553,17 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     let mut return_addr = None;
                     let fun = self.func_info.get(name).unwrap().clone();
                     if (return_ty.is_array() || return_ty.is_struct()) & !fun.external {
-                        sig.params.push(AbiParam::new(types::I64));
+                        sig.params
+                            .push(AbiParam::new(self.module.target_config().pointer_type()));
                         let slot = self.builder.create_stack_slot(StackSlotData::new(
                             StackSlotKind::ExplicitSlot,
                             ty_size(&return_ty) as u32,
                         ));
-                        let addr = self.builder.ins().stack_addr(types::I64, slot, 0);
+                        let addr = self.builder.ins().stack_addr(
+                            self.module.target_config().pointer_type(),
+                            slot,
+                            0,
+                        );
 
                         args.push(addr);
                         return_addr = Some(addr);
@@ -726,6 +745,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                         .ins()
                         .store(MemFlags::new(), val_.0, self.return_addr.unwrap(), 0);
                     self.builder.ins().return_(&[]);
+                    self.terminated = true;
                     return;
                 }
                 if val.is_none() {
@@ -734,25 +754,46 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     let val = self.translate_expr(val.as_ref().unwrap());
                     self.builder.ins().return_(&[val.0]);
                 }
+                self.terminated = true;
             }
-            StmtKind::If(cond,then,otherwise) => {
+            StmtKind::If(cond, then, otherwise) => {
                 let cond_value = self.translate_expr(cond).0;
-
                 let else_block = self.builder.create_ebb();
                 let merge_block = self.builder.create_ebb();
 
-                self.builder.ins().brz(cond_value,else_block,&[]);
-                self.translate_stmt(then);
-                self.builder.ins().jump(merge_block,&[]);
+                self.builder.ins().brz(cond_value, else_block, &[]);
+                if let StmtKind::Block(stmts) = &**then {
+                    for stmt in stmts.iter() {
+                        self.translate_stmt(then);
+                    }
+                } else {
+                    self.translate_stmt(then);
+                }
+                if !self.terminated {
+                    self.builder.ins().jump(merge_block, &[]);
+                }
+                self.terminated = false;
                 self.builder.switch_to_block(else_block);
                 self.builder.seal_block(else_block);
                 if otherwise.is_some() {
-                    self.translate_stmt(otherwise.as_ref().unwrap());
+                    if let StmtKind::Block(stmts) = &**otherwise.as_ref().unwrap() {
+                        for stmt in stmts.iter() {
+                            self.translate_stmt(stmt);
+                        }
+                    } else {
+                        self.translate_stmt(otherwise.as_ref().unwrap());
+                    }
                 }
-                self.builder.ins().jump(merge_block,&[]);
-                self.builder.switch_to_block(merge_block);
 
+                if !self.terminated {
+                    self.builder.ins().jump(merge_block, &[]);
+                    
+                    
+                }
+                self.builder.switch_to_block(merge_block);
                 self.builder.seal_block(merge_block);
+                self.terminated = false;
+                
             }
             StmtKind::VarDecl(name, ty, val) => {
                 let ty = if ty.is_some() {
@@ -763,14 +804,19 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 };
 
                 let variable = Variable::new(self.variables.len());
-                self.builder.declare_var(variable, ty_to_cranelift(&self.get_ty(&ty)));
+                self.builder
+                    .declare_var(variable, ty_to_cranelift(&self.get_ty(&ty)));
                 let value = if val.is_none() {
                     let slot = self.builder.create_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
                         ty_size(&ty) as u32,
                     ));
                     if ty.is_struct() || ty.is_array() {
-                        self.builder.ins().stack_addr(types::I64, slot, 0)
+                        self.builder.ins().stack_addr(
+                            self.module.target_config().pointer_type(),
+                            slot,
+                            0,
+                        )
                     } else {
                         self.builder.ins().stack_load(ty_to_cranelift(&ty), slot, 0)
                     }
@@ -790,19 +836,19 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 self.variables.insert(name.to_owned(), var);
             }
-            StmtKind::While(cond,body) => {
+            StmtKind::While(cond, body) => {
                 let header_ebb = self.builder.create_ebb();
                 let exit_ebb = self.builder.create_ebb();
 
-                self.builder.ins().jump(header_ebb,&[]);
+                self.builder.ins().jump(header_ebb, &[]);
 
                 self.builder.switch_to_block(header_ebb);
 
                 let cond_val = self.translate_expr(cond).0;
 
-                self.builder.ins().brz(cond_val,exit_ebb,&[]);
+                self.builder.ins().brz(cond_val, exit_ebb, &[]);
                 self.translate_stmt(body);
-                self.builder.ins().jump(header_ebb,&[]);
+                self.builder.ins().jump(header_ebb, &[]);
                 self.builder.switch_to_block(exit_ebb);
                 self.builder.seal_block(header_ebb);
                 self.builder.seal_block(exit_ebb);

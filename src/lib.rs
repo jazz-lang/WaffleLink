@@ -2,6 +2,8 @@
 #![feature(const_fn)]
 #![feature(const_transmute)]
 
+pub static mut DUMP_IR: bool = false;
+
 #[macro_use]
 pub mod macros;
 pub mod ast;
