@@ -4,6 +4,7 @@ use super::ast::*;
 use colored::Colorize;
 use std::collections::HashMap;
 
+#[derive(Clone)]
 pub struct CStructure {
     pub name: String,
     pub fields: Vec<(String, Type)>,
@@ -219,7 +220,8 @@ impl<'a> TypeChecker<'a> {
                                 .map(|(name, ty)| (name.clone(), box self.infer_type(&ty.clone())))
                                 .collect::<Vec<_>>();
                             func.this = Some((this.0.clone(), box this_ty.clone()));
-                            self.methods.insert(this_ty.get_pointee().unwrap().clone(),vec![func]);
+                            self.methods
+                                .insert(this_ty.get_pointee().unwrap().clone(), vec![func]);
                         }
                     } else {
                         if self.functions.contains_key(&func.name) {
@@ -255,7 +257,7 @@ impl<'a> TypeChecker<'a> {
             self.locals.clear();
         }
 
-        for (_,methods) in self.methods.clone().iter() {
+        for (_, methods) in self.methods.clone().iter() {
             for method in methods.iter() {
                 if method.body.is_none() {
                     continue;
@@ -263,15 +265,18 @@ impl<'a> TypeChecker<'a> {
 
                 self.locals.clear();
                 for param in method.parameters.iter() {
-                    self.locals.insert(param.0.clone(),*param.1.clone());
+                    self.locals.insert(param.0.clone(), *param.1.clone());
                 }
                 self.current_func = Some(method.clone());
-                self.locals.insert(method.this.as_ref().unwrap().0.clone(),*method.this.as_ref().unwrap().1.clone());
+                self.locals.insert(
+                    method.this.as_ref().unwrap().0.clone(),
+                    *method.this.as_ref().unwrap().1.clone(),
+                );
 
                 self.check_stmt(method.body.as_ref().unwrap());
                 self.locals.clear();
             }
-        } 
+        }
 
         /*for elem in elements.iter() {
             match elem {
@@ -338,6 +343,13 @@ impl<'a> TypeChecker<'a> {
                 self.type_info.insert(expr.id, ty.clone());
                 return ty;
             }
+            ExprKind::String(_) => {
+                let char_ty = Type::new(pos.clone(), TypeKind::Basic("char".to_owned()));
+                let ty = Type::new(pos.clone(), TypeKind::Pointer(box char_ty));
+                self.type_info.insert(expr.id, ty.clone());
+
+                return ty;
+            }
             ExprKind::Array(values) => {
                 if values.len() == 0 {
                     error!("Cannot infer array type", pos);
@@ -377,6 +389,15 @@ impl<'a> TypeChecker<'a> {
                 let ty2 = self.check_expr(rhs);
 
                 if ty1.is_basic() && ty2.is_basic() {
+                    let op: &str = op;
+                    match op {
+                        x if ["==", "!=", ">", "<", ">=", "<="].contains(&x) => {
+                            let ty = Type::new(pos.clone(), TypeKind::Basic("bool".to_owned()));
+                            self.type_info.insert(expr.id, ty.clone());
+                            return ty;
+                        }
+                        _ => {}
+                    }
                     if ty1 != ty2 {
                         error!(
                             &format!(
@@ -404,10 +425,10 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            ExprKind::Conv(from,to) => {
+            ExprKind::Conv(from, to) => {
                 self.check_expr(from);
                 let ty = self.infer_type(to);
-                self.type_info.insert(expr.id,ty.clone());
+                self.type_info.insert(expr.id, ty.clone());
 
                 return ty;
             }
@@ -595,9 +616,33 @@ impl<'a> TypeChecker<'a> {
                 return val_ty.get_subty().clone().unwrap().clone();
             }
             ExprKind::SizeOf(_) => {
-                let ty = Type::new(pos,TypeKind::Basic("usize".to_owned()));
-                self.type_info.insert(expr.id,ty.clone());
+                let ty = Type::new(pos, TypeKind::Basic("usize".to_owned()));
+                self.type_info.insert(expr.id, ty.clone());
                 return ty;
+            }
+            ExprKind::StructConstruct(name, fields) => {
+                let ty: CStructure = self.structures.get(name).unwrap().clone();
+                assert!(ty.fields.len() == fields.len());
+                for (i, field) in fields.iter().enumerate() {
+                    let field: (String, Box<Expr>) = field.clone();
+                    if field.0 != ty.fields[i].0 {
+                        unimplemented!() // TODO: Print error
+                    }
+                    let vty = self.check_expr(&field.1);
+                    if vty != ty.fields[i].1 {
+                        error!(
+                            &format!(
+                                "field `{}` expected `{}` type,found `{}`",
+                                field.0, ty.fields[i].1, vty
+                            ),
+                            pos
+                        );
+                    }
+                }
+
+                self.type_info.insert(expr.id, ty.ty.clone());
+
+                return ty.ty.clone();
             }
             _ => unimplemented!(),
         };

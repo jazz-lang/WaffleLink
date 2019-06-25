@@ -110,7 +110,6 @@ impl<'a> Parser<'a> {
                 }
             };
 
-            self.advance_token()?;
             if modifiers.contains(modifier) {
                 return Err(MsgWithPos::new(
                     self.lexer.path().to_string(),
@@ -745,7 +744,9 @@ impl<'a> Parser<'a> {
 
         let ty = self.parse_type()?;
         let body = if modifiers.contains("extern") || modifiers.contains("internal") {
-            self.expect_semicolon()?;
+            if self.token.is(TokenKind::Semicolon) {
+                self.expect_semicolon()?;
+            }
             None
         } else {
             self.parse_function_block()?

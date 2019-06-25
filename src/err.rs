@@ -391,8 +391,11 @@ impl MsgWithPos {
                 "error".red(),
                 self.pos,
                 self.msg.message(),
-                &self.src.lines().nth(self.pos.line as usize - 1).unwrap_or("")
-                    [self.pos.column as usize - 1..]
+                &self
+                    .src
+                    .lines()
+                    .nth(self.pos.line as usize - 1)
+                    .unwrap_or("")[self.pos.column as usize - 1..]
             )
         }
     }

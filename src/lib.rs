@@ -5,6 +5,7 @@
 #[macro_use]
 pub mod macros;
 pub mod ast;
+pub mod codegen;
 pub mod err;
 pub mod lexer;
 pub mod parser;
@@ -87,7 +88,6 @@ impl Context {
                                 eprintln!("{}\n", e);
                                 failed.store(true, std::sync::atomic::Ordering::Relaxed);
                                 fail_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                std::process::exit(-1);
                             }
                         }
                     }
