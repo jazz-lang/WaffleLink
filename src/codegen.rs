@@ -4,7 +4,7 @@ use cranelift_module::*;
 use cranelift_simplejit::*;
 
 use crate::ast::{
-    Constant, Expr, ExprKind, Function, Interface, Location, StmtKind, Struct, TypeKind,Element
+    Constant, Element, Expr, ExprKind, Function, Interface, Location, StmtKind, Struct, TypeKind,
 };
 
 #[derive(Clone)]
@@ -103,11 +103,18 @@ pub fn ty_to_cranelift(ty: &CType) -> Type {
                         return types::I8;
                     }
                 }
-                _ => unreachable!(),
+                x => panic!("{:?}", x),
             }
         }
         TypeKind::Array(_, _) => types::I64,
-        _ => unreachable!(),
+        x => panic!("{:?}", x),
+    }
+}
+
+fn retrieve_from_load(expr: &Expr) -> &Expr {
+    match &expr.kind {
+        ExprKind::Deref(val) => val,
+        _ => expr,
     }
 }
 
@@ -118,11 +125,17 @@ pub struct Codegen<T: Backend> {
     data_ctx: DataContext,
     ty_info: HashMap<usize, CType>,
     elements: Vec<Element>,
-    func_info: HashMap<String,Function>
+    func_info: HashMap<String, Function>,
+    functions: HashMap<String, FuncId>,
+    pub complex_types: HashMap<String, CType>,
 }
 
 impl<T: Backend> Codegen<T> {
-    pub fn new(ty_info: HashMap<usize, CType>, backend: T::Builder,ast: Vec<Element>) -> Codegen<T> {
+    pub fn new(
+        ty_info: HashMap<usize, CType>,
+        backend: T::Builder,
+        ast: Vec<Element>,
+    ) -> Codegen<T> {
         let module = Module::new(backend);
 
         Self {
@@ -132,49 +145,92 @@ impl<T: Backend> Codegen<T> {
             module,
             ty_info,
             elements: ast,
-            func_info: HashMap::new()
+            func_info: HashMap::new(),
+            functions: HashMap::new(),
+            complex_types: HashMap::new(),
         }
     }
 
+    pub fn get_function(&mut self, name: &str) -> Option<T::FinalizedFunction> {
+        match self.functions.get(name) {
+            Some(id) => Some(self.module.get_finalized_function(*id)),
+            None => None,
+        }
+    }
+
+    fn get_ty(&self, ty: &CType) -> CType {
+        if ty.is_basic() {
+            if let TypeKind::Basic(name) = &ty.kind {
+                if self.complex_types.contains_key(name) {
+                    return self.complex_types.get(name).unwrap().clone();
+                }
+            }
+        }
+
+        return ty.clone();
+    }
     pub fn translate(&mut self) {
         let elements = self.elements.clone();
 
         for elem in elements.iter() {
             match elem {
                 Element::Func(func) => {
-                    
-                    if !func.returns.is_struct() && !func.returns.is_array() && !func.returns.is_void() {
-                        self.ctx.func.signature.returns.push(AbiParam::new(ty_to_cranelift(&func.returns)));
+                    if !self.get_ty(&func.returns).is_struct()
+                        && !self.get_ty(&func.returns).is_array()
+                        && !func.returns.is_void()
+                        || func.external
+                    {
+                        if !func.returns.is_void() {
+                            self.ctx
+                                .func
+                                .signature
+                                .returns
+                                .push(AbiParam::new(ty_to_cranelift(&self.get_ty(&func.returns))));
+                        }
                     } else if func.returns.is_void() {
                         //self.ctx.func.signature.params.push(AbiParam::new(types::I32));
                     } else {
-                        self.ctx.func.signature.params.push(AbiParam::new(types::I64));
+                        self.ctx
+                            .func
+                            .signature
+                            .params
+                            .push(AbiParam::new(types::I64));
                     }
 
                     if func.this.is_some() {
-                        self.ctx.func.signature.params.push(AbiParam::new(types::I64));
+                        self.ctx
+                            .func
+                            .signature
+                            .params
+                            .push(AbiParam::new(types::I64));
                     }
 
+                    let mut ebb_params = vec![];
                     for p in func.parameters.iter() {
-                        self.ctx.func.signature.params.push(AbiParam::new(ty_to_cranelift(&p.1)));
+                        let ty = ty_to_cranelift(&self.get_ty(&p.1));
+                        ebb_params.push(ty);
+                        self.ctx.func.signature.params.push(AbiParam::new(ty));
                     }
 
-
-                    
                     if func.external || func.internal || func.body.is_none() {
-                        let maybe_err = self.module.declare_function(&func.name,Linkage::Import,&self.ctx.func.signature);
+                        let maybe_err = self.module.declare_function(
+                            &func.name,
+                            Linkage::Import,
+                            &self.ctx.func.signature,
+                        );
                         match maybe_err {
-                            Ok(_) => {},
+                            Ok(_) => {}
                             Err(e) => {
-                                eprintln!("{}",e);
-                            } 
+                                eprintln!("{}", e);
+                            }
                         }
                     } else {
-
-                        let mut builder = FunctionBuilder::new(&mut self.ctx.func,&mut self.builder_ctx);
+                        let mut builder =
+                            FunctionBuilder::new(&mut self.ctx.func, &mut self.builder_ctx);
 
                         let entry_ebb = builder.create_ebb();
                         builder.switch_to_block(entry_ebb);
+                        builder.append_ebb_params_for_function_params(entry_ebb);
                         builder.seal_block(entry_ebb);
 
                         let mut trans = FunctionTranslator {
@@ -183,38 +239,231 @@ impl<T: Backend> Codegen<T> {
                             builder,
                             data_ctx: &mut self.data_ctx,
                             variables: HashMap::new(),
-                            func_info: &self.func_info
+                            func_info: &self.func_info,
+                            complex_types: &self.complex_types,
+                            return_addr: None,
                         };
+                        if trans.get_ty(&func.returns).is_struct() {
+                            trans.return_addr = Some(trans.builder.ebb_params(entry_ebb)[0]);
+                        }
+                        for (i, param) in func.parameters.iter().enumerate() {
+                            let i = if trans.get_ty(&func.returns).is_struct() {
+                                i + 1
+                            } else {
+                                i
+                            };
+                            let val = trans.builder.ebb_params(entry_ebb)[i];
+                            let var = Variable::new(trans.variables.len());
+                            trans
+                                .builder
+                                .declare_var(var, ty_to_cranelift(&trans.get_ty(&param.1)));
+                            trans.builder.def_var(var, val);
+                            let var = Var {
+                                name: param.0.clone(),
+                                ty: ebb_params[i],
+                                wty: trans.get_ty(&param.1),
+                                on_stack: false,
+                                value: var,
+                            };
+                            trans.variables.insert(param.0.clone(), var);
+                        }
                         trans.translate_stmt(func.body.as_ref().unwrap());
-
+                        println!("IR dump of `{}` function:", func.name);
+                        println!("{}", trans.builder.func.display(None));
                         trans.builder.finalize();
-                        println!("IR dump of `{}` function:",func.name);
-                        println!("{}",trans.builder.func.display(None));
                     }
-
-                    self.func_info.insert(func.name.clone(),func.clone()); // TODO: Mangle function names
-
+                    let linkage = if func.external {
+                        Linkage::Import
+                    } else {
+                        Linkage::Export
+                    };
+                    self.func_info.insert(func.name.clone(), func.clone()); // TODO: Mangle function names
+                    let id = match self.module.declare_function(
+                        &func.name,
+                        linkage,
+                        &self.ctx.func.signature,
+                    ) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            std::process::exit(-1);
+                        }
+                    };
+                    if !func.external {
+                        let error = self.module.define_function(id, &mut self.ctx);
+                        match error {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("{}", e);
+                            }
+                        }
+                    }
+                    self.functions.insert(func.name.clone(), id);
+                    self.module.clear_context(&mut self.ctx);
                 }
-                _ => {/* TODO */}
+                _ => { /* TODO */ }
             }
         }
+
+        self.module.finalize_definitions();
     }
 }
 
 use std::collections::HashMap;
 
-
-
 pub struct FunctionTranslator<'a, T: Backend> {
-    pub ty_info: HashMap<usize,CType>,
+    pub ty_info: HashMap<usize, CType>,
     pub module: &'a mut Module<T>,
     pub data_ctx: &'a mut DataContext,
-    pub func_info: &'a HashMap<String,Function>,
+    pub func_info: &'a HashMap<String, Function>,
     pub builder: FunctionBuilder<'a>,
     pub variables: HashMap<String, Var>,
+    return_addr: Option<Value>,
+    complex_types: &'a HashMap<String, CType>,
 }
 
 impl<'a, T: Backend> FunctionTranslator<'a, T> {
+    pub(crate) fn translate_binop(&mut self, op: &str, lhs: &Expr, rhs: &Expr) -> Value {
+        let ty = self.ty_info.get(&lhs.id).unwrap().clone();
+        let ty2 = self.ty_info.get(&rhs.id).unwrap().clone();
+        let x = self.translate_expr(lhs).0;
+        let y = self.translate_expr(rhs).0;
+        assert!(ty.is_basic() || ty.is_pointer());
+        match &ty.kind {
+            TypeKind::Basic(name) => {
+                let name: &str = name;
+                match name {
+                    n if [
+                        "int", "uint", "ulong", "long", "short", "ushort", "ubyte", "byte",
+                        "usize", "isize",
+                    ]
+                    .contains(&n) =>
+                    {
+                        assert!(ty2.is_basic());
+                        match op {
+                            "+" => return self.builder.ins().iadd(x, y),
+                            "-" => return self.builder.ins().isub(x, y),
+                            "/" => return self.builder.ins().sdiv(x, y),
+                            "*" => return self.builder.ins().imul(x, y),
+                            ">>" => return self.builder.ins().sshr(x, y),
+                            "<<" => return self.builder.ins().ishl(x, y),
+                            ">" => return self.builder.ins().icmp(IntCC::SignedGreaterThan, x, y),
+                            "<" => return self.builder.ins().icmp(IntCC::SignedLessThan, x, y),
+                            ">=" => {
+                                return self.builder.ins().icmp(
+                                    IntCC::SignedGreaterThanOrEqual,
+                                    x,
+                                    y,
+                                )
+                            }
+                            "<=" => {
+                                return self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, x, y)
+                            }
+                            "|" => return self.builder.ins().bor(x,y),
+                            "&" => return self.builder.ins().band(x,y),
+                            "^" => return self.builder.ins().bxor(x,y),
+                            "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
+                            "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
+                            _ => unimplemented!(),
+                        }
+                    }
+                    n if n == "bool" => match op {
+                        "||" => return self.builder.ins().bor(x, y),
+                        "&&" => return self.builder.ins().band(x, y),
+                        "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
+                        "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
+                        _ => unreachable!(),
+                    },
+
+                    n if ["float32", "float64"].contains(&n) => match op {
+                        "+" => return self.builder.ins().fadd(x, y),
+                        "-" => return self.builder.ins().fsub(x, y),
+                        "/" => return self.builder.ins().fdiv(x, y),
+                        "*" => return self.builder.ins().fmul(x, y),
+                        ">" => return self.builder.ins().fcmp(FloatCC::GreaterThan, x, y),
+                        "<" => return self.builder.ins().fcmp(FloatCC::LessThan, x, y),
+                        ">=" => return self.builder.ins().fcmp(FloatCC::GreaterThanOrEqual, x, y),
+                        "<=" => return self.builder.ins().fcmp(FloatCC::LessThanOrEqual, x, y),
+                        "==" => return self.builder.ins().fcmp(FloatCC::Equal, x, y),
+                        "!=" => return self.builder.ins().fcmp(FloatCC::NotEqual, x, y),
+                        _ => unimplemented!(),
+                    },
+
+                    _ => unreachable!(),
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn translate_cast(&mut self, value: Value, from: &CType, to: &CType) -> Value {
+        if to == from {
+            return value;
+        }
+        if to.is_basic() && from.is_basic() {
+            if to.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize"]) && from.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize","int", "long", "byte", "short", "isize"]) {
+                if ty_size(to) < ty_size(from) {
+                    return self.builder.ins().ireduce(ty_to_cranelift(to),value);
+                } else if ty_size(to) == ty_size(from) {
+                    return value;
+                
+                } else {
+                    return self.builder.ins().uextend(ty_to_cranelift(to),value);
+                }
+            }
+            if to.is_basic_names(&["int", "long", "byte", "short", "isize"]) && from.is_basic_names(&["int", "long", "byte", "short", "size","uint", "ulong", "ubyte", "ushort", "ulong", "usize"]) {
+                if ty_size(to) < ty_size(from) {
+                    return self.builder.ins().ireduce(ty_to_cranelift(to),value);
+                } else if ty_size(to) == ty_size(from) {
+                    return value;
+                
+                } else {
+                    return self.builder.ins().sextend(ty_to_cranelift(to),value);
+                }
+            }
+
+            if to.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize"])
+                && from.is_basic_names(&["float32", "float64"])
+            {
+                return self.builder.ins().fcvt_to_uint(ty_to_cranelift(to), value);
+            }
+            if to.is_basic_names(&["int", "long", "byte", "short", "long", "isize"])
+                && from.is_basic_names(&["float32", "float64"])
+            {
+                return self.builder.ins().fcvt_to_sint(ty_to_cranelift(to), value);
+            }
+
+            if to.is_basic_name("float32") && from.is_basic_name("float64") {
+                return self.builder.ins().fpromote(types::F64, value);
+            }
+
+            if to.is_basic_name("float64") && from.is_basic_name("float32") {
+                return self.builder.ins().fdemote(types::F32, value);
+            }
+
+            if from.is_basic_names(&["uint", "ulong", "ubyte", "ushort", "ulong", "usize"])
+                && to.is_basic_names(&["float32", "float64"])
+            {
+                return self
+                    .builder
+                    .ins()
+                    .fcvt_from_uint(ty_to_cranelift(to), value);
+            }
+            if from.is_basic_names(&["int", "long", "byte", "short", "long", "isize"])
+                && to.is_basic_names(&["float32", "float64"])
+            {
+                return self
+                    .builder
+                    .ins()
+                    .fcvt_from_sint(ty_to_cranelift(to), value);
+            } else {
+                return self.builder.ins().bitcast(ty_to_cranelift(to), value);
+            }
+        } else {
+            return self.builder.ins().bitcast(ty_to_cranelift(to), value);
+        }
+    }
+
     pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Variable>) {
         match &expr.kind {
             ExprKind::Integer(value, suffix) => {
@@ -246,6 +495,16 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     None,
                 );
             }
+
+            ExprKind::Bool(val) => (self.builder.ins().bconst(types::B1,*val),None),
+            ExprKind::Conv(val, _) => {
+                let output = self.get_ty(&self.ty_info.get(&expr.id).unwrap().clone());
+                let from = self.get_ty(&self.ty_info.get(&val.id).unwrap().clone());
+                let value = self.translate_expr(val);
+
+                (self.translate_cast(value.0, &from, &output), None)
+            }
+            ExprKind::Binary(op, lhs, rhs) => return (self.translate_binop(op, lhs, rhs), None),
             ExprKind::String(value) => {
                 self.data_ctx
                     .define(value.clone().into_boxed_str().into_boxed_bytes());
@@ -258,9 +517,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.module.define_data(id, &self.data_ctx).unwrap();
                 self.module.finalize_definitions();
 
-                let local_id = self
-                    .module
-                    .declare_data_in_func(id, &mut self.builder.func);
+                let local_id = self.module.declare_data_in_func(id, &mut self.builder.func);
                 let pointer = self.module.target_config().pointer_type();
                 return (self.builder.ins().symbol_value(pointer, local_id), None);
             }
@@ -273,58 +530,62 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     value.1,
                 );
             }
-            ExprKind::Call(name,this,parameters) => {
+            ExprKind::Call(name, this, parameters) => {
                 if this.is_none() {
                     let mut sig = self.module.make_signature();
 
                     let return_ty = self.ty_info.get(&expr.id).unwrap().clone();
                     let mut args = Vec::new();
                     let mut return_addr = None;
-                    
-                    if return_ty.is_array() || return_ty.is_struct() {
+                    let fun = self.func_info.get(name).unwrap().clone();
+                    if (return_ty.is_array() || return_ty.is_struct()) & !fun.external {
                         sig.params.push(AbiParam::new(types::I64));
-                        let slot = self.builder.create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, ty_size(&return_ty) as u32));
-                        let addr = self.builder.ins().stack_addr(types::I64,slot,0);
+                        let slot = self.builder.create_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            ty_size(&return_ty) as u32,
+                        ));
+                        let addr = self.builder.ins().stack_addr(types::I64, slot, 0);
 
                         args.push(addr);
                         return_addr = Some(addr);
                     } else if !return_ty.is_void() {
                         sig.returns.push(AbiParam::new(ty_to_cranelift(&return_ty)));
-                    } else {}
+                    } else {
+                    }
 
-                    let fun = self.func_info.get(name).unwrap().clone();
                     for param in fun.parameters.iter() {
-                        let ty = ty_to_cranelift(&param.1);
+                        let ty = ty_to_cranelift(&self.get_ty(&param.1));
                         sig.params.push(AbiParam::new(ty));
                     }
 
-                    let callee = self
+                    let callee = self.module.declare_function(&name, Linkage::Import, &sig);
+                    let callee = match callee {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            std::process::exit(-1);
+                        }
+                    };
+                    let local_callee = self
                         .module
-                        .declare_function(&name,Linkage::Import,&sig)
-                        .expect("problem declaring function");
-                    let local_callee = self.module
                         .declare_func_in_func(callee, &mut self.builder.func);
-                    
 
-                    
-                    
                     for arg in parameters.iter() {
                         args.push(self.translate_expr(arg).0);
                     }
-                    let call = self.builder.ins().call(local_callee,&args);
+                    let call = self.builder.ins().call(local_callee, &args);
 
                     let return_value = if return_ty.is_struct() || return_ty.is_array() {
                         return_addr.unwrap()
                     } else {
                         if return_ty.is_void() {
-                            self.builder.ins().iconst(types::I32,0)
+                            self.builder.ins().iconst(types::I32, 0)
                         } else {
                             self.builder.inst_results(call)[0]
                         }
-                        
                     };
 
-                    (return_value,None)
+                    (return_value, None)
                 } else {
                     unimplemented!()
                 }
@@ -334,10 +595,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     let var: &Var = self.variables.get(name).unwrap();
                     if var.on_stack {
                         let value = self.builder.use_var(var.value);
-                        return (
-                            self.builder.ins().load(var.ty, MemFlags::new(), value, 0),
-                            None,
-                        );
+                        return (value, None);
                     } else {
                         return (self.builder.use_var(var.value), Some(var.value));
                     }
@@ -345,54 +603,51 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     unimplemented!()
                 }
             }
-            ExprKind::AddrOf(val) => {
-                let value = self.translate_expr(val);
-                let ty = self.ty_info.get(&val.id).unwrap();
-                let slot = self.builder.create_stack_slot(StackSlotData::new(
-                    StackSlotKind::ExplicitSlot,
-                    ty_size(ty) as u32,
-                ));
-                self.builder.ins().stack_store(value.0, slot, 0);
-                let addr = self.builder.ins().stack_addr(types::I64, slot, 0);
-                return (addr, None);
-            }
+            ExprKind::AddrOf(val) => self.translate_expr(retrieve_from_load(val)),
             ExprKind::Assign(to, from) => {
                 let to_ty = self.ty_info.get(&to.id).unwrap().clone();
                 //let from_ty = self.ty_info.get(&from.id).unwrap().clone();
-                let lhs = self.translate_expr(to);
+                //let lhs = self.translate_expr(to);
                 let rhs = self.translate_expr(from);
 
-                if to_ty.is_pointer() || to_ty.is_basic() {
-                    self.builder.def_var(lhs.1.unwrap(), rhs.0);
-                } else {
-                    match &to.kind {
-                        ExprKind::Member(object, field) => {
-                            let mut offset = 0;
-                            let object_val = self.translate_expr(object);
-                            let ty = self.ty_info.get(&object.id).unwrap().clone();
-                            if ty.is_struct() {
-                                let x = if let TypeKind::Structure(_, fields) = &ty.kind {
-                                    fields.clone()
-                                } else {
-                                    unreachable!()
-                                };
-
-                                for field_ in x.iter() {
-                                    if &field_.0 != field {
-                                        offset += ty_size(&field_.1);
-                                    }
+                match &to.kind {
+                    ExprKind::Member(object, field) => {
+                        let mut offset = 0;
+                        let object_val = self.translate_expr(object);
+                        let ty = self.ty_info.get(&object.id).unwrap().clone();
+                        let ty = if ty.is_struct() {
+                            ty
+                        } else {
+                            ty.get_subty().unwrap().clone()
+                        };
+                        if ty.is_struct() {
+                            let x = if let TypeKind::Structure(_, fields) = &ty.kind {
+                                fields.clone()
+                            } else {
+                                unreachable!()
+                            };
+                            for field_ in x.iter() {
+                                if &field_.0 == field {
+                                    break;
                                 }
-                            }
 
-                            self.builder.ins().store(
-                                MemFlags::new(),
-                                rhs.0,
-                                object_val.0,
-                                offset as i32,
-                            );
+                                offset += ty_size(&field_.1);
+                            }
                         }
 
-                        _ => {
+                        self.builder.ins().store(
+                            MemFlags::new(),
+                            rhs.0,
+                            object_val.0,
+                            offset as i32,
+                        );
+                    }
+
+                    _ => {
+                        let lhs = self.translate_expr(to);
+                        if to_ty.is_basic() {
+                            self.builder.def_var(lhs.1.unwrap(), rhs.0);
+                        } else {
                             self.builder.ins().store(MemFlags::new(), rhs.0, lhs.0, 0);
                         }
                     }
@@ -400,8 +655,51 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 return rhs;
             }
-            _ => unimplemented!(),
+            ExprKind::Member(object, field) => {
+                let ty = self.ty_info.get(&object.id).unwrap().clone();
+                let val = self.translate_expr(object).0;
+                let mut offset = 0;
+                let ty = if ty.is_struct() {
+                    ty
+                } else {
+                    ty.get_subty().unwrap().clone()
+                };
+                if ty.is_struct() {
+                    let x = if let TypeKind::Structure(_, fields) = &ty.kind {
+                        fields.clone()
+                    } else {
+                        unreachable!()
+                    };
+
+                    for field_ in x.iter() {
+                        if &field_.0 == field {
+                            break;
+                        }
+                        offset += ty_size(&field_.1);
+                    }
+                }
+                let output = ty_to_cranelift(self.ty_info.get(&expr.id).as_ref().unwrap());
+                return (
+                    self.builder
+                        .ins()
+                        .load(output, MemFlags::new(), val, offset as i32),
+                    None,
+                );
+            }
+            x => panic!("{:?}", x),
         }
+    }
+
+    fn get_ty(&self, ty: &CType) -> CType {
+        if ty.is_basic() {
+            if let TypeKind::Basic(name) = &ty.kind {
+                if self.complex_types.contains_key(name) {
+                    return self.complex_types.get(name).unwrap().clone();
+                }
+            }
+        }
+
+        return ty.clone();
     }
 
     pub fn translate_stmt(&mut self, s: &StmtKind) {
@@ -422,6 +720,14 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.variables = old_locals;
             }
             StmtKind::Return(val) => {
+                if self.return_addr.is_some() {
+                    let val_ = self.translate_expr(val.as_ref().unwrap());
+                    self.builder
+                        .ins()
+                        .store(MemFlags::new(), val_.0, self.return_addr.unwrap(), 0);
+                    self.builder.ins().return_(&[]);
+                    return;
+                }
                 if val.is_none() {
                     self.builder.ins().return_(&[]);
                 } else {
@@ -429,16 +735,35 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     self.builder.ins().return_(&[val.0]);
                 }
             }
+            StmtKind::If(cond,then,otherwise) => {
+                let cond_value = self.translate_expr(cond).0;
+
+                let else_block = self.builder.create_ebb();
+                let merge_block = self.builder.create_ebb();
+
+                self.builder.ins().brz(cond_value,else_block,&[]);
+                self.translate_stmt(then);
+                self.builder.ins().jump(merge_block,&[]);
+                self.builder.switch_to_block(else_block);
+                self.builder.seal_block(else_block);
+                if otherwise.is_some() {
+                    self.translate_stmt(otherwise.as_ref().unwrap());
+                }
+                self.builder.ins().jump(merge_block,&[]);
+                self.builder.switch_to_block(merge_block);
+
+                self.builder.seal_block(merge_block);
+            }
             StmtKind::VarDecl(name, ty, val) => {
                 let ty = if ty.is_some() {
-                    *ty.clone().unwrap()
+                    self.get_ty(ty.as_ref().unwrap())
                 } else {
                     let val = val.as_ref().unwrap();
                     self.ty_info.get(&val.id).unwrap().clone()
                 };
 
                 let variable = Variable::new(self.variables.len());
-                self.builder.declare_var(variable, ty_to_cranelift(&ty));
+                self.builder.declare_var(variable, ty_to_cranelift(&self.get_ty(&ty)));
                 let value = if val.is_none() {
                     let slot = self.builder.create_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
@@ -463,7 +788,24 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     value: variable,
                 };
 
-                self.variables.insert(name.to_owned(),var);
+                self.variables.insert(name.to_owned(), var);
+            }
+            StmtKind::While(cond,body) => {
+                let header_ebb = self.builder.create_ebb();
+                let exit_ebb = self.builder.create_ebb();
+
+                self.builder.ins().jump(header_ebb,&[]);
+
+                self.builder.switch_to_block(header_ebb);
+
+                let cond_val = self.translate_expr(cond).0;
+
+                self.builder.ins().brz(cond_val,exit_ebb,&[]);
+                self.translate_stmt(body);
+                self.builder.ins().jump(header_ebb,&[]);
+                self.builder.switch_to_block(exit_ebb);
+                self.builder.seal_block(header_ebb);
+                self.builder.seal_block(exit_ebb);
             }
             _ => unimplemented!(),
         }

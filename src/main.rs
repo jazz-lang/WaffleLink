@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
-use walkdir::WalkDir;
 
+use waffle::codegen::Codegen;
+
+use cranelift_simplejit::SimpleJITBackend;
+use cranelift_simplejit::SimpleJITBuilder;
 //#[global_allocator]
 //static A: mimallocator::Mimalloc = mimallocator::Mimalloc;
 
@@ -34,11 +37,19 @@ fn main() {
         "Time wasted on parsing and typechecking: {} ms",
         start.to(end).num_milliseconds()
     );
+    let complex = checker.complex.clone();
 
-    use waffle::codegen::Codegen;
-
-    use cranelift_simplejit::SimpleJITBuilder;
-    use cranelift_simplejit::SimpleJITBackend;
-    let mut codegen = Codegen::<SimpleJITBackend>::new(ty_info,SimpleJITBuilder::new(),context.merged.unwrap().ast.clone());
+    let mut codegen: Codegen<SimpleJITBackend> = Codegen::<SimpleJITBackend>::new(
+        ty_info,
+        SimpleJITBuilder::new(),
+        context.merged.unwrap().ast.clone(),
+    );
+    codegen.complex_types = complex;
     codegen.translate();
+
+    let main_func = codegen.get_function("main").unwrap();
+
+    let fun: fn() -> isize = unsafe { std::mem::transmute(main_func) };
+
+    println!("{}", fun());
 }

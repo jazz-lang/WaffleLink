@@ -21,6 +21,7 @@ pub struct TypeChecker<'a> {
     current_func: Option<Function>,
     globals: HashMap<String, (Type, bool)>,
     locals: HashMap<String, Type>,
+    pub complex: HashMap<String, Type>,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -51,6 +52,7 @@ impl<'a> TypeChecker<'a> {
             globals: HashMap::new(),
             locals: HashMap::new(),
             methods: HashMap::new(),
+            complex: HashMap::new(),
         }
     }
 
@@ -391,7 +393,7 @@ impl<'a> TypeChecker<'a> {
                 if ty1.is_basic() && ty2.is_basic() {
                     let op: &str = op;
                     match op {
-                        x if ["==", "!=", ">", "<", ">=", "<="].contains(&x) => {
+                        x if ["==", "!=", ">", "<", ">=", "<=", "||", "&&"].contains(&x) => {
                             let ty = Type::new(pos.clone(), TypeKind::Basic("bool".to_owned()));
                             self.type_info.insert(expr.id, ty.clone());
                             return ty;
@@ -427,7 +429,7 @@ impl<'a> TypeChecker<'a> {
 
             ExprKind::Conv(from, to) => {
                 self.check_expr(from);
-                let ty = self.infer_type(to);
+                let ty = self.infer_type(&to);
                 self.type_info.insert(expr.id, ty.clone());
 
                 return ty;
@@ -479,8 +481,7 @@ impl<'a> TypeChecker<'a> {
 
                     return ty;
                 } else {
-                    // TODO: get methods
-                    unimplemented!()
+                    error!(&format!("not found `{}`", name), pos);
                 }
             }
             ExprKind::Call(func, object, arguments) => {
@@ -571,7 +572,13 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Member(object, name) => {
                 let ty = self.check_expr(object);
-
+                let ty = if ty.is_struct() {
+                    ty
+                } else if ty.is_pointer() {
+                    ty.get_subty().unwrap().clone()
+                } else {
+                    unimplemented!();
+                };
                 if let TypeKind::Structure(_name_, fields) = &ty.kind {
                     for field in fields.iter() {
                         if field.0 == *name {
@@ -581,16 +588,8 @@ impl<'a> TypeChecker<'a> {
                     }
 
                     error!(&format!("field `{}` not found on `{}` type", name, ty), pos);
-                } else if let TypeKind::Structure(_name_, fields) = &ty.get_subty().unwrap().kind {
-                    assert!(!ty.is_array());
-                    for field in fields.iter() {
-                        if field.0 == *name {
-                            self.type_info.insert(expr.id, *field.1.clone());
-                            return *field.1.clone();
-                        }
-                    }
-                    error!(&format!("field `{}` not found on `{}` type", name, ty), pos);
                 } else {
+                    println!("{}", ty);
                     unimplemented!()
                 }
             }
@@ -707,17 +706,18 @@ impl<'a> TypeChecker<'a> {
                 let var_ty = if ty.is_some() && val.is_some() {
                     let vty = self.check_expr(&val.clone().unwrap());
                     let ty = ty.as_ref().unwrap().clone();
-                    let ty = self.infer_type(&ty);
-                    if vty != ty {
-                        error!(&format!("can not assign `{}` to `{}`", vty, ty), vty.pos);
+                    let ty_ = self.infer_type(&ty);
+
+                    if vty != ty_ {
+                        error!(&format!("can not assign `{}` to `{}`", vty, ty_), vty.pos);
                     }
-                    ty
+                    ty_
                 } else if val.is_some() && ty.is_none() {
                     let vty = self.check_expr(&val.clone().unwrap());
 
                     vty
                 } else if ty.is_some() {
-                    self.infer_type(&ty.as_ref().unwrap().clone())
+                    self.infer_type(&ty.as_ref().unwrap())
                 } else {
                     unreachable!()
                 };
@@ -727,13 +727,17 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn infer_type(&self, ty: &Type) -> Type {
+    pub fn infer_type(&mut self, ty: &Type) -> Type {
         match &ty.kind {
             TypeKind::Basic(name) => {
                 if self.structures.contains_key(name) {
+                    self.complex.insert(
+                        name.to_owned(),
+                        self.structures.get(name).unwrap().ty.clone(),
+                    );
                     return self.structures.get(name).unwrap().ty.clone();
                 } else if let Some(interface) = self.interfaces.get(name) {
-                    return Type::new(
+                    /* return Type::new(
                         interface.pos.clone(),
                         TypeKind::Interface(
                             interface.name.clone(),
@@ -754,7 +758,8 @@ impl<'a> TypeChecker<'a> {
                                 })
                                 .collect::<Vec<_>>(),
                         ),
-                    );
+                    );*/
+                    unimplemented!()
                 } else {
                     return ty.clone();
                 }
@@ -781,7 +786,10 @@ impl<'a> TypeChecker<'a> {
                     TypeKind::Array(box self.infer_type(subty), *len),
                 )
             }
-            TypeKind::Structure(_, _) | TypeKind::Interface(_, _) => return ty.clone(),
+            TypeKind::Structure(name, _) | TypeKind::Interface(name, _) => {
+                self.complex.insert(name.to_owned(), ty.clone());
+                return ty.clone();
+            }
             TypeKind::Optional(optional) => Type::new(
                 ty.pos.clone(),
                 TypeKind::Optional(box self.infer_type(optional)),

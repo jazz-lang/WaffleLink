@@ -6,6 +6,7 @@ use crate::{
     err::{Msg, MsgWithPos},
     *,
 };
+use std::cell::RefCell;
 use std::collections::HashSet;
 
 pub struct Parser<'a> {
