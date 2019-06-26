@@ -4,3 +4,4 @@ I want to create my own small IR and assember for learning purposes and use that
 
 # TODO
 - Interfaces
+- AddressOf operator for primitives in cranelift backend

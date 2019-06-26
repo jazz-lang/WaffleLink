@@ -443,7 +443,7 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Unary(_, lhs) => {
                 let ty = self.check_expr(lhs);
-                assert!(ty.is_basic());
+                assert!(ty.is_basic() || ty.is_pointer() || ty.is_option());
 
                 return ty;
             }
@@ -509,6 +509,7 @@ impl<'a> TypeChecker<'a> {
                             } else {
                                 unreachable!();
                             };
+
                             let interface = self.interfaces.get(&name).unwrap().clone();
                             if !self.ty_impls_interface(&expr_ty, &interface) {
                                 error!(
@@ -521,12 +522,14 @@ impl<'a> TypeChecker<'a> {
                             }
                         } else {
                             let expr_ty = self.check_expr(&arguments[i]);
+
                             if expr_ty != *param.1 {
                                 error!(
                                     &format!("expected `{}` type,found `{}`", param.1, expr_ty),
                                     pos
                                 );
                             }
+                            self.type_info.insert(arguments[i].id, expr_ty);
                         }
                     }
 

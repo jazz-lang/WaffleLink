@@ -885,6 +885,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let variable = Variable::new(self.variables.len());
                 self.builder
                     .declare_var(variable, ty_to_cranelift(&self.get_ty(&ty)));
+
                 let value = if val.is_none() {
                     let slot = self.builder.create_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,

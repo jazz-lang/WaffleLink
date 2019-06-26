@@ -34,7 +34,7 @@ pub struct Options {
     pub dump_ir: bool,
     #[structopt(long = "target", help = "Set target triple")]
     pub target: Option<String>,
-    #[structopt(long = "emit-c",help = "Generate C code")]
+    #[structopt(long = "emit-c", help = "Generate C code")]
     pub emit_c: bool,
 }
 
@@ -47,21 +47,20 @@ fn main() {
         library: false,
         merged: None,
     };
-    let start = time::PreciseTime::now();
     context.parse(opts.path.to_str().unwrap());
     use waffle::tycheck::TypeChecker;
     let mut checker = TypeChecker::new(&mut context);
 
     checker.run();
     let ty_info = checker.type_info.clone();
-    let end = time::PreciseTime::now();
 
     let complex = checker.complex.clone();
 
     if opts.emit_c {
         let mut cgen = waffle::cgen::CCodeGen::new();
-        cgen.buffer  =
-"
+        cgen.complex_types = complex;
+        cgen.ty_info = ty_info;
+        cgen.buffer = "
 #include <stddef.h>
 typedef unsigned long ulong;
 typedef unsigned int uint;
@@ -70,23 +69,31 @@ typedef unsigned short ushort;
 typedef size_t usize;
 typedef size_t isize;
 
-".to_owned();
-        cgen.ty_info = ty_info;
+"
+        .to_owned();
+
         cgen.gen_toplevel(&context.merged.unwrap().ast);
-        
+
         let output = "output.c";
         if !std::path::Path::new("output.c").exists() {
             std::fs::File::create("output.c").unwrap();
         }
-        let mut file = std::fs::OpenOptions::new().write(true).open(&output).unwrap();
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&output)
+            .unwrap();
         use std::io::Write;
         file.write_all(cgen.buffer.as_bytes()).unwrap();
         if !opts.compile_only {
-            linker(&output,&opts.libraries,if opts.output.is_some() {
-                opts.output.as_ref().unwrap()
-            } else {
-                "output.exe"
-            }); 
+            linker(
+                &output,
+                &opts.libraries,
+                if opts.output.is_some() {
+                    opts.output.as_ref().unwrap()
+                } else {
+                    "output.exe"
+                },
+            );
         }
         return;
     }

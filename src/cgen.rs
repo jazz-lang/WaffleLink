@@ -48,6 +48,16 @@ fn ty_to_c(ty: &Type) -> String {
             ty.push_str(");\n");
             format!("{}", unsafe { FN_TY_C - 1 })
         }
+        TypeKind::Array(ty_, size) => {
+            let mut ty = String::new();
+            ty.push_str(&ty_to_c(ty_));
+            ty.push_str("[");
+            if size.is_some() {
+                ty.push_str(&format!("{}", size.unwrap()));
+            }
+            ty.push_str("]");
+            return ty;
+        }
         _ => unimplemented!(),
     }
 }
@@ -76,7 +86,7 @@ impl CCodeGen {
         for elem in elements.iter() {
             match elem {
                 Element::Struct(s) => {
-                    self.write(&format!("typedef struct {} {};\n", s.name,s.name));
+                    self.write(&format!("typedef struct {} {};\n", s.name, s.name));
                 }
                 _ => (),
             }
@@ -119,7 +129,7 @@ impl CCodeGen {
                     self.write(");\n");
                 }
                 Element::Const(constant) => {
-                    self.write(&format!("#define {} ", constant.name));
+                    self.write(&format!("\n#define {} ", constant.name));
                     self.gen_expr(&constant.value);
                     self.write("\n");
                 }
@@ -140,21 +150,19 @@ impl CCodeGen {
                         self.write(&ty_to_c(ty));
                         self.write(&format!(" {};\n", name));
                     }
-                    self.write(&format!("}} {};\n",s.name));
+                    self.write(&format!("}} {};\n", s.name));
                 }
                 _ => (),
             }
-            
         }
         for elem in elements.iter() {
             match elem {
-                
                 Element::Func(func) => {
                     let func: &Function = func;
                     if func.external || func.body.is_none() {
                         continue;
                     }
-                    
+
                     self.write(&ty_to_c(&func.returns));
                     self.write(&format!(" {} (", func.mangle_name()));
                     if func.this.is_some() {
@@ -215,10 +223,11 @@ impl CCodeGen {
 
                 self.write(&c_ty);
                 self.write(&format!(" {}", name));
-                self.write("=");
+
                 if val.is_none() {
                     self.write(";\n");
                 } else {
+                    self.write("=");
                     self.gen_expr(val.as_ref().unwrap());
                     self.write(";\n");
                 }
@@ -261,14 +270,14 @@ impl CCodeGen {
                 self.gen_expr(rhs);
             }
             ExprKind::Unary(op, lhs) => {
-                self.write("-");
+                self.write(op);
                 self.gen_expr(lhs);
             }
             ExprKind::Identifier(ident) => {
                 self.write(&format!("{}", ident));
             }
             ExprKind::Member(object, field) => {
-                let ty = self.ty_info.get(&object.id).unwrap().clone();
+                let ty = self.get_ty(&self.ty_info.get(&object.id).unwrap().clone());
                 self.gen_expr(object);
                 if ty.is_pointer() {
                     self.write("->");
