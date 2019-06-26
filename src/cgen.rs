@@ -5,6 +5,8 @@ pub struct CCodeGen {
     pub ty_info: HashMap<usize, Type>,
     pub variables: HashMap<String, Type>,
     pub complex_types: HashMap<String, Type>,
+    tmp_id: usize,
+    temps: String,
 }
 
 static mut FN_TY_C: i32 = 0;
@@ -18,6 +20,8 @@ impl CCodeGen {
             ty_info: HashMap::new(),
             variables: HashMap::new(),
             complex_types: HashMap::new(),
+            tmp_id: 0,
+            temps: String::new(),
         }
     }
 }
@@ -174,12 +178,25 @@ impl CCodeGen {
                     }
                     for (i, (name, ty)) in func.parameters.iter().enumerate() {
                         self.write(&format!("{} {}", ty_to_c(ty), name));
-                        if i != func.parameters.len() {
+                        if i != func.parameters.len() - 1 {
                             self.write(",");
                         }
                     }
                     self.write(")\n");
+
+                    let mut code_with_temps = String::new();
+                    let mut buffer = self.buffer.clone();
+                    self.buffer.clear();
                     self.gen_statement(func.body.as_ref().unwrap());
+                    
+                    code_with_temps.push_str(&buffer);
+                    code_with_temps.push_str("{\n");
+                    code_with_temps.push_str(&self.temps);
+                    
+                    code_with_temps.push_str(&self.buffer);
+                    code_with_temps.push_str("\n}\n");
+                    buffer.push_str(&code_with_temps);
+                    self.buffer = code_with_temps;
                     self.write("\n");
                 }
                 _ => (),
@@ -358,10 +375,57 @@ impl CCodeGen {
                 }
                 self.write("}");
             }
-            ExprKind::AddrOf(expr) => {
-                self.write("&");
-                self.gen_expr(expr);
-            }
+            ExprKind::AddrOf(expr) => 
+            {
+                match &expr.kind {
+                    ExprKind::Integer(val, suffix) => {
+                        use crate::lexer::IntSuffix;
+
+                        match suffix {
+                            IntSuffix::Long => {
+                                self.temps.push_str(&format!("long _{} = ", self.tmp_id));
+                                self.temps.push_str(&format!("{}LL;\n", val));
+                                self.tmp_id += 1;
+                            }
+                            IntSuffix::ULong => {
+                                self.temps
+                                    .push_str(&format!("unsigned long _{} = ", self.tmp_id));
+                                self.temps.push_str(&format!("{}ULL;\n", val));
+                            }
+                            _ => {
+                                self.temps.push_str(&format!("int _{} = ", self.tmp_id));
+                                self.temps.push_str(&format!("{};\n", val))
+                            }
+                        }
+
+                        self.write("&");
+                        self.write(&format!("_{}", self.tmp_id));
+                        self.tmp_id += 1;
+                    }
+                    ExprKind::Float(val, suffix) => {
+                        use crate::lexer::FloatSuffix;
+
+                        match suffix {
+                            FloatSuffix::Float => {
+                                self.temps.push_str(&format!("float _{} = ", self.tmp_id));
+                                self.temps.push_str(&format!("{}F\n;", val));
+                            }
+                            _ => {
+                                self.temps.push_str(&format!("double _{} = ", self.tmp_id));
+                                self.temps.push_str(&format!("{}\n;", val))
+                            }
+                        }
+                        self.write("&");
+                        self.write(&format!("_{}", self.tmp_id));
+                        self.tmp_id += 1;
+                    }
+
+                    _ => {
+                        self.write("&");
+                        self.gen_expr(expr);
+                    }
+                }
+            },
             ExprKind::Call(name, this, arguments) => {
                 let name = if this.is_some() {
                     let ty = self
@@ -385,8 +449,11 @@ impl CCodeGen {
                     if ty.is_pointer() {
                         self.gen_expr(&this);
                     } else {
-                        self.write("&");
-                        self.gen_expr(&this);
+                        self.gen_expr(&Expr {
+                            id: 0,
+                            pos: this.pos.clone(),
+                            kind: ExprKind::AddrOf(this.clone())
+                        });
 
                         if arguments.len() != 0 {
                             self.write(",");
