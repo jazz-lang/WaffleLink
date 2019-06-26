@@ -7,6 +7,7 @@ pub static mut DUMP_IR: bool = false;
 #[macro_use]
 pub mod macros;
 pub mod ast;
+pub mod cgen;
 pub mod codegen;
 pub mod err;
 pub mod lexer;

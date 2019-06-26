@@ -25,7 +25,7 @@ pub struct Options {
     pub aot: bool,
     #[structopt(
         short = "c",
-        help = "Only output object file if AOT enabled,otherwise code will be executed"
+        help = "Compiler will output object file or C code file (you can not use that config without --aot or --emit-c"
     )]
     pub compile_only: bool,
     #[structopt(short = "o", help = "Set output filename")]
@@ -34,6 +34,8 @@ pub struct Options {
     pub dump_ir: bool,
     #[structopt(long = "target", help = "Set target triple")]
     pub target: Option<String>,
+    #[structopt(long = "emit-c",help = "Generate C code")]
+    pub emit_c: bool,
 }
 
 fn main() {
@@ -54,11 +56,41 @@ fn main() {
     let ty_info = checker.type_info.clone();
     let end = time::PreciseTime::now();
 
-    println!(
-        "Time wasted on parsing and typechecking: {} ms",
-        start.to(end).num_milliseconds()
-    );
     let complex = checker.complex.clone();
+
+    if opts.emit_c {
+        let mut cgen = waffle::cgen::CCodeGen::new();
+        cgen.buffer  =
+"
+#include <stddef.h>
+typedef unsigned long ulong;
+typedef unsigned int uint;
+typedef unsigned short ushort;
+
+typedef size_t usize;
+typedef size_t isize;
+
+".to_owned();
+        cgen.ty_info = ty_info;
+        cgen.gen_toplevel(&context.merged.unwrap().ast);
+        
+        let output = "output.c";
+        if !std::path::Path::new("output.c").exists() {
+            std::fs::File::create("output.c").unwrap();
+        }
+        let mut file = std::fs::OpenOptions::new().write(true).open(&output).unwrap();
+        use std::io::Write;
+        file.write_all(cgen.buffer.as_bytes()).unwrap();
+        if !opts.compile_only {
+            linker(&output,&opts.libraries,if opts.output.is_some() {
+                opts.output.as_ref().unwrap()
+            } else {
+                "output.exe"
+            }); 
+        }
+        return;
+    }
+
     if opts.dump_ir {
         unsafe {
             waffle::DUMP_IR = true;

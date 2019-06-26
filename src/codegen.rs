@@ -499,9 +499,19 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     .ins()
                     .fcvt_from_sint(ty_to_cranelift(to), value);
             } else {
+                let cty1 = ty_to_cranelift(to);
+                let cty2 = ty_to_cranelift(from);
+                if cty1 == cty2 {
+                    return value;
+                }
                 return self.builder.ins().bitcast(ty_to_cranelift(to), value);
             }
         } else {
+            let cty1 = ty_to_cranelift(to);
+            let cty2 = ty_to_cranelift(from);
+            if cty1 == cty2 {
+                return value;
+            }
             return self.builder.ins().bitcast(ty_to_cranelift(to), value);
         }
     }
@@ -582,9 +592,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let name = if this.is_some() {
                     let ty = self.ty_info.get(&this.as_ref().unwrap().id).unwrap();
                     if !ty.is_pointer() {
-                        format!("@{}_{}", ty, name)
+                        format!("this{}_{}", ty, name)
                     } else {
-                        format!("@{}_{}", ty.get_subty().unwrap(), name)
+                        format!("this{}_{}", ty.get_subty().unwrap(), name)
                     }
                 } else {
                     name.to_owned()
