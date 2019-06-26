@@ -117,6 +117,7 @@ pub struct Codegen<T: Backend> {
     func_info: HashMap<String, Function>,
     functions: HashMap<String, FuncId>,
     pub complex_types: HashMap<String, CType>,
+
 }
 
 impl<T: Backend> Codegen<T> {
@@ -139,6 +140,7 @@ impl<T: Backend> Codegen<T> {
             func_info: HashMap::new(),
             functions: HashMap::new(),
             complex_types: HashMap::new(),
+
         }
     }
 
@@ -212,7 +214,7 @@ impl<T: Backend> Codegen<T> {
 
                     if func.external || func.internal || func.body.is_none() {
                         let maybe_err = self.module.declare_function(
-                            &func.name,
+                            &func.mangle_name(),
                             Linkage::Import,
                             &self.ctx.func.signature,
                         );
@@ -241,7 +243,9 @@ impl<T: Backend> Codegen<T> {
                             func_info: &self.func_info,
                             complex_types: &self.complex_types,
                             return_addr: None,
-                            terminated: false
+                            terminated: false,
+                            break_ebb: vec![],
+                            continue_ebb:vec![]
                         };
                         if trans.get_ty(&func.returns).is_struct() {
                             trans.return_addr = Some(trans.builder.ebb_params(entry_ebb)[0]);
@@ -268,11 +272,22 @@ impl<T: Backend> Codegen<T> {
                             };
                             trans.variables.insert(param.0.clone(), var);
                         }
-                        trans.translate_stmt(func.body.as_ref().unwrap());
-                        if unsafe { crate::DUMP_IR } {
-                            println!("IR dump of `{}` function:", func.name);
-                            println!("{}", trans.builder.func.display(None));
+                        if let StmtKind::Block(stmts) = &**func.body.as_ref().unwrap() {
+                            for stmt in stmts.iter() {
+                                trans.translate_stmt(stmt);
+                            }
+                        } else {
+                            trans.translate_stmt(func.body.as_ref().unwrap());
                         }
+                        
+                        if unsafe { crate::DUMP_IR } {
+                            
+                            let ir: String = format!("{}", trans.builder.display(None));
+                            println!("{}",ir.replace("u0:0",&func.mangle_name()));
+                        }
+                        
+                        
+                        
                         trans.builder.finalize();
                     }
                     let linkage = if func.external {
@@ -324,7 +339,9 @@ pub struct FunctionTranslator<'a, T: Backend> {
     pub variables: HashMap<String, Var>,
     return_addr: Option<Value>,
     complex_types: &'a HashMap<String, CType>,
-    terminated: bool
+    terminated: bool,
+        break_ebb: Vec<Ebb>,
+    continue_ebb: Vec<Ebb>
 }
 
 impl<'a, T: Backend> FunctionTranslator<'a, T> {
@@ -764,7 +781,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.builder.ins().brz(cond_value, else_block, &[]);
                 if let StmtKind::Block(stmts) = &**then {
                     for stmt in stmts.iter() {
-                        self.translate_stmt(then);
+                        self.translate_stmt(stmt);
                     }
                 } else {
                     self.translate_stmt(then);
@@ -794,6 +811,19 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.builder.seal_block(merge_block);
                 self.terminated = false;
                 
+            }
+            StmtKind::Continue => {
+                
+                self.builder.ins().jump(*self.continue_ebb.last().expect("break statement outside fo loop"),&[]);
+                let dead_block = self.builder.create_ebb();
+                self.builder.switch_to_block(dead_block);
+                self.builder.seal_block(dead_block);
+            }
+            StmtKind::Break => {
+                self.builder.ins().jump(*self.break_ebb.last().expect("break statement outside fo loop"),&[]);
+                let dead_block = self.builder.create_ebb();
+                self.builder.switch_to_block(dead_block);
+                self.builder.seal_block(dead_block);
             }
             StmtKind::VarDecl(name, ty, val) => {
                 let ty = if ty.is_some() {
@@ -839,7 +869,8 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             StmtKind::While(cond, body) => {
                 let header_ebb = self.builder.create_ebb();
                 let exit_ebb = self.builder.create_ebb();
-
+                self.break_ebb.push(exit_ebb);
+                self.continue_ebb.push(header_ebb);
                 self.builder.ins().jump(header_ebb, &[]);
 
                 self.builder.switch_to_block(header_ebb);
@@ -847,11 +878,21 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let cond_val = self.translate_expr(cond).0;
 
                 self.builder.ins().brz(cond_val, exit_ebb, &[]);
-                self.translate_stmt(body);
+                if let StmtKind::Block(stmts) = &**body {
+                    for stmt in stmts.iter() {
+                        self.translate_stmt(stmt);
+                    }
+                } else {
+                     self.translate_stmt(body);
+                }
+               
+                
                 self.builder.ins().jump(header_ebb, &[]);
                 self.builder.switch_to_block(exit_ebb);
                 self.builder.seal_block(header_ebb);
                 self.builder.seal_block(exit_ebb);
+                self.break_ebb.pop();
+                self.continue_ebb.pop();
             }
             _ => unimplemented!(),
         }
