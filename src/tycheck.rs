@@ -26,7 +26,7 @@ pub struct TypeChecker<'a> {
 
 impl<'a> TypeChecker<'a> {
     fn ty_impls_interface(&self, ty: &Type, interface: &Interface) -> bool {
-        let methods = self.methods.get(&format!("{}",ty)).clone().unwrap();
+        let methods = self.methods.get(&format!("{}", ty)).clone().unwrap();
         let funcs = interface.functions.iter();
         for ifunc in funcs {
             for method in methods.iter() {
@@ -184,14 +184,17 @@ impl<'a> TypeChecker<'a> {
                     if let Some(this) = func.this.clone() {
                         let this_ty = self.infer_type(&this.1);
                         assert!(this_ty.is_pointer());
-                       
+
                         if this_ty.get_pointee().unwrap().is_pointer() {
                             error!("Methods for pointers not implemented", this_ty.pos);
                         }
                         if this_ty.get_pointee().unwrap().is_interface() {
                             error!("Interface can not be `This` type", this_ty.pos);
                         }
-                        if self.methods.contains_key(&format!("{}",this_ty.get_pointee().unwrap())) {
+                        if self
+                            .methods
+                            .contains_key(&format!("{}", this_ty.get_pointee().unwrap()))
+                        {
                             let mut func = func.clone();
                             if this_ty.is_interface() {
                                 unimplemented!()
@@ -203,7 +206,7 @@ impl<'a> TypeChecker<'a> {
                                 .map(|(name, ty)| (name.clone(), box self.infer_type(&ty.clone())))
                                 .collect::<Vec<_>>();
                             func.this = Some((this.0.clone(), box this_ty.clone()));
-                            let methods = self.methods.get_mut(&format!("{}",this_ty)).unwrap();
+                            let methods = self.methods.get_mut(&format!("{}", this_ty)).unwrap();
                             for method in methods.into_iter() {
                                 if method.name == func.name {
                                     error!(
@@ -222,10 +225,12 @@ impl<'a> TypeChecker<'a> {
                                 .iter()
                                 .map(|(name, ty)| (name.clone(), box self.infer_type(&ty.clone())))
                                 .collect::<Vec<_>>();
-                            
+
                             func.this = Some((this.0.clone(), box this_ty.clone()));
-                            self.methods
-                                .insert(format!("{}",this_ty.get_pointee().unwrap().clone()), vec![func]);
+                            self.methods.insert(
+                                format!("{}", this_ty.get_pointee().unwrap().clone()),
+                                vec![func],
+                            );
                         }
                     } else {
                         if self.functions.contains_key(&func.name) {
@@ -533,7 +538,6 @@ impl<'a> TypeChecker<'a> {
                     let obj_ty = if object.is_pointer() | object.is_option() {
                         object.get_subty().unwrap().clone()
                     } else if object.is_struct() || object.is_basic() {
-                        
                         object
                     } else {
                         error!(
@@ -545,8 +549,8 @@ impl<'a> TypeChecker<'a> {
                         );
                     };
 
-                    let methods = self.methods.get(&format!("{}",obj_ty)).clone();
-                    
+                    let methods = self.methods.get(&format!("{}", obj_ty)).clone();
+
                     if methods.is_none() {
                         error!(&format!("type `{}` does not have any method", obj_ty), pos);
                     }
@@ -712,7 +716,7 @@ impl<'a> TypeChecker<'a> {
                     let ty = ty.as_ref().unwrap().clone();
                     let ty_ = self.infer_type(&ty);
                     if vty.is_void() {
-                        error!(&format!("invalid use of void type"),vty.pos);
+                        error!(&format!("invalid use of void type"), vty.pos);
                     }
                     if vty != ty_ {
                         error!(&format!("can not assign `{}` to `{}`", vty, ty_), vty.pos);
@@ -721,7 +725,7 @@ impl<'a> TypeChecker<'a> {
                 } else if val.is_some() && ty.is_none() {
                     let vty = self.check_expr(&val.clone().unwrap());
                     if vty.is_void() {
-                        error!(&format!("invalid use of void type"),vty.pos);
+                        error!(&format!("invalid use of void type"), vty.pos);
                     }
                     vty
                 } else if ty.is_some() {

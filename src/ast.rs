@@ -56,7 +56,6 @@ impl Type {
         Type { pos, kind }
     }
 
-
     pub fn is_void(&self) -> bool {
         match &self.kind {
             TypeKind::Void => true,

@@ -195,7 +195,6 @@ impl<T: Backend> Codegen<T> {
                             .push(AbiParam::new(self.module.target_config().pointer_type()));
                     }
 
-
                     let mut ebb_params = vec![];
                     for p in func.parameters.iter() {
                         let ty = ty_to_cranelift(&self.get_ty(&p.1));
@@ -272,19 +271,21 @@ impl<T: Backend> Codegen<T> {
                             };
                             trans.variables.insert(param.0.clone(), var);
                         }
-                        if let Some((name,ty)) = &func.this {
+                        if let Some((name, ty)) = &func.this {
                             let val = *trans.builder.ebb_params(entry_ebb).last().unwrap();
                             let var = Variable::new(trans.variables.len());
-                            trans.builder.declare_var(var,trans.module.target_config().pointer_type());
-                            trans.builder.def_var(var,val);
+                            trans
+                                .builder
+                                .declare_var(var, trans.module.target_config().pointer_type());
+                            trans.builder.def_var(var, val);
                             let var = Var {
                                 name: name.to_owned(),
                                 ty: *ebb_params.last().unwrap(),
                                 wty: trans.get_ty(ty),
                                 on_stack: false,
-                                value: var
+                                value: var,
                             };
-                            trans.variables.insert(name.to_owned(),var);
+                            trans.variables.insert(name.to_owned(), var);
                         }
                         if let StmtKind::Block(stmts) = &**func.body.as_ref().unwrap() {
                             for stmt in stmts.iter() {
@@ -566,7 +567,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             ExprKind::Deref(val) => {
                 let value = self.translate_expr(val);
                 let cty = self.ty_info.get(&expr.id).unwrap();
-                let ty = ty_to_cranelift(cty.get_subty().unwrap());
+                let ty = ty_to_cranelift(cty);
                 return (
                     self.builder.ins().load(ty, MemFlags::new(), value.0, 0),
                     value.1,
@@ -581,9 +582,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let name = if this.is_some() {
                     let ty = self.ty_info.get(&this.as_ref().unwrap().id).unwrap();
                     if !ty.is_pointer() {
-                        format!("@{}_{}",ty,name)
+                        format!("@{}_{}", ty, name)
                     } else {
-                        format!("@{}_{}",ty.get_subty().unwrap(),name)
+                        format!("@{}_{}", ty.get_subty().unwrap(), name)
                     }
                 } else {
                     name.to_owned()
@@ -608,8 +609,6 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     sig.returns.push(AbiParam::new(ty_to_cranelift(&return_ty)));
                 } else {
                 }
-                
-                
 
                 for param in fun.parameters.iter() {
                     let ty = ty_to_cranelift(&self.get_ty(&param.1));
@@ -617,11 +616,8 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 }
 
                 if this.is_some() {
-                    let this = this.as_ref().unwrap(); 
-
-                    let value = self.translate_expr(this);
-                    sig.params.push(AbiParam::new(self.module.target_config().pointer_type()));
-                    args.push(value.0);
+                    sig.params
+                        .push(AbiParam::new(self.module.target_config().pointer_type()));
                 }
 
                 let callee = self.module.declare_function(&name, Linkage::Import, &sig);
@@ -639,13 +635,21 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 for arg in parameters.iter() {
                     args.push(self.translate_expr(arg).0);
                 }
+                if this.is_some() {
+                    let this = this.as_ref().unwrap();
+
+                    let value = self.translate_expr(this);
+
+                    args.push(value.0);
+                }
+
                 let call = self.builder.ins().call(local_callee, &args);
 
                 let return_value = if return_ty.is_struct() || return_ty.is_array() {
                     return_addr.unwrap()
                 } else {
                     if return_ty.is_void() {
-                        return (Value::new(0 as usize),None);
+                        return (Value::new(0 as usize), None);
                     } else {
                         self.builder.inst_results(call)[0]
                     }
