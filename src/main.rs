@@ -36,6 +36,8 @@ pub struct Options {
     pub target: Option<String>,
     #[structopt(long = "emit-c", help = "Generate C code")]
     pub emit_c: bool,
+    #[structopt(long = "show-time", help = "Display compilation time")]
+    pub time: bool,
 }
 
 fn main() {
@@ -47,6 +49,7 @@ fn main() {
         library: false,
         merged: None,
     };
+    let start = time::PreciseTime::now();
     context.parse(opts.path.to_str().unwrap());
     use waffle::tycheck::TypeChecker;
     let mut checker = TypeChecker::new(&mut context);
@@ -73,7 +76,13 @@ typedef size_t isize;
         .to_owned();
 
         cgen.gen_toplevel(&context.merged.unwrap().ast);
-
+        let end = time::PreciseTime::now();
+        if opts.time {
+            println!(
+                "Compilation time {} ms (without C file compiling)",
+                start.to(end).num_milliseconds()
+            );
+        }
         let output = "output.c";
         if !std::path::Path::new("output.c").exists() {
             std::fs::File::create("output.c").unwrap();
@@ -84,6 +93,7 @@ typedef size_t isize;
             .unwrap();
         use std::io::Write;
         file.write_all(cgen.buffer.as_bytes()).unwrap();
+
         if !opts.compile_only {
             linker(
                 &output,
@@ -95,6 +105,7 @@ typedef size_t isize;
                 },
             );
         }
+
         return;
     }
 
@@ -144,6 +155,10 @@ typedef size_t isize;
                 },
             );
         }
+        let end = time::PreciseTime::now();
+        if opts.time {
+            println!("Compilation time {} ms", start.to(end).num_milliseconds());
+        }
     } else {
         let mut codegen: Codegen<SimpleJITBackend> = Codegen::<SimpleJITBackend>::new(
             ty_info,
@@ -156,7 +171,10 @@ typedef size_t isize;
         let func = codegen.get_function("main").unwrap();
 
         let function: fn() -> isize = unsafe { std::mem::transmute(func) };
-
+        let end = time::PreciseTime::now();
+        if opts.time {
+            println!("Compilation time {} ms\n", start.to(end).num_milliseconds());
+        }
         println!("Result: {}", function());
     }
 }
@@ -166,7 +184,10 @@ extern "C" {
 }
 
 fn linker(filename: &str, libs: &Vec<String>, output: &str) {
-    let mut linker = String::from(&format!("gcc -lc -lpthread {} -o {} ", filename, output));
+    let mut linker = String::from(&format!(
+        "gcc -lc -lpthread -lwaffle_runtime {} -o {}  ",
+        filename, output
+    ));
     for lib in libs.iter() {
         linker.push_str(&format!(" -l{} ", lib));
     }

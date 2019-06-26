@@ -917,6 +917,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.variables.insert(name.to_owned(), var);
             }
             StmtKind::While(cond, body) => {
+                let variables = self.variables.clone();
                 let header_ebb = self.builder.create_ebb();
                 let exit_ebb = self.builder.create_ebb();
                 self.break_ebb.push(exit_ebb);
@@ -942,6 +943,38 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 self.builder.seal_block(exit_ebb);
                 self.break_ebb.pop();
                 self.continue_ebb.pop();
+                self.variables = variables;
+            }
+            StmtKind::For(decl, cond, then, body) => {
+                let variables = self.variables.clone();
+                self.translate_stmt(decl);
+                let header_ebb = self.builder.create_ebb();
+                let exit_ebb = self.builder.create_ebb();
+                self.break_ebb.push(exit_ebb);
+                self.continue_ebb.push(header_ebb);
+                self.builder.ins().jump(header_ebb, &[]);
+
+                self.builder.switch_to_block(header_ebb);
+
+                let cond_val = self.translate_expr(cond).0;
+
+                self.builder.ins().brz(cond_val, exit_ebb, &[]);
+                if let StmtKind::Block(stmts) = &**body {
+                    for stmt in stmts.iter() {
+                        self.translate_stmt(stmt);
+                    }
+                } else {
+                    self.translate_stmt(body);
+                }
+                self.translate_expr(then);
+
+                self.builder.ins().jump(header_ebb, &[]);
+                self.builder.switch_to_block(exit_ebb);
+                self.builder.seal_block(header_ebb);
+                self.builder.seal_block(exit_ebb);
+                self.break_ebb.pop();
+                self.continue_ebb.pop();
+                self.variables = variables;
             }
             _ => unimplemented!(),
         }

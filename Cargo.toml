@@ -4,12 +4,12 @@ version = "0.1.0"
 authors = ["playXE <adel.prokurov@protonmail.com>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 
 [profile.release]
 lto = true
 opt-level = 3
-codegen-units = 3
+codegen-units = 8
 [dependencies]
 colored = "1.8"
 lazy_static = "1.3"

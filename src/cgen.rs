@@ -241,12 +241,25 @@ impl CCodeGen {
             }
             StmtKind::Return(val) => {
                 if val.is_none() {
-                    self.write("return;");
+                    self.write("return;\n");
                 } else {
                     self.write("return ");
                     self.gen_expr(val.as_ref().unwrap());
-                    self.write(";");
+                    self.write(";\n");
                 }
+            }
+            StmtKind::For(decl, cond, then, body) => {
+                self.write("for (\n");
+                self.write("\t");
+                self.gen_statement(decl);
+                self.write("\t");
+                self.gen_expr(cond);
+                self.write(";\n");
+                self.write("\t");
+                self.gen_expr(then);
+                self.write(")");
+                self.gen_statement(body);
+                self.write("\n");
             }
             _ => unimplemented!(),
         }
