@@ -707,14 +707,18 @@ impl<'a> TypeChecker<'a> {
                     let vty = self.check_expr(&val.clone().unwrap());
                     let ty = ty.as_ref().unwrap().clone();
                     let ty_ = self.infer_type(&ty);
-
+                    if vty.is_void() {
+                        error!(&format!("invalid use of void type"),vty.pos);
+                    }
                     if vty != ty_ {
                         error!(&format!("can not assign `{}` to `{}`", vty, ty_), vty.pos);
                     }
                     ty_
                 } else if val.is_some() && ty.is_none() {
                     let vty = self.check_expr(&val.clone().unwrap());
-
+                    if vty.is_void() {
+                        error!(&format!("invalid use of void type"),vty.pos);
+                    }
                     vty
                 } else if ty.is_some() {
                     self.infer_type(&ty.as_ref().unwrap())

@@ -645,7 +645,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     return_addr.unwrap()
                 } else {
                     if return_ty.is_void() {
-                        self.builder.ins().iconst(types::I32, 0)
+                        return (Value::new(0 as usize),None);
                     } else {
                         self.builder.inst_results(call)[0]
                     }
