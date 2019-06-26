@@ -297,7 +297,10 @@ impl Function {
         } else {
             let mut name = String::new();
             if self.this.is_some() {
-                name.push_str(&format!("@{}_",self.this.as_ref().unwrap().1.get_subty().unwrap()));
+                name.push_str(&format!(
+                    "@{}_",
+                    self.this.as_ref().unwrap().1.get_subty().unwrap()
+                ));
             }
 
             name.push_str(&self.name);

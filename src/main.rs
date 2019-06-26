@@ -10,7 +10,6 @@ use cranelift_faerie::FaerieBuilder;
 use cranelift_faerie::FaerieProduct;
 use cranelift_simplejit::SimpleJITBackend;
 
-
 use cranelift_simplejit::SimpleJITBuilder;
 use std::str::FromStr;
 use target_lexicon::triple;
@@ -73,7 +72,7 @@ fn main() {
         };
         let mut flag_builder = settings::builder();
         flag_builder.enable("is_pic").unwrap();
-        flag_builder.set("opt_level","fastest").unwrap();
+        flag_builder.set("opt_level", "fastest").unwrap();
         let t_ref = &triple_;
         let isa_builder = isa::lookup(triple!(t_ref)).unwrap();
         let isa = isa_builder.finish(settings::Flags::new(flag_builder));
@@ -128,7 +127,7 @@ extern "C" {
 }
 
 fn linker(filename: &str, libs: &Vec<String>, output: &str) {
-    let mut linker = String::from(&format!("tcc -lc -lpthread {} -o {} ", filename, output));
+    let mut linker = String::from(&format!("gcc -lc -lpthread {} -o {} ", filename, output));
     for lib in libs.iter() {
         linker.push_str(&format!(" -l{} ", lib));
     }

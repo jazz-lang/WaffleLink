@@ -117,7 +117,6 @@ pub struct Codegen<T: Backend> {
     func_info: HashMap<String, Function>,
     functions: HashMap<String, FuncId>,
     pub complex_types: HashMap<String, CType>,
-
 }
 
 impl<T: Backend> Codegen<T> {
@@ -140,7 +139,6 @@ impl<T: Backend> Codegen<T> {
             func_info: HashMap::new(),
             functions: HashMap::new(),
             complex_types: HashMap::new(),
-
         }
     }
 
@@ -167,9 +165,9 @@ impl<T: Backend> Codegen<T> {
         for elem in elements.iter() {
             match elem {
                 Element::Func(func) => {
-                    self.func_info.insert(func.name.clone(), func.clone()); // TODO: Mangle function names
+                    self.func_info.insert(func.mangle_name(), func.clone());
                 }
-                _ => ()
+                _ => (),
             }
         }
         for elem in elements.iter() {
@@ -197,19 +195,20 @@ impl<T: Backend> Codegen<T> {
                             .push(AbiParam::new(self.module.target_config().pointer_type()));
                     }
 
-                    if func.this.is_some() {
-                        self.ctx
-                            .func
-                            .signature
-                            .params
-                            .push(AbiParam::new(self.module.target_config().pointer_type()));
-                    }
 
                     let mut ebb_params = vec![];
                     for p in func.parameters.iter() {
                         let ty = ty_to_cranelift(&self.get_ty(&p.1));
                         ebb_params.push(ty);
                         self.ctx.func.signature.params.push(AbiParam::new(ty));
+                    }
+                    if func.this.is_some() {
+                        ebb_params.push(self.module.target_config().pointer_type());
+                        self.ctx
+                            .func
+                            .signature
+                            .params
+                            .push(AbiParam::new(self.module.target_config().pointer_type()));
                     }
 
                     if func.external || func.internal || func.body.is_none() {
@@ -245,17 +244,19 @@ impl<T: Backend> Codegen<T> {
                             return_addr: None,
                             terminated: false,
                             break_ebb: vec![],
-                            continue_ebb:vec![]
+                            continue_ebb: vec![],
                         };
                         if trans.get_ty(&func.returns).is_struct() {
                             trans.return_addr = Some(trans.builder.ebb_params(entry_ebb)[0]);
                         }
+
                         for (i, param) in func.parameters.iter().enumerate() {
                             let i = if trans.get_ty(&func.returns).is_struct() {
                                 i + 1
                             } else {
                                 i
                             };
+
                             let val = trans.builder.ebb_params(entry_ebb)[i];
                             let var = Variable::new(trans.variables.len());
                             trans
@@ -268,9 +269,22 @@ impl<T: Backend> Codegen<T> {
                                 wty: trans.get_ty(&param.1),
                                 on_stack: false,
                                 value: var,
-                                
                             };
                             trans.variables.insert(param.0.clone(), var);
+                        }
+                        if let Some((name,ty)) = &func.this {
+                            let val = *trans.builder.ebb_params(entry_ebb).last().unwrap();
+                            let var = Variable::new(trans.variables.len());
+                            trans.builder.declare_var(var,trans.module.target_config().pointer_type());
+                            trans.builder.def_var(var,val);
+                            let var = Var {
+                                name: name.to_owned(),
+                                ty: *ebb_params.last().unwrap(),
+                                wty: trans.get_ty(ty),
+                                on_stack: false,
+                                value: var
+                            };
+                            trans.variables.insert(name.to_owned(),var);
                         }
                         if let StmtKind::Block(stmts) = &**func.body.as_ref().unwrap() {
                             for stmt in stmts.iter() {
@@ -279,15 +293,12 @@ impl<T: Backend> Codegen<T> {
                         } else {
                             trans.translate_stmt(func.body.as_ref().unwrap());
                         }
-                        
+
                         if unsafe { crate::DUMP_IR } {
-                            
                             let ir: String = format!("{}", trans.builder.display(None));
-                            println!("{}",ir.replace("u0:0",&func.mangle_name()));
+                            println!("{}", ir.replace("u0:0", &func.mangle_name()));
                         }
-                        
-                        
-                        
+
                         trans.builder.finalize();
                     }
                     let linkage = if func.external {
@@ -297,7 +308,7 @@ impl<T: Backend> Codegen<T> {
                     };
 
                     let id = match self.module.declare_function(
-                        &func.name,
+                        &func.mangle_name(),
                         linkage,
                         &self.ctx.func.signature,
                     ) {
@@ -317,7 +328,7 @@ impl<T: Backend> Codegen<T> {
                             }
                         }
                     }
-                    self.functions.insert(func.name.clone(), id);
+                    self.functions.insert(func.mangle_name(), id);
                     self.module.clear_context(&mut self.ctx);
                 }
                 _ => { /* TODO */ }
@@ -340,8 +351,8 @@ pub struct FunctionTranslator<'a, T: Backend> {
     return_addr: Option<Value>,
     complex_types: &'a HashMap<String, CType>,
     terminated: bool,
-        break_ebb: Vec<Ebb>,
-    continue_ebb: Vec<Ebb>
+    break_ebb: Vec<Ebb>,
+    continue_ebb: Vec<Ebb>,
 }
 
 impl<'a, T: Backend> FunctionTranslator<'a, T> {
@@ -562,69 +573,85 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 );
             }
             ExprKind::Call(name, this, parameters) => {
-                if this.is_none() {
-                    let mut sig = self.module.make_signature();
+                let mut sig = self.module.make_signature();
 
-                    let return_ty = self.ty_info.get(&expr.id).unwrap().clone();
-                    let mut args = Vec::new();
-                    let mut return_addr = None;
-                    let fun = self.func_info.get(name).unwrap().clone();
-                    if (return_ty.is_array() || return_ty.is_struct()) & !fun.external {
-                        sig.params
-                            .push(AbiParam::new(self.module.target_config().pointer_type()));
-                        let slot = self.builder.create_stack_slot(StackSlotData::new(
-                            StackSlotKind::ExplicitSlot,
-                            ty_size(&return_ty) as u32,
-                        ));
-                        let addr = self.builder.ins().stack_addr(
-                            self.module.target_config().pointer_type(),
-                            slot,
-                            0,
-                        );
-
-                        args.push(addr);
-                        return_addr = Some(addr);
-                    } else if !return_ty.is_void() {
-                        sig.returns.push(AbiParam::new(ty_to_cranelift(&return_ty)));
+                let return_ty = self.ty_info.get(&expr.id).unwrap().clone();
+                let mut args = Vec::new();
+                let mut return_addr = None;
+                let name = if this.is_some() {
+                    let ty = self.ty_info.get(&this.as_ref().unwrap().id).unwrap();
+                    if !ty.is_pointer() {
+                        format!("@{}_{}",ty,name)
                     } else {
+                        format!("@{}_{}",ty.get_subty().unwrap(),name)
                     }
-
-                    for param in fun.parameters.iter() {
-                        let ty = ty_to_cranelift(&self.get_ty(&param.1));
-                        sig.params.push(AbiParam::new(ty));
-                    }
-
-                    let callee = self.module.declare_function(&name, Linkage::Import, &sig);
-                    let callee = match callee {
-                        Ok(v) => v,
-                        Err(e) => {
-                            eprintln!("{}", e);
-                            std::process::exit(-1);
-                        }
-                    };
-                    let local_callee = self
-                        .module
-                        .declare_func_in_func(callee, &mut self.builder.func);
-
-                    for arg in parameters.iter() {
-                        args.push(self.translate_expr(arg).0);
-                    }
-                    let call = self.builder.ins().call(local_callee, &args);
-
-                    let return_value = if return_ty.is_struct() || return_ty.is_array() {
-                        return_addr.unwrap()
-                    } else {
-                        if return_ty.is_void() {
-                            self.builder.ins().iconst(types::I32, 0)
-                        } else {
-                            self.builder.inst_results(call)[0]
-                        }
-                    };
-
-                    (return_value, None)
                 } else {
-                    unimplemented!()
+                    name.to_owned()
+                };
+                let fun = self.func_info.get(&name).unwrap().clone();
+                if (return_ty.is_array() || return_ty.is_struct()) & !fun.external {
+                    sig.params
+                        .push(AbiParam::new(self.module.target_config().pointer_type()));
+                    let slot = self.builder.create_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        ty_size(&return_ty) as u32,
+                    ));
+                    let addr = self.builder.ins().stack_addr(
+                        self.module.target_config().pointer_type(),
+                        slot,
+                        0,
+                    );
+
+                    args.push(addr);
+                    return_addr = Some(addr);
+                } else if !return_ty.is_void() {
+                    sig.returns.push(AbiParam::new(ty_to_cranelift(&return_ty)));
+                } else {
                 }
+                
+                
+
+                for param in fun.parameters.iter() {
+                    let ty = ty_to_cranelift(&self.get_ty(&param.1));
+                    sig.params.push(AbiParam::new(ty));
+                }
+
+                if this.is_some() {
+                    let this = this.as_ref().unwrap(); 
+
+                    let value = self.translate_expr(this);
+                    sig.params.push(AbiParam::new(self.module.target_config().pointer_type()));
+                    args.push(value.0);
+                }
+
+                let callee = self.module.declare_function(&name, Linkage::Import, &sig);
+                let callee = match callee {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        std::process::exit(-1);
+                    }
+                };
+                let local_callee = self
+                    .module
+                    .declare_func_in_func(callee, &mut self.builder.func);
+
+                for arg in parameters.iter() {
+                    args.push(self.translate_expr(arg).0);
+                }
+                let call = self.builder.ins().call(local_callee, &args);
+
+                let return_value = if return_ty.is_struct() || return_ty.is_array() {
+                    return_addr.unwrap()
+                } else {
+                    if return_ty.is_void() {
+                        self.builder.ins().iconst(types::I32, 0)
+                    } else {
+                        self.builder.inst_results(call)[0]
+                    }
+                };
+
+                (return_value, None)
             }
             ExprKind::Identifier(name) => {
                 if self.variables.contains_key(name) {
@@ -804,23 +831,31 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 if !self.terminated {
                     self.builder.ins().jump(merge_block, &[]);
-                    
-                    
                 }
                 self.builder.switch_to_block(merge_block);
                 self.builder.seal_block(merge_block);
                 self.terminated = false;
-                
             }
             StmtKind::Continue => {
-                
-                self.builder.ins().jump(*self.continue_ebb.last().expect("break statement outside fo loop"),&[]);
+                self.builder.ins().jump(
+                    *self
+                        .continue_ebb
+                        .last()
+                        .expect("break statement outside fo loop"),
+                    &[],
+                );
                 let dead_block = self.builder.create_ebb();
                 self.builder.switch_to_block(dead_block);
                 self.builder.seal_block(dead_block);
             }
             StmtKind::Break => {
-                self.builder.ins().jump(*self.break_ebb.last().expect("break statement outside fo loop"),&[]);
+                self.builder.ins().jump(
+                    *self
+                        .break_ebb
+                        .last()
+                        .expect("break statement outside fo loop"),
+                    &[],
+                );
                 let dead_block = self.builder.create_ebb();
                 self.builder.switch_to_block(dead_block);
                 self.builder.seal_block(dead_block);
@@ -883,10 +918,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                         self.translate_stmt(stmt);
                     }
                 } else {
-                     self.translate_stmt(body);
+                    self.translate_stmt(body);
                 }
-               
-                
+
                 self.builder.ins().jump(header_ebb, &[]);
                 self.builder.switch_to_block(exit_ebb);
                 self.builder.seal_block(header_ebb);
