@@ -23,5 +23,6 @@ extern func puts(s *char) void
 
 func println(s *char) void {
 	puts(s)
+	return;
 }
 
