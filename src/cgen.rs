@@ -203,6 +203,7 @@ impl CCodeGen {
                     code_with_temps.push_str("\n}\n");
                     buffer.push_str(&code_with_temps);
                     self.buffer = code_with_temps;
+                    self.temps.clear();
                     self.write("\n");
                 }
                 _ => (),
@@ -471,9 +472,9 @@ impl CCodeGen {
                         .unwrap()
                         .clone();
                     if ty.is_pointer() {
-                        format!("this{}_{}", ty.get_subty().unwrap(), name)
+                        format!("${}_{}", ty.get_subty().unwrap(), name)
                     } else {
-                        format!("this{}_{}", ty, name)
+                        format!("${}_{}", ty, name)
                     }
                 } else {
                     name.to_owned()

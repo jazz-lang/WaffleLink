@@ -592,9 +592,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let name = if this.is_some() {
                     let ty = self.ty_info.get(&this.as_ref().unwrap().id).unwrap();
                     if !ty.is_pointer() {
-                        format!("this{}_{}", ty, name)
+                        format!("${}_{}", ty, name)
                     } else {
-                        format!("this{}_{}", ty.get_subty().unwrap(), name)
+                        format!("${}_{}", ty.get_subty().unwrap(), name)
                     }
                 } else {
                     name.to_owned()
