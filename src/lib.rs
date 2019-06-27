@@ -138,10 +138,10 @@ impl Context {
             in_module.insert(file.path.clone());
         }
 
-        let mut imports = vec![];
+        let mut imports = std::collections::HashSet::new();
         merge_file.ast.iter().for_each(|x| {
             if let Element::Import(ref name) = x {
-                imports.push(name.name.clone());
+                imports.insert(name.name.clone());
             }
         });
         
@@ -164,13 +164,16 @@ impl Context {
                 full_path.push_str(import);
                 if std::path::Path::new(&full_path).exists() {
                     ctx.parse(&full_path);
-                }
+                } else {
+                
                 
                 let mut other_path = String::new();
                 other_path.push_str(&self.path);
                 other_path.push('/');
                 other_path.push_str(import);
+
                 ctx.parse(&other_path);
+                }
                 assert!(ctx.merged.is_some());
 
                 ctx.merged.unwrap().clone()
@@ -178,9 +181,7 @@ impl Context {
             .collect::<Vec<_>>();;
 
         for file in files.into_iter() {
-            if in_module.contains(&file.path) {
-                continue;
-            }
+            
             merge_file.ast.extend_from_slice(&file.ast);
         }
 
