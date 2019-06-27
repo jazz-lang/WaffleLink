@@ -38,16 +38,23 @@ pub struct Options {
     pub emit_c: bool,
     #[structopt(long = "show-time", help = "Display compilation time")]
     pub time: bool,
+    #[structopt(short = "O",long = "opt-level",help ="Optimization level ( possible values: 0,1,2,3 )")]
+    pub opt_level: Option<usize>,
+    #[structopt(long="cc",help = "Specify C compiler for linking/compiling C files")]
+    pub cc: Option<String>
 }
 
 fn main() {
     let opts: Options = Options::from_args();
-
+    if opts.opt_level.is_some() {
+        assert!(opts.opt_level.unwrap() <= 3);
+    }
     let mut context = waffle::Context {
         files: vec![],
         import_search_paths: vec![],
         library: false,
         merged: None,
+        path: String::new()
     };
     let start = time::PreciseTime::now();
     context.parse(opts.path.to_str().unwrap());
@@ -96,8 +103,14 @@ typedef size_t isize;
 
         if !opts.compile_only {
             linker(
+                if opts.cc.is_some() {
+                    opts.cc.as_ref().unwrap()
+                } else {
+                    "clang"
+                },
                 &output,
                 &opts.libraries,
+                opts.opt_level.unwrap_or(2),
                 if opts.output.is_some() {
                     opts.output.as_ref().unwrap()
                 } else {
@@ -118,7 +131,7 @@ typedef size_t isize;
         let triple_ = if opts.target.is_some() {
             opts.target.unwrap().clone()
         } else {
-            "x86_64-unknown-unknown-elf".to_owned()
+            target_lexicon::Triple::default().to_string()
         };
         let mut flag_builder = settings::builder();
         flag_builder.enable("is_pic").unwrap();
@@ -146,8 +159,14 @@ typedef size_t isize;
 
         if !opts.compile_only {
             linker(
+                if opts.cc.is_some() {
+                    opts.cc.as_ref().unwrap()
+                } else {
+                    "clang"
+                },
                 "output.o",
                 &opts.libraries,
+                opts.opt_level.unwrap_or(2),
                 if opts.output.is_some() {
                     opts.output.as_ref().unwrap()
                 } else {
@@ -165,6 +184,21 @@ typedef size_t isize;
             SimpleJITBuilder::new(),
             context.merged.unwrap().ast.clone(),
         );
+        // Load runtime
+        unsafe {
+            let c_str: std::ffi::CString = std::ffi::CString::new("libwaffle_runtime.so").unwrap();
+            let handle = libc::dlopen(c_str.as_ptr(),libc::RTLD_LAZY);
+            if handle.is_null() {
+                panic!("Could not load language runtime");
+            }
+        }
+        for lib in opts.libraries {
+            unsafe {
+                let c_str: std::ffi::CString = std::ffi::CString::new(lib).unwrap();
+                let _handle = libc::dlopen(c_str.as_ptr(),libc::RTLD_LAZY);
+            } 
+        }
+
         codegen.complex_types = complex;
         codegen.translate();
 
@@ -183,10 +217,10 @@ extern "C" {
     fn system(s: *const i8) -> i32;
 }
 
-fn linker(filename: &str, libs: &Vec<String>, output: &str) {
+fn linker(cc: &str,filename: &str, libs: &Vec<String>,opt_level: usize, output: &str) {
     let mut linker = String::from(&format!(
-        "gcc -lc -lpthread -lwaffle_runtime {} -o {}  ",
-        filename, output
+        "{} -O{} -lc -lpthread -lwaffle_runtime {} -o {}  ",
+        cc,opt_level,filename, output
     ));
     for lib in libs.iter() {
         linker.push_str(&format!(" -l{} ", lib));

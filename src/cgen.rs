@@ -1,12 +1,15 @@
 use std::collections::HashMap;
-
+use std::collections::HashSet;
 pub struct CCodeGen {
     pub buffer: String,
     pub ty_info: HashMap<usize, Type>,
-    pub variables: HashMap<String, Type>,
+    pub variables: HashMap<String, String>,
+    c_variables: HashSet<String>,
+    lbl_id: usize,
     pub complex_types: HashMap<String, Type>,
     tmp_id: usize,
     temps: String,
+    merge_lbl: Option<String>
 }
 
 static mut FN_TY_C: i32 = 0;
@@ -16,12 +19,15 @@ use super::ast::*;
 impl CCodeGen {
     pub fn new() -> CCodeGen {
         CCodeGen {
+            lbl_id: 0,
             buffer: String::new(),
             ty_info: HashMap::new(),
             variables: HashMap::new(),
             complex_types: HashMap::new(),
             tmp_id: 0,
             temps: String::new(),
+            c_variables: HashSet::new(),
+            merge_lbl: None
         }
     }
 }
@@ -213,6 +219,7 @@ impl CCodeGen {
             StmtKind::Block(stmts) => {
                 self.write("{\n");
                 for stmt in stmts.iter() {
+                    self.write("\t");
                     self.gen_statement(stmt);
                 }
                 self.write("}\n");
@@ -229,6 +236,32 @@ impl CCodeGen {
                     self.write("else ");
                     self.gen_statement(or.as_ref().unwrap());
                 }
+
+                /*let true_lbl = format!("if_true_{}",self.lbl_id);
+                let merge_lbl = if self.merge_lbl.is_some() {
+                    self.merge_lbl.as_ref().unwrap().to_owned()
+                } else {    format!("merge_lbl_{}",self.lbl_id)
+                };
+                let has_label = self.merge_lbl.is_some();
+                self.lbl_id += 1;
+                self.write("if (");
+                self.gen_expr(cond);
+                self.write(&format!(") goto {};\n",true_lbl));
+                if or.is_some() {
+                    self.merge_lbl = Some(merge_lbl.clone());
+                    self.gen_statement(or.as_ref().unwrap());
+                }
+                self.write(&format!("\tgoto {};\n",merge_lbl));
+                self.write(&format!("{}:\n",true_lbl));
+                self.gen_statement(then);
+                self.write(&format!("\tgoto {};\n",merge_lbl));
+                if !has_label {
+                self.write(&format!("\t{}:\n",merge_lbl));
+                }
+                if has_label {
+                    self.merge_lbl = None;
+                }*/
+                
             }
             StmtKind::VarDecl(name, ty, val) => {
                 let c_ty = if ty.is_some() {
@@ -239,8 +272,11 @@ impl CCodeGen {
                 };
 
                 self.write(&c_ty);
-                self.write(&format!(" {}", name));
-
+                let c_name = self.tmp_id;
+                self.write(&format!(" /* var {} */ _{}",name,  c_name));
+                self.c_variables.insert(c_name.to_string());
+                self.variables.insert(name.to_owned(),c_name.to_string());
+                self.tmp_id += 1;
                 if val.is_none() {
                     self.write(";\n");
                 } else {
@@ -304,7 +340,13 @@ impl CCodeGen {
                 self.gen_expr(lhs);
             }
             ExprKind::Identifier(ident) => {
-                self.write(&format!("{}", ident));
+                if self.variables.contains_key(ident) {
+                    let c_name = self.variables.get(ident).unwrap().clone();
+                    self.write(&format!("_{}",c_name));
+                } else {
+                    self.write(&format!("{}", ident));
+                }
+                
             }
             ExprKind::Member(object, field) => {
                 let ty = self.get_ty(&self.ty_info.get(&object.id).unwrap().clone());

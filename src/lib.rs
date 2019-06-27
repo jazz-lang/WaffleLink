@@ -33,6 +33,7 @@ pub struct Context {
     pub files: Vec<File>,
     pub library: bool,
     pub merged: Option<File>,
+    pub path: String
 }
 
 use ast::Element;
@@ -57,6 +58,7 @@ fn walk_directories(path: &str, files: &mut Vec<String>) {
 }
 use parser::Parser;
 use reader::Reader;
+use rayon::iter::*;
 impl Context {
     pub fn parse(&mut self, path: &str) {
         let spath = std::path::Path::new(path);
@@ -66,10 +68,16 @@ impl Context {
         } else {
             files.push(path.to_owned());
         }
+        if spath.is_dir() {
+            self.path = path.to_owned();
+        } else {
+            let tmp_path = std::path::Path::new(path);
+            self.path = tmp_path.parent().unwrap().to_str().unwrap().to_owned();
+        }
         let failed = std::sync::atomic::AtomicBool::new(false);
         let fail_count = std::sync::atomic::AtomicI32::new(0);
         self.files = files
-            .iter()
+            .par_iter()
             .map(|file_path| {
                 let path = std::path::Path::new(file_path);
                 let mut ast_file = File {
@@ -136,18 +144,33 @@ impl Context {
                 imports.push(name.name.clone());
             }
         });
+        
+        let home_path = env!("HOME").to_owned();
+        let home_path = home_path + "/.jazz";
+        let home_path = std::path::Path::new(&home_path);
         let files = imports
-            .iter()
+            .par_iter()
             .map(|import| {
                 let mut ctx = Context {
                     merged: None,
                     library: false,
                     files: vec![],
                     import_search_paths: vec![],
+                    path: self.path.clone()
                 };
-
-                ctx.parse(import);
-
+                let mut full_path = String::new();
+                full_path.push_str(home_path.to_str().unwrap());
+                full_path.push('/');
+                full_path.push_str(import);
+                if std::path::Path::new(&full_path).exists() {
+                    ctx.parse(&full_path);
+                }
+                
+                let mut other_path = String::new();
+                other_path.push_str(&self.path);
+                other_path.push('/');
+                other_path.push_str(import);
+                ctx.parse(&other_path);
                 assert!(ctx.merged.is_some());
 
                 ctx.merged.unwrap().clone()

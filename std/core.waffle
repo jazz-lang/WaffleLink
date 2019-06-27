@@ -1,0 +1,27 @@
+extern func int_to_str(i int) *char
+extern func long_to_str(l long) *char
+extern func uint_to_str(i uint) *char
+extern func ulong_to_str(i ulong) *char
+
+func (v *int) to_string() *char {
+	return int_to_str(*v)
+}
+
+func (v *long) to_string() *char {
+	return long_to_str(*v)
+}
+
+func (v *uint) to_string() *char {
+	return uint_to_str(*v)
+}
+
+func (v *ulong) to_string() *char {
+	return ulong_to_str(*v)
+}
+
+extern func puts(s *char) void
+
+func println(s *char) void {
+	puts(s)
+}
+

@@ -668,7 +668,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 (return_value, None)
             }
             ExprKind::Identifier(name) => {
-                if self.variables.contains_key(name) {
+                let value = if self.variables.contains_key(name) {
                     let var: &Var = self.variables.get(name).unwrap();
                     if var.on_stack {
                         let value = self.builder.use_var(var.value);
@@ -678,7 +678,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     }
                 } else {
                     unimplemented!()
-                }
+                };
+
+                value
             }
             ExprKind::AddrOf(val) => self.translate_expr(retrieve_from_load(val)),
             ExprKind::Assign(to, from) => {
