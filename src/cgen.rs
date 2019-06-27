@@ -361,7 +361,7 @@ impl CCodeGen {
                 use crate::lexer::IntSuffix;
 
                 match suffix {
-                    IntSuffix::Long => self.write(&format!("{}LL", val)),
+                    IntSuffix::Long => self.write(&format!("{}LL", *val as i64)),
                     IntSuffix::ULong => self.write(&format!("{}ULL", val)),
                     _ => self.write(&format!("{}", val)),
                 }
@@ -423,7 +423,7 @@ impl CCodeGen {
                     match suffix {
                         IntSuffix::Long => {
                             self.temps.push_str(&format!("long _{} = ", self.tmp_id));
-                            self.temps.push_str(&format!("{}LL;\n", val));
+                            self.temps.push_str(&format!("{}LL;\n", *val as i64));
                             self.tmp_id += 1;
                         }
                         IntSuffix::ULong => {
@@ -433,7 +433,7 @@ impl CCodeGen {
                         }
                         _ => {
                             self.temps.push_str(&format!("int _{} = ", self.tmp_id));
-                            self.temps.push_str(&format!("{};\n", val))
+                            self.temps.push_str(&format!("{};\n", *val as i32))
                         }
                     }
 
