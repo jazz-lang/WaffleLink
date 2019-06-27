@@ -142,8 +142,6 @@ impl<T: Backend> Codegen<T> {
         }
     }
 
-    
-
     pub fn get_function(&mut self, name: &str) -> Option<T::FinalizedFunction> {
         match self.functions.get(name) {
             Some(id) => Some(self.module.get_finalized_function(*id)),
@@ -650,16 +648,18 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 if this.is_some() {
                     let this = this.as_ref().unwrap();
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
-                    let value = if !ty.is_pointer() && !ty.is_array() && !ty.is_struct() && !ty.is_option() {
-                        let value = self.translate_expr(&Expr {
-                            pos: expr.pos.clone(),
-                            id: 0,
-                            kind: ExprKind::AddrOf(this.clone())
-                        });
-                        value
-                    } else {
-                        self.translate_expr(this)
-                    };
+                    let value =
+                        if !ty.is_pointer() && !ty.is_array() && !ty.is_struct() && !ty.is_option()
+                        {
+                            let value = self.translate_expr(&Expr {
+                                pos: expr.pos.clone(),
+                                id: 0,
+                                kind: ExprKind::AddrOf(this.clone()),
+                            });
+                            value
+                        } else {
+                            self.translate_expr(this)
+                        };
 
                     args.push(value.0);
                 }
@@ -688,53 +688,47 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 let ty = ty_to_cranelift(self.ty_info.get(&expr.id).unwrap());
                 let val = self.builder.use_var(value.value);
-                (self.builder.ins().load(ty,MemFlags::new(),val,0),None)
+                (self.builder.ins().load(ty, MemFlags::new(), val, 0), None)
             }
-            ExprKind::AddrOf(val) => 
-            {
+            ExprKind::AddrOf(val) => {
                 let ty = self.ty_info.get(&val.id).unwrap().clone();
                 let cty = ty_to_cranelift(&ty);
                 let pty = self.module.target_config().pointer_type();
-                let val = match &val.kind 
-                {
-                    ExprKind::Integer(val,_) => {
-                        let slot = self.builder.create_stack_slot(
-                            StackSlotData::new(
-                                StackSlotKind::ExplicitSlot,
-                                ty_size(&ty) as u32
-                            )
-                        );
+                let val = match &val.kind {
+                    ExprKind::Integer(val, _) => {
+                        let slot = self.builder.create_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            ty_size(&ty) as u32,
+                        ));
 
-                        let addr = self.builder.ins().stack_addr(pty,slot,0);
-                        let iconst = self.builder.ins().iconst(cty,*val as i64);
-                        self.builder.ins().store(MemFlags::new(),iconst,addr,0);
+                        let addr = self.builder.ins().stack_addr(pty, slot, 0);
+                        let iconst = self.builder.ins().iconst(cty, *val as i64);
+                        self.builder.ins().store(MemFlags::new(), iconst, addr, 0);
 
                         addr
-                    }   
-                    ExprKind::Float(val,_) => {
-                        let slot = self.builder.create_stack_slot(
-                            StackSlotData::new(
-                                StackSlotKind::ExplicitSlot,
-                                ty_size(&ty) as u32
-                            )
-                        );
+                    }
+                    ExprKind::Float(val, _) => {
+                        let slot = self.builder.create_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            ty_size(&ty) as u32,
+                        ));
 
-                        let addr = self.builder.ins().stack_addr(pty,slot,0);
+                        let addr = self.builder.ins().stack_addr(pty, slot, 0);
                         let fconst = if ty.is_basic_name("float32") {
                             self.builder.ins().f32const((*val) as f32)
                         } else {
                             self.builder.ins().f64const(*val)
                         };
-                        
-                        self.builder.ins().store(MemFlags::new(),fconst,addr,0);
+
+                        self.builder.ins().store(MemFlags::new(), fconst, addr, 0);
 
                         addr
                     }
 
-                    _ => self.retrieve_from_load(val)
+                    _ => self.retrieve_from_load(val),
                 };
-                (val,None)
-            },
+                (val, None)
+            }
             ExprKind::Assign(to, from) => {
                 //let to_ty = self.ty_info.get(&to.id).unwrap().clone();
                 //let from_ty = self.ty_info.get(&from.id).unwrap().clone();
@@ -777,7 +771,6 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     _ => {
                         let lhs = self.retrieve_from_load(to);
                         self.builder.ins().store(MemFlags::new(), rhs.0, lhs, 0);
-                        
                     }
                 }
 
@@ -818,7 +811,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
         }
     }
 
-    fn retrieve_from_load(&mut self,expr: &Expr) -> Value {
+    fn retrieve_from_load(&mut self, expr: &Expr) -> Value {
         match &expr.kind {
             ExprKind::Identifier(name) => {
                 let value = if self.variables.contains_key(name) {
@@ -986,7 +979,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     addr
                 } else {
                     let value = self.translate_expr(val.as_ref().unwrap()).0;
-                    self.builder.ins().store(MemFlags::new(),value,addr,0);
+                    self.builder.ins().store(MemFlags::new(), value, addr, 0);
                     addr
                 };
 

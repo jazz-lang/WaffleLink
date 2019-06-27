@@ -466,11 +466,10 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             ExprKind::Identifier(name) => {
-                println!("{:?}",self.locals);
                 if self.locals.contains_key(name) {
                     let ty = self.locals.get(name).unwrap().clone();
                     self.type_info.insert(expr.id, ty.clone());
-                    
+
                     return ty;
                 } else if self.globals.contains_key(name) {
                     let ty = self.globals.get(name).unwrap().0.clone();
@@ -737,7 +736,6 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     unreachable!()
                 };
-                println!("{:?}",name);
                 self.locals.insert(name.to_owned(), var_ty);
             }
         }

@@ -10,6 +10,7 @@ pub mod ast;
 pub mod cgen;
 pub mod codegen;
 pub mod err;
+pub mod jit;
 pub mod lexer;
 pub mod parser;
 pub mod reader;
