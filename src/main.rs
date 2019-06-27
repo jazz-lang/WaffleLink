@@ -38,10 +38,14 @@ pub struct Options {
     pub emit_c: bool,
     #[structopt(long = "show-time", help = "Display compilation time")]
     pub time: bool,
-    #[structopt(short = "O",long = "opt-level",help ="Optimization level ( possible values: 0,1,2,3 )")]
+    #[structopt(
+        short = "O",
+        long = "opt-level",
+        help = "Optimization level ( possible values: 0,1,2,3 )"
+    )]
     pub opt_level: Option<usize>,
-    #[structopt(long="cc",help = "Specify C compiler for linking/compiling C files")]
-    pub cc: Option<String>
+    #[structopt(long = "cc", help = "Specify C compiler for linking/compiling C files")]
+    pub cc: Option<String>,
 }
 
 fn main() {
@@ -54,7 +58,7 @@ fn main() {
         import_search_paths: vec![],
         library: false,
         merged: None,
-        path: String::new()
+        path: String::new(),
     };
     let start = time::PreciseTime::now();
     context.parse(opts.path.to_str().unwrap());
@@ -131,7 +135,7 @@ typedef size_t isize;
         let triple_ = if opts.target.is_some() {
             opts.target.unwrap().clone()
         } else {
-            target_lexicon::Triple::default().to_string()
+            "x86_64-unknown-unknown-elf".to_owned()
         };
         let mut flag_builder = settings::builder();
         flag_builder.enable("is_pic").unwrap();
@@ -187,7 +191,7 @@ typedef size_t isize;
         // Load runtime
         unsafe {
             let c_str: std::ffi::CString = std::ffi::CString::new("libwaffle_runtime.so").unwrap();
-            let handle = libc::dlopen(c_str.as_ptr(),libc::RTLD_LAZY);
+            let handle = libc::dlopen(c_str.as_ptr(), libc::RTLD_LAZY);
             if handle.is_null() {
                 panic!("Could not load language runtime");
             }
@@ -195,8 +199,8 @@ typedef size_t isize;
         for lib in opts.libraries {
             unsafe {
                 let c_str: std::ffi::CString = std::ffi::CString::new(lib).unwrap();
-                let _handle = libc::dlopen(c_str.as_ptr(),libc::RTLD_LAZY);
-            } 
+                let _handle = libc::dlopen(c_str.as_ptr(), libc::RTLD_LAZY);
+            }
         }
 
         codegen.complex_types = complex;
@@ -217,10 +221,10 @@ extern "C" {
     fn system(s: *const i8) -> i32;
 }
 
-fn linker(cc: &str,filename: &str, libs: &Vec<String>,opt_level: usize, output: &str) {
+fn linker(cc: &str, filename: &str, libs: &Vec<String>, opt_level: usize, output: &str) {
     let mut linker = String::from(&format!(
         "{} -O{} -lc -lpthread -lwaffle_runtime {} -o {}  ",
-        cc,opt_level,filename, output
+        cc, opt_level, filename, output
     ));
     for lib in libs.iter() {
         linker.push_str(&format!(" -l{} ", lib));

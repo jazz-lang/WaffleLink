@@ -298,7 +298,7 @@ impl Function {
             let mut name = String::new();
             if self.this.is_some() {
                 name.push_str(&format!(
-                    "this{}_",
+                    "${}_",
                     self.this.as_ref().unwrap().1.get_subty().unwrap()
                 ));
             }

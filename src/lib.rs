@@ -33,7 +33,7 @@ pub struct Context {
     pub files: Vec<File>,
     pub library: bool,
     pub merged: Option<File>,
-    pub path: String
+    pub path: String,
 }
 
 use ast::Element;
@@ -57,8 +57,8 @@ fn walk_directories(path: &str, files: &mut Vec<String>) {
     }
 }
 use parser::Parser;
-use reader::Reader;
 use rayon::iter::*;
+use reader::Reader;
 impl Context {
     pub fn parse(&mut self, path: &str) {
         let spath = std::path::Path::new(path);
@@ -144,7 +144,7 @@ impl Context {
                 imports.insert(name.name.clone());
             }
         });
-        
+
         let home_path = env!("HOME").to_owned();
         let home_path = home_path + "/.jazz";
         let home_path = std::path::Path::new(&home_path);
@@ -156,7 +156,7 @@ impl Context {
                     library: false,
                     files: vec![],
                     import_search_paths: vec![],
-                    path: self.path.clone()
+                    path: self.path.clone(),
                 };
                 let mut full_path = String::new();
                 full_path.push_str(home_path.to_str().unwrap());
@@ -165,14 +165,12 @@ impl Context {
                 if std::path::Path::new(&full_path).exists() {
                     ctx.parse(&full_path);
                 } else {
-                
-                
-                let mut other_path = String::new();
-                other_path.push_str(&self.path);
-                other_path.push('/');
-                other_path.push_str(import);
+                    let mut other_path = String::new();
+                    other_path.push_str(&self.path);
+                    other_path.push('/');
+                    other_path.push_str(import);
 
-                ctx.parse(&other_path);
+                    ctx.parse(&other_path);
                 }
                 assert!(ctx.merged.is_some());
 
@@ -181,7 +179,6 @@ impl Context {
             .collect::<Vec<_>>();;
 
         for file in files.into_iter() {
-            
             merge_file.ast.extend_from_slice(&file.ast);
         }
 
