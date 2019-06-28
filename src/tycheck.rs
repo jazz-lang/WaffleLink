@@ -11,6 +11,14 @@ pub struct CStructure {
     pub ty: Type,
 }
 
+fn exists_basic(name: &str) -> bool {
+    match name {
+        "int" | "uint" | "ubyte" | "byte" | "ushort" | "short"
+        | "ulong" | "long" | "float32" | "float64" | "bool" | "char" => true,
+        _ => false
+    }
+}
+
 pub struct TypeChecker<'a> {
     pub ctx: &'a mut Context,
     pub type_info: HashMap<usize, Type>,
@@ -219,6 +227,8 @@ impl<'a> TypeChecker<'a> {
                             methods.push(func.clone());
                         } else {
                             let mut func = func.clone();
+                            
+                            
                             func.returns = box self.infer_type(&func.returns);
                             func.parameters = func
                                 .parameters
@@ -239,6 +249,9 @@ impl<'a> TypeChecker<'a> {
 
                         let mut func = func.clone();
                         func.returns = box self.infer_type(&func.returns);
+                        if &func.name == "main" && func.returns.is_void() {
+                                error!("'main' must return 'int'",func.pos);
+                            }
                         func.parameters = func
                             .parameters
                             .iter()
@@ -636,7 +649,8 @@ impl<'a> TypeChecker<'a> {
                 for (i, field) in fields.iter().enumerate() {
                     let field: (String, Box<Expr>) = field.clone();
                     if field.0 != ty.fields[i].0 {
-                        unimplemented!() // TODO: Print error
+                        eprintln!("{} {}",field.0,ty.fields[i].0);
+                        std::process::exit(1);
                     }
                     let vty = self.check_expr(&field.1);
                     if vty != ty.fields[i].1 {
@@ -653,6 +667,12 @@ impl<'a> TypeChecker<'a> {
                 self.type_info.insert(expr.id, ty.ty.clone());
 
                 return ty.ty.clone();
+            }
+            ExprKind::Null => {
+                let boxed = box Type::new(expr.pos.clone(),TypeKind::Void);
+                let ty = Type::new(expr.pos.clone(),TypeKind::Pointer(boxed));
+                self.type_info.insert(expr.id,ty.clone());
+                return ty;
             }
             _ => unimplemented!(),
         };
@@ -750,7 +770,7 @@ impl<'a> TypeChecker<'a> {
                         self.structures.get(name).unwrap().ty.clone(),
                     );
                     return self.structures.get(name).unwrap().ty.clone();
-                } else if let Some(interface) = self.interfaces.get(name) {
+                } else if let Some(_) = self.interfaces.get(name) {
                     /* return Type::new(
                         interface.pos.clone(),
                         TypeKind::Interface(
@@ -775,6 +795,9 @@ impl<'a> TypeChecker<'a> {
                     );*/
                     unimplemented!()
                 } else {
+                    if !exists_basic(name) {
+                        error!(&format!("Basic type '{}' does not exists",name),ty.pos);
+                    }
                     return ty.clone();
                 }
             }

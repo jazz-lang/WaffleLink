@@ -44,7 +44,7 @@ pub struct Options {
         help = "Optimization level ( possible values: 0,1,2,3 )"
     )]
     pub opt_level: Option<usize>,
-    #[structopt(long = "cc", help = "Specify C compiler for linking/compiling C files")]
+    #[structopt(long = "cc", help = "Specify C compiler for linking/compiling C files",parse(from_str))]
     pub cc: Option<String>,
 }
 
@@ -79,9 +79,17 @@ fn main() {
 typedef unsigned long ulong;
 typedef unsigned int uint;
 typedef unsigned short ushort;
-
+typedef double float64;
+typedef float float32;
 typedef size_t usize;
 typedef size_t isize;
+typedef unsigned char ubyte;
+typedef char byte;
+#ifndef true 
+typedef unsigned char bool;
+#define true 1
+#define false 0
+#endif
 
 "
         .to_owned();
@@ -103,6 +111,7 @@ typedef size_t isize;
             .open(&output)
             .unwrap();
         use std::io::Write;
+        file.set_len(0).unwrap();
         file.write_all(cgen.buffer.as_bytes()).unwrap();
 
         if !opts.compile_only {

@@ -386,16 +386,22 @@ impl MsgWithPos {
                     [self.pos.column as usize - 1..]
             )
         } else {
+            let line = self
+                    .src
+                    .lines()
+                    .nth(self.pos.line as usize - 1)
+                    .unwrap_or("");
+            let line = if line != "" && self.pos.column < line.len() {
+                &line[self.pos.column as usize - 1..]
+            } else {
+                ""
+            };
             format!(
                 "{} {}: {}\n|\n| {}\n|",
                 "error".red(),
                 self.pos,
                 self.msg.message(),
-                &self
-                    .src
-                    .lines()
-                    .nth(self.pos.line as usize - 1)
-                    .unwrap_or("")[self.pos.column as usize - 1..]
+                line
             )
         }
     }

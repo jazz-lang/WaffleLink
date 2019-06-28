@@ -5,11 +5,9 @@ pub struct CCodeGen {
     pub ty_info: HashMap<usize, Type>,
     pub variables: HashMap<String, String>,
     c_variables: HashSet<String>,
-    lbl_id: usize,
     pub complex_types: HashMap<String, Type>,
     tmp_id: usize,
     temps: String,
-    merge_lbl: Option<String>,
 }
 
 static mut FN_TY_C: i32 = 0;
@@ -19,7 +17,6 @@ use super::ast::*;
 impl CCodeGen {
     pub fn new() -> CCodeGen {
         CCodeGen {
-            lbl_id: 0,
             buffer: String::new(),
             ty_info: HashMap::new(),
             variables: HashMap::new(),
@@ -27,7 +24,6 @@ impl CCodeGen {
             tmp_id: 0,
             temps: String::new(),
             c_variables: HashSet::new(),
-            merge_lbl: None,
         }
     }
 }
@@ -40,23 +36,23 @@ fn ty_to_c(ty: &Type) -> String {
         TypeKind::Void => "void".to_owned(),
         TypeKind::Optional(ty) => format!("{}*", ty_to_c(ty)),
         TypeKind::Function(returns, params) => {
-            let ty = unsafe { FUNC_TYPES.as_mut().unwrap() };
-            ty.push_str("typedef ");
-            ty.push_str(&ty_to_c(returns));
-            ty.push_str(" ");
-            ty.push_str(&format!("(*_{})", unsafe { FN_TY_C }));
+            let ty_ = unsafe { FUNC_TYPES.as_mut().unwrap() };
+            ty_.push_str("typedef ");
+            ty_.push_str(&ty_to_c(returns));
+            ty_.push_str(" ");
+            ty_.push_str(&format!("(*_{})", unsafe { FN_TY_C }));
             unsafe {
                 FN_TY_C += 1;
             }
-            ty.push_str("(");
+            ty_.push_str("(");
             for (i, param) in params.iter().enumerate() {
-                ty.push_str(&ty_to_c(param));
+                ty_.push_str(&ty_to_c(param));
                 if i != params.len() - 1 {
-                    ty.push_str(", ");
+                    ty_.push_str(", ");
                 }
             }
-            ty.push_str(");\n");
-            format!("{}", unsafe { FN_TY_C - 1 })
+            ty_.push_str(");\n");
+            format!("/* {} */_{}",ty, unsafe { FN_TY_C - 1 })
         }
         TypeKind::Array(ty_, size) => {
             let mut ty = String::new();
@@ -101,12 +97,10 @@ impl CCodeGen {
                 _ => (),
             }
         }
+        let mut buffer = self.buffer.clone();
+        self.buffer.clear();
 
-        unsafe {
-            self.write("\n");
-            self.write(FUNC_TYPES.as_ref().unwrap());
-            self.write("\n");
-        }
+        
         for elem in elements.iter() {
             match elem {
                 Element::Func(func) => {
@@ -172,7 +166,7 @@ impl CCodeGen {
                     if func.external || func.body.is_none() {
                         continue;
                     }
-
+                    self.variables.clear();
                     self.write(&ty_to_c(&func.returns));
                     self.write(&format!(" {} (", func.mangle_name()));
                     if func.this.is_some() {
@@ -187,6 +181,10 @@ impl CCodeGen {
                         if i != func.parameters.len() - 1 {
                             self.write(",");
                         }
+                    }
+
+                    for (name,_) in func.parameters.iter() {
+                        self.variables.insert(name.to_string(),name.to_string());
                     }
                     self.write(")\n");
 
@@ -209,6 +207,14 @@ impl CCodeGen {
                 _ => (),
             }
         }
+        unsafe {
+            buffer.push_str("\n");
+            buffer.push_str(FUNC_TYPES.as_ref().unwrap());
+            buffer.push_str("\n");
+        }
+        
+        buffer.push_str(&self.buffer);
+        self.buffer = buffer;
     }
 
     fn gen_statement(&mut self, s: &StmtKind) {
@@ -272,8 +278,8 @@ impl CCodeGen {
                 };
 
                 self.write(&c_ty);
-                let c_name = self.tmp_id;
-                self.write(&format!(" /* var {} */ _{}", name, c_name));
+                let c_name = format!("_{}",self.tmp_id);
+                self.write(&format!(" /* var {} */ {}", name, c_name));
                 self.c_variables.insert(c_name.to_string());
                 self.variables.insert(name.to_owned(), c_name.to_string());
                 self.tmp_id += 1;
@@ -342,7 +348,7 @@ impl CCodeGen {
             ExprKind::Identifier(ident) => {
                 if self.variables.contains_key(ident) {
                     let c_name = self.variables.get(ident).unwrap().clone();
-                    self.write(&format!("_{}", c_name));
+                    self.write(&format!("{}", c_name));
                 } else {
                     self.write(&format!("{}", ident));
                 }
@@ -431,6 +437,7 @@ impl CCodeGen {
                                 .push_str(&format!("unsigned long _{} = ", self.tmp_id));
                             self.temps.push_str(&format!("{}ULL;\n", val));
                         }
+
                         _ => {
                             self.temps.push_str(&format!("int _{} = ", self.tmp_id));
                             self.temps.push_str(&format!("{};\n", *val as i32))
@@ -458,6 +465,7 @@ impl CCodeGen {
                     self.write(&format!("_{}", self.tmp_id));
                     self.tmp_id += 1;
                 }
+
 
                 _ => {
                     self.write("&");

@@ -1,0 +1,52 @@
+struct Location {
+	line int,
+	column int,
+	file *char
+}
+
+
+func new_location(name *char,line int,column int) Location {
+	var loc =  Location {
+		line: line,
+		column: column,
+		file: name
+	}
+
+	return loc
+}
+
+
+const INT_EXPR: int = 0
+const FLOAT_EXPR: int = 1
+const STR_EXPR: int = 2
+const BIN_EXPR: int = 3
+const CSTR_EXPR: int = 4
+struct Expr {
+	pos Location,
+	id int,
+	kind int
+}
+
+
+struct ExprInt {
+	pos Location,
+	id int,
+	kind int,
+	val ulong
+}
+
+struct ExrpFloat {
+	pos Location,
+	id int,
+	kind int,
+	val float64
+}
+
+struct ExprBinary {
+	pos Location,
+	id int,
+	kind int,
+	op *char,
+	x *Expr,
+	y *Expr
+}

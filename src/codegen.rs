@@ -1,10 +1,8 @@
 use crate::ast::Type as CType;
 use cranelift::prelude::*;
 use cranelift_module::*;
-use cranelift_simplejit::*;
-
 use crate::ast::{
-    Constant, Element, Expr, ExprKind, Function, Interface, Location, StmtKind, Struct, TypeKind,
+   Element, Expr, ExprKind, Function, StmtKind, TypeKind,
 };
 
 #[derive(Clone)]
@@ -13,7 +11,7 @@ pub struct Var {
     pub wty: CType,
     pub ty: types::Type,
     pub value: Variable,
-    pub on_stack: bool,
+    pub argument: bool,
 }
 
 pub fn ty_size(ty: &CType) -> usize {
@@ -100,12 +98,6 @@ pub fn ty_to_cranelift(ty: &CType) -> Type {
     }
 }
 
-fn retrieve_from_load(expr: &Expr) -> &Expr {
-    match &expr.kind {
-        ExprKind::Deref(val) => val,
-        _ => expr,
-    }
-}
 
 pub struct Codegen<T: Backend> {
     pub module: Module<T>,
@@ -266,7 +258,7 @@ impl<T: Backend> Codegen<T> {
                                 name: param.0.clone(),
                                 ty: ebb_params[i],
                                 wty: trans.get_ty(&param.1),
-                                on_stack: false,
+                                argument: true,
                                 value: var,
                             };
                             trans.variables.insert(param.0.clone(), var);
@@ -282,7 +274,7 @@ impl<T: Backend> Codegen<T> {
                                 name: name.to_owned(),
                                 ty: *ebb_params.last().unwrap(),
                                 wty: trans.get_ty(ty),
-                                on_stack: false,
+                                argument: true,
                                 value: var,
                             };
                             trans.variables.insert(name.to_owned(), var);
@@ -518,6 +510,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
     pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Variable>) {
         match &expr.kind {
+            ExprKind::Null => {
+                (self.builder.ins().iconst(types::I64,0),None)
+            }
             ExprKind::Integer(value, suffix) => {
                 use crate::lexer::IntSuffix;
                 let value = *value;
@@ -558,8 +553,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             }
             ExprKind::Binary(op, lhs, rhs) => return (self.translate_binop(op, lhs, rhs), None),
             ExprKind::String(value) => {
+                let value = format!("{}\0",value);
                 self.data_ctx
-                    .define(value.clone().into_boxed_str().into_boxed_bytes());
+                    .define(value.into_boxed_str().into_boxed_bytes());
                 let id = self
                     .module
                     .declare_data(&format!("__str_{}", expr.id), Linkage::Export, true)
@@ -568,10 +564,10 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
                 self.module.define_data(id, &self.data_ctx).unwrap();
                 self.module.finalize_definitions();
+                self.data_ctx.clear();
 
                 let local_id = self.module.declare_data_in_func(id, &mut self.builder.func);
                 let pointer = self.module.target_config().pointer_type();
-                self.data_ctx.clear();
                 return (self.builder.ins().symbol_value(pointer, local_id), None);
             }
             ExprKind::Deref(val) => {
@@ -649,7 +645,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     let this = this.as_ref().unwrap();
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
                     let value =
-                        if !ty.is_pointer() && !ty.is_array() && !ty.is_struct() && !ty.is_option()
+                        if !ty.is_pointer()
                         {
                             let value = self.translate_expr(&Expr {
                                 pos: expr.pos.clone(),
@@ -681,6 +677,9 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             ExprKind::Identifier(name) => {
                 let value = if self.variables.contains_key(name) {
                     let var: &Var = self.variables.get(name).unwrap();
+                    if var.argument || var.wty.is_pointer() || var.wty.is_struct() {
+                        return (self.builder.use_var(var.value),None);
+                    }
                     var
                 } else {
                     unimplemented!()
@@ -778,7 +777,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             }
             ExprKind::Member(object, field) => {
                 let ty = self.ty_info.get(&object.id).unwrap().clone();
-                let val = self.translate_expr(object).0;
+                let val = self.retrieve_from_load(object);
                 let mut offset = 0;
                 let ty = if ty.is_struct() {
                     ty
@@ -978,9 +977,16 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let value = if val.is_none() {
                     addr
                 } else {
+                    //let ty = self.ty_info.get(&val.as_ref().unwrap().id).unwrap().clone();
                     let value = self.translate_expr(val.as_ref().unwrap()).0;
+                    /*let value = if ty.is_pointer() {
+                        self.builder.ins().load(ty_to_cranelift(ty.get_subty().unwrap()),MemFlags::new(),value,0)
+                    } else {
+                        value
+                    };*/
                     self.builder.ins().store(MemFlags::new(), value, addr, 0);
                     addr
+                    
                 };
 
                 self.builder.def_var(variable, value);
@@ -989,7 +995,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     name: name.to_owned(),
                     ty: ty_to_cranelift(&ty),
                     wty: ty.clone(),
-                    on_stack: ty.is_struct() || ty.is_array(),
+                    argument: false,
                     value: variable,
                 };
 
