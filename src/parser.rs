@@ -742,7 +742,14 @@ impl<'a> Parser<'a> {
             data
         };
 
-        let ty = self.parse_type()?;
+        let ty = if !self.token.is(TokenKind::RBrace) {
+            self.parse_type()?
+        } else {
+            Type::new(
+                pos.clone(),
+                TypeKind::Void
+            )
+        };
         let body = if modifiers.contains("extern") || modifiers.contains("internal") {
             if self.token.is(TokenKind::Semicolon) {
                 self.expect_semicolon()?;
