@@ -22,7 +22,7 @@ pub struct Options {
 
     #[structopt(short = "l", help = "Link with library")]
     pub libraries: Vec<String>,
-    #[structopt(long = "aot", help = "Use JIT compilation instead of AOT compilation")]
+    #[structopt(long = "jit", help = "Use JIT compilation instead of AOT compilation")]
     pub jit: bool,
     #[structopt(
         short = "c",
