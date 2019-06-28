@@ -247,15 +247,23 @@ impl<T: Backend> Codegen<T> {
 
                             let val = trans.builder.ebb_params(entry_ebb)[i];
                             let var = Variable::new(trans.variables.len());
+                            let slot = trans.builder.create_stack_slot(
+                                StackSlotData::new(
+                                    StackSlotKind::ExplicitSlot,
+                                    ty_size(&trans.get_ty(&param.1)) as _
+                                )
+                            );
+                            let addr = trans.builder.ins().stack_addr(trans.module.target_config().pointer_type(),slot,0);
+                            trans.builder.ins().store(MemFlags::new(),val,addr,0);
                             trans
                                 .builder
-                                .declare_var(var, ty_to_cranelift(&trans.get_ty(&param.1)));
-                            trans.builder.def_var(var, val);
+                                .declare_var(var, trans.module.target_config().pointer_type());
+                            trans.builder.def_var(var, addr);
                             let var = Var {
                                 name: param.0.clone(),
                                 ty: ebb_params[i],
                                 wty: trans.get_ty(&param.1),
-                                argument: true,
+                                argument: false,
                                 value: var,
                             };
                             trans.variables.insert(param.0.clone(), var);
