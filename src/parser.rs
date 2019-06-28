@@ -742,7 +742,7 @@ impl<'a> Parser<'a> {
             data
         };
 
-        let ty = if !self.token.is(TokenKind::RBrace) {
+        let ty = if !self.token.is(TokenKind::LBrace) {
             self.parse_type()?
         } else {
             Type::new(
