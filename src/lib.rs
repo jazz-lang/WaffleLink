@@ -58,7 +58,6 @@ fn walk_directories(path: &str, files: &mut Vec<String>) {
     }
 }
 use parser::Parser;
-use rayon::iter::*;
 use reader::Reader;
 impl Context {
     pub fn parse(&mut self, path: &str) {
@@ -78,7 +77,7 @@ impl Context {
         let failed = std::sync::atomic::AtomicBool::new(false);
         let fail_count = std::sync::atomic::AtomicI32::new(0);
         self.files = files
-            .par_iter()
+            .iter()
             .map(|file_path| {
                 let path = std::path::Path::new(file_path);
                 let mut ast_file = File {
@@ -150,7 +149,7 @@ impl Context {
         let home_path = home_path + "/.jazz";
         let home_path = std::path::Path::new(&home_path);
         let files = imports
-            .par_iter()
+            .iter()
             .map(|import| {
                 let mut ctx = Context {
                     merged: None,

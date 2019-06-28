@@ -9,6 +9,7 @@ use cranelift_faerie::FaerieBackend;
 use cranelift_faerie::FaerieBuilder;
 use cranelift_faerie::FaerieProduct;
 use cranelift_simplejit::SimpleJITBackend;
+use cranelift_module::default_libcall_names;
 
 use cranelift_simplejit::SimpleJITBuilder;
 use std::str::FromStr;
@@ -21,8 +22,8 @@ pub struct Options {
 
     #[structopt(short = "l", help = "Link with library")]
     pub libraries: Vec<String>,
-    #[structopt(long = "aot", help = "Use AOT compilation instead of JIT compilation")]
-    pub aot: bool,
+    #[structopt(long = "aot", help = "Use JIT compilation instead of AOT compilation")]
+    pub jit: bool,
     #[structopt(
         short = "c",
         help = "Compiler will output object file or C code file (you can not use that config without --aot or --emit-c"
@@ -140,7 +141,7 @@ typedef unsigned char bool;
             waffle::DUMP_IR = true;
         }
     }
-    if opts.aot {
+    if !opts.jit {
         let triple_ = if opts.target.is_some() {
             opts.target.unwrap().clone()
         } else {
@@ -158,7 +159,7 @@ typedef unsigned char bool;
                 isa,
                 "waffle".to_owned(),
                 cranelift_faerie::FaerieTrapCollection::Disabled,
-                cranelift_faerie::FaerieBuilder::default_libcall_names(),
+                default_libcall_names(),
             )
             .unwrap(),
             context.merged.unwrap().ast.clone(),
@@ -192,9 +193,12 @@ typedef unsigned char bool;
             println!("Compilation time {} ms", start.to(end).num_milliseconds());
         }
     } else {
+        if !opts.libraries.is_empty() {
+            panic!("Linking with libraries not supported in JIT mode");
+        }
         let mut codegen: Codegen<SimpleJITBackend> = Codegen::<SimpleJITBackend>::new(
             ty_info,
-            SimpleJITBuilder::new(),
+            SimpleJITBuilder::new(default_libcall_names()),
             context.merged.unwrap().ast.clone(),
         );
         // Load runtime
@@ -205,12 +209,7 @@ typedef unsigned char bool;
                 panic!("Could not load language runtime");
             }
         }
-        for lib in opts.libraries {
-            unsafe {
-                let c_str: std::ffi::CString = std::ffi::CString::new(lib).unwrap();
-                let _handle = libc::dlopen(c_str.as_ptr(), libc::RTLD_LAZY);
-            }
-        }
+        
 
         codegen.complex_types = complex;
         codegen.translate();

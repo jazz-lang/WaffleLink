@@ -558,7 +558,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     .define(value.into_boxed_str().into_boxed_bytes());
                 let id = self
                     .module
-                    .declare_data(&format!("__str_{}", expr.id), Linkage::Export, true)
+                    .declare_data(&format!("__str_{}", expr.id), Linkage::Export, true,None)
                     .map_err(|e| e.to_string())
                     .unwrap();
 
@@ -677,7 +677,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             ExprKind::Identifier(name) => {
                 let value = if self.variables.contains_key(name) {
                     let var: &Var = self.variables.get(name).unwrap();
-                    if var.argument || var.wty.is_pointer() || var.wty.is_struct() {
+                    if var.argument || var.wty.is_struct() {
                         return (self.builder.use_var(var.value),None);
                     }
                     var

@@ -340,6 +340,11 @@ impl<'a> TypeChecker<'a> {
     pub fn check_expr(&mut self, expr: &Expr) -> Type {
         let pos = expr.pos.clone();
         match &expr.kind {
+            ExprKind::Character(_) => {
+                let ty = Type::new(pos.clone(),TypeKind::Basic("char".to_owned()));
+                self.type_info.insert(expr.id,ty.clone());
+                return ty;
+            }
             ExprKind::Integer(_, suffix) => {
                 use crate::lexer::IntSuffix;
                 let kind = match suffix {
@@ -410,7 +415,7 @@ impl<'a> TypeChecker<'a> {
                 let ty1 = self.check_expr(lhs);
                 let ty2 = self.check_expr(rhs);
 
-                if ty1.is_basic() && ty2.is_basic() {
+                if (ty1.is_basic() && ty2.is_basic()) || (ty1.is_pointer() && ty2.is_pointer()){
                     let op: &str = op;
                     match op {
                         x if ["==", "!=", ">", "<", ">=", "<=", "||", "&&"].contains(&x) => {
