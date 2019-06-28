@@ -1,9 +1,7 @@
 use crate::ast::Type as CType;
+use crate::ast::{Element, Expr, ExprKind, Function, StmtKind, TypeKind};
 use cranelift::prelude::*;
 use cranelift_module::*;
-use crate::ast::{
-   Element, Expr, ExprKind, Function, StmtKind, TypeKind,
-};
 
 #[derive(Clone)]
 pub struct Var {
@@ -97,7 +95,6 @@ pub fn ty_to_cranelift(ty: &CType) -> Type {
         x => panic!("{:?}", x),
     }
 }
-
 
 pub struct Codegen<T: Backend> {
     pub module: Module<T>,
@@ -510,9 +507,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
     pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Variable>) {
         match &expr.kind {
-            ExprKind::Null => {
-                (self.builder.ins().iconst(types::I64,0),None)
-            }
+            ExprKind::Null => (self.builder.ins().iconst(types::I64, 0), None),
             ExprKind::Integer(value, suffix) => {
                 use crate::lexer::IntSuffix;
                 let value = *value;
@@ -553,12 +548,12 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             }
             ExprKind::Binary(op, lhs, rhs) => return (self.translate_binop(op, lhs, rhs), None),
             ExprKind::String(value) => {
-                let value = format!("{}\0",value);
+                let value = format!("{}\0", value);
                 self.data_ctx
                     .define(value.into_boxed_str().into_boxed_bytes());
                 let id = self
                     .module
-                    .declare_data(&format!("__str_{}", expr.id), Linkage::Export, true,None)
+                    .declare_data(&format!("__str_{}", expr.id), Linkage::Export, true, None)
                     .map_err(|e| e.to_string())
                     .unwrap();
 
@@ -644,18 +639,16 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 if this.is_some() {
                     let this = this.as_ref().unwrap();
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
-                    let value =
-                        if !ty.is_pointer()
-                        {
-                            let value = self.translate_expr(&Expr {
-                                pos: expr.pos.clone(),
-                                id: 0,
-                                kind: ExprKind::AddrOf(this.clone()),
-                            });
-                            value
-                        } else {
-                            self.translate_expr(this)
-                        };
+                    let value = if !ty.is_pointer() {
+                        let value = self.translate_expr(&Expr {
+                            pos: expr.pos.clone(),
+                            id: 0,
+                            kind: ExprKind::AddrOf(this.clone()),
+                        });
+                        value
+                    } else {
+                        self.translate_expr(this)
+                    };
 
                     args.push(value.0);
                 }
@@ -678,7 +671,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let value = if self.variables.contains_key(name) {
                     let var: &Var = self.variables.get(name).unwrap();
                     if var.argument || var.wty.is_struct() {
-                        return (self.builder.use_var(var.value),None);
+                        return (self.builder.use_var(var.value), None);
                     }
                     var
                 } else {
@@ -986,7 +979,6 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     };*/
                     self.builder.ins().store(MemFlags::new(), value, addr, 0);
                     addr
-                    
                 };
 
                 self.builder.def_var(variable, value);

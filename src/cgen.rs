@@ -52,7 +52,7 @@ fn ty_to_c(ty: &Type) -> String {
                 }
             }
             ty_.push_str(");\n");
-            format!("/* {} */_{}",ty, unsafe { FN_TY_C - 1 })
+            format!("/* {} */_{}", ty, unsafe { FN_TY_C - 1 })
         }
         TypeKind::Array(ty_, size) => {
             let mut ty = String::new();
@@ -100,7 +100,6 @@ impl CCodeGen {
         let mut buffer = self.buffer.clone();
         self.buffer.clear();
 
-        
         for elem in elements.iter() {
             match elem {
                 Element::Func(func) => {
@@ -183,8 +182,8 @@ impl CCodeGen {
                         }
                     }
 
-                    for (name,_) in func.parameters.iter() {
-                        self.variables.insert(name.to_string(),name.to_string());
+                    for (name, _) in func.parameters.iter() {
+                        self.variables.insert(name.to_string(), name.to_string());
                     }
                     self.write(")\n");
 
@@ -212,7 +211,7 @@ impl CCodeGen {
             buffer.push_str(FUNC_TYPES.as_ref().unwrap());
             buffer.push_str("\n");
         }
-        
+
         buffer.push_str(&self.buffer);
         self.buffer = buffer;
     }
@@ -278,7 +277,7 @@ impl CCodeGen {
                 };
 
                 self.write(&c_ty);
-                let c_name = format!("_{}",self.tmp_id);
+                let c_name = format!("_{}", self.tmp_id);
                 self.write(&format!(" /* var {} */ {}", name, c_name));
                 self.c_variables.insert(c_name.to_string());
                 self.variables.insert(name.to_owned(), c_name.to_string());
@@ -465,7 +464,6 @@ impl CCodeGen {
                     self.write(&format!("_{}", self.tmp_id));
                     self.tmp_id += 1;
                 }
-
 
                 _ => {
                     self.write("&");

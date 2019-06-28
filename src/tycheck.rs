@@ -13,9 +13,9 @@ pub struct CStructure {
 
 fn exists_basic(name: &str) -> bool {
     match name {
-        "int" | "uint" | "ubyte" | "byte" | "ushort" | "short"
-        | "ulong" | "long" | "float32" | "float64" | "bool" | "char" => true,
-        _ => false
+        "int" | "uint" | "ubyte" | "byte" | "ushort" | "short" | "ulong" | "long" | "float32"
+        | "float64" | "bool" | "char" => true,
+        _ => false,
     }
 }
 
@@ -227,8 +227,7 @@ impl<'a> TypeChecker<'a> {
                             methods.push(func.clone());
                         } else {
                             let mut func = func.clone();
-                            
-                            
+
                             func.returns = box self.infer_type(&func.returns);
                             func.parameters = func
                                 .parameters
@@ -250,8 +249,8 @@ impl<'a> TypeChecker<'a> {
                         let mut func = func.clone();
                         func.returns = box self.infer_type(&func.returns);
                         if &func.name == "main" && func.returns.is_void() {
-                                error!("'main' must return 'int'",func.pos);
-                            }
+                            error!("'main' must return 'int'", func.pos);
+                        }
                         func.parameters = func
                             .parameters
                             .iter()
@@ -341,8 +340,8 @@ impl<'a> TypeChecker<'a> {
         let pos = expr.pos.clone();
         match &expr.kind {
             ExprKind::Character(_) => {
-                let ty = Type::new(pos.clone(),TypeKind::Basic("char".to_owned()));
-                self.type_info.insert(expr.id,ty.clone());
+                let ty = Type::new(pos.clone(), TypeKind::Basic("char".to_owned()));
+                self.type_info.insert(expr.id, ty.clone());
                 return ty;
             }
             ExprKind::Integer(_, suffix) => {
@@ -415,7 +414,7 @@ impl<'a> TypeChecker<'a> {
                 let ty1 = self.check_expr(lhs);
                 let ty2 = self.check_expr(rhs);
 
-                if (ty1.is_basic() && ty2.is_basic()) || (ty1.is_pointer() && ty2.is_pointer()){
+                if (ty1.is_basic() && ty2.is_basic()) || (ty1.is_pointer() && ty2.is_pointer()) {
                     let op: &str = op;
                     match op {
                         x if ["==", "!=", ">", "<", ">=", "<=", "||", "&&"].contains(&x) => {
@@ -654,7 +653,7 @@ impl<'a> TypeChecker<'a> {
                 for (i, field) in fields.iter().enumerate() {
                     let field: (String, Box<Expr>) = field.clone();
                     if field.0 != ty.fields[i].0 {
-                        eprintln!("{} {}",field.0,ty.fields[i].0);
+                        eprintln!("{} {}", field.0, ty.fields[i].0);
                         std::process::exit(1);
                     }
                     let vty = self.check_expr(&field.1);
@@ -674,9 +673,9 @@ impl<'a> TypeChecker<'a> {
                 return ty.ty.clone();
             }
             ExprKind::Null => {
-                let boxed = box Type::new(expr.pos.clone(),TypeKind::Void);
-                let ty = Type::new(expr.pos.clone(),TypeKind::Pointer(boxed));
-                self.type_info.insert(expr.id,ty.clone());
+                let boxed = box Type::new(expr.pos.clone(), TypeKind::Void);
+                let ty = Type::new(expr.pos.clone(), TypeKind::Pointer(boxed));
+                self.type_info.insert(expr.id, ty.clone());
                 return ty;
             }
             _ => unimplemented!(),
@@ -801,7 +800,7 @@ impl<'a> TypeChecker<'a> {
                     unimplemented!()
                 } else {
                     if !exists_basic(name) {
-                        error!(&format!("Basic type '{}' does not exists",name),ty.pos);
+                        error!(&format!("Basic type '{}' does not exists", name), ty.pos);
                     }
                     return ty.clone();
                 }

@@ -387,10 +387,10 @@ impl MsgWithPos {
             )
         } else {
             let line = self
-                    .src
-                    .lines()
-                    .nth(self.pos.line as usize - 1)
-                    .unwrap_or("");
+                .src
+                .lines()
+                .nth(self.pos.line as usize - 1)
+                .unwrap_or("");
             let line = if line != "" && self.pos.column < line.len() {
                 &line[self.pos.column as usize - 1..]
             } else {

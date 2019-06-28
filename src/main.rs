@@ -8,8 +8,8 @@ use cranelift::codegen::settings::{self, Configurable};
 use cranelift_faerie::FaerieBackend;
 use cranelift_faerie::FaerieBuilder;
 use cranelift_faerie::FaerieProduct;
-use cranelift_simplejit::SimpleJITBackend;
 use cranelift_module::default_libcall_names;
+use cranelift_simplejit::SimpleJITBackend;
 
 use cranelift_simplejit::SimpleJITBuilder;
 use std::str::FromStr;
@@ -45,7 +45,11 @@ pub struct Options {
         help = "Optimization level ( possible values: 0,1,2,3 )"
     )]
     pub opt_level: Option<usize>,
-    #[structopt(long = "cc", help = "Specify C compiler for linking/compiling C files",parse(from_str))]
+    #[structopt(
+        long = "cc",
+        help = "Specify C compiler for linking/compiling C files",
+        parse(from_str)
+    )]
     pub cc: Option<String>,
 }
 
@@ -209,7 +213,6 @@ typedef unsigned char bool;
                 panic!("Could not load language runtime");
             }
         }
-        
 
         codegen.complex_types = complex;
         codegen.translate();
