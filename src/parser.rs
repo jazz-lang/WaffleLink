@@ -81,15 +81,11 @@ impl<'a> Parser<'a> {
         self.advance_token()?;
         let name = self.expect_identifier()?;
 
-        self.expect_token(TokenKind::Colon)?;
-        let data_type = self.parse_type()?;
-        if self.token.is(TokenKind::Semicolon) {
-            self.expect_semicolon()?;
-        }
+        let data_type = self.parse_var_type()?.unwrap();
         elements.push(Element::Var(ExternVar {
             pos,
             name,
-            ty: box data_type,
+            ty: data_type,
         }));
 
         Ok(())
@@ -745,10 +741,7 @@ impl<'a> Parser<'a> {
         let ty = if !self.token.is(TokenKind::LBrace) {
             self.parse_type()?
         } else {
-            Type::new(
-                pos.clone(),
-                TypeKind::Void
-            )
+            Type::new(pos.clone(), TypeKind::Void)
         };
         let body = if modifiers.contains("extern") || modifiers.contains("internal") {
             if self.token.is(TokenKind::Semicolon) {

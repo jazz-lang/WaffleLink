@@ -201,7 +201,7 @@ impl<'a> TypeChecker<'a> {
                         }
                         if self
                             .methods
-                            .contains_key(&format!("{}", this_ty.get_pointee().unwrap()))
+                            .contains_key(&format!("{}", this_ty.get_subty().unwrap()))
                         {
                             let mut func = func.clone();
                             if this_ty.is_interface() {
@@ -214,7 +214,10 @@ impl<'a> TypeChecker<'a> {
                                 .map(|(name, ty)| (name.clone(), box self.infer_type(&ty.clone())))
                                 .collect::<Vec<_>>();
                             func.this = Some((this.0.clone(), box this_ty.clone()));
-                            let methods = self.methods.get_mut(&format!("{}", this_ty)).unwrap();
+                            let methods = self
+                                .methods
+                                .get_mut(&format!("{}", this_ty.get_subty().unwrap()))
+                                .unwrap();
                             for method in methods.into_iter() {
                                 if method.name == func.name {
                                     error!(
@@ -404,7 +407,7 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Assign(to, from) => {
                 let ty_to = self.check_expr(to);
                 let ty_from = self.check_expr(from);
-                if ty_to != ty_from {
+                if (ty_to != ty_from) && (!ty_from.is_array() && !ty_to.is_array_wo_len()) {
                     error!(&format!("can not assign `{}` to `{}`", ty_from, ty_to), pos)
                 }
                 self.type_info.insert(expr.id, ty_from.clone());

@@ -145,8 +145,15 @@ impl Context {
             }
         });
 
-        let home_path = env!("HOME").to_owned();
-        let home_path = home_path + "/.jazz";
+        let home_path = option_env!("HOME").to_owned();
+        let home_path = format!(
+            "{}/.jazz",
+            if home_path.is_some() {
+                home_path.as_ref().unwrap()
+            } else {
+                env!("HOMEPATH")
+            }
+        );
         let home_path = std::path::Path::new(&home_path);
         let files = imports
             .iter()

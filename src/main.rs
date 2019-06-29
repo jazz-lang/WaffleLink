@@ -205,14 +205,6 @@ typedef unsigned char bool;
             SimpleJITBuilder::new(default_libcall_names()),
             context.merged.unwrap().ast.clone(),
         );
-        // Load runtime
-        unsafe {
-            let c_str: std::ffi::CString = std::ffi::CString::new("libwaffle_runtime.so").unwrap();
-            let handle = libc::dlopen(c_str.as_ptr(), libc::RTLD_LAZY);
-            if handle.is_null() {
-                panic!("Could not load language runtime");
-            }
-        }
 
         codegen.complex_types = complex;
         codegen.translate();
@@ -233,9 +225,14 @@ extern "C" {
 }
 
 fn linker(cc: &str, filename: &str, libs: &Vec<String>, opt_level: usize, output: &str) {
+    let lib = if cfg!(windows) {
+        ""
+    } else {
+        "-lwaffle_runtime -lc -lpthread"
+    };
     let mut linker = String::from(&format!(
-        "{} -O{} -lc -lpthread -lwaffle_runtime {} -o {}  ",
-        cc, opt_level, filename, output
+        "{} -O{} {} {} -o {}  ",
+        cc, opt_level, lib, filename, output
     ));
     for lib in libs.iter() {
         linker.push_str(&format!(" -l{} ", lib));

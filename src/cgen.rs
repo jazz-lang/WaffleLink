@@ -54,14 +54,14 @@ fn ty_to_c(ty: &Type) -> String {
             ty_.push_str(");\n");
             format!("/* {} */_{}", ty, unsafe { FN_TY_C - 1 })
         }
-        TypeKind::Array(ty_, size) => {
+        TypeKind::Array(ty_, _) => {
             let mut ty = String::new();
             ty.push_str(&ty_to_c(ty_));
-            ty.push_str("[");
+            /*ty.push_str("[");
             if size.is_some() {
                 ty.push_str(&format!("{}", size.unwrap()));
             }
-            ty.push_str("]");
+            ty.push_str("]");*/
             return ty;
         }
         _ => unimplemented!(),
@@ -269,6 +269,12 @@ impl CCodeGen {
                 }*/
             }
             StmtKind::VarDecl(name, ty, val) => {
+                let ty_ = if ty.is_some() {
+                    *ty.as_ref().unwrap().clone()
+                } else {
+                    let ty_info = self.ty_info.get(&val.as_ref().unwrap().id).unwrap().clone();
+                    ty_info
+                };
                 let c_ty = if ty.is_some() {
                     ty_to_c(ty.as_ref().unwrap())
                 } else {
@@ -281,6 +287,17 @@ impl CCodeGen {
                 self.write(&format!(" /* var {} */ {}", name, c_name));
                 self.c_variables.insert(c_name.to_string());
                 self.variables.insert(name.to_owned(), c_name.to_string());
+                if ty_.is_array() {
+                    if ty_.is_array_wo_len() {
+                        self.write("[]");
+                    } else {
+                        if let TypeKind::Array(_, Some(size)) = &ty_.kind {
+                            self.write(&format!("[{}]", size));
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                }
                 self.tmp_id += 1;
                 if val.is_none() {
                     self.write(";\n");

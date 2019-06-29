@@ -10,6 +10,7 @@ pub struct Var {
     pub ty: types::Type,
     pub value: Variable,
     pub argument: bool,
+    pub initialized: bool,
 }
 
 pub fn ty_size(ty: &CType) -> usize {
@@ -106,6 +107,7 @@ pub struct Codegen<T: Backend> {
     func_info: HashMap<String, Function>,
     functions: HashMap<String, FuncId>,
     pub complex_types: HashMap<String, CType>,
+    constants: HashMap<String, Box<Expr>>,
 }
 
 impl<T: Backend> Codegen<T> {
@@ -128,6 +130,7 @@ impl<T: Backend> Codegen<T> {
             func_info: HashMap::new(),
             functions: HashMap::new(),
             complex_types: HashMap::new(),
+            constants: HashMap::new(),
         }
     }
 
@@ -155,6 +158,10 @@ impl<T: Backend> Codegen<T> {
             match elem {
                 Element::Func(func) => {
                     self.func_info.insert(func.mangle_name(), func.clone());
+                }
+                Element::Const(constant) => {
+                    self.constants
+                        .insert(constant.name.clone(), constant.value.clone());
                 }
                 _ => (),
             }
@@ -233,13 +240,18 @@ impl<T: Backend> Codegen<T> {
                             terminated: false,
                             break_ebb: vec![],
                             continue_ebb: vec![],
+                            constants: &self.constants,
                         };
-                        if trans.get_ty(&func.returns).is_struct() {
+                        if trans.get_ty(&func.returns).is_struct()
+                            || trans.get_ty(&func.returns).is_array()
+                        {
                             trans.return_addr = Some(trans.builder.ebb_params(entry_ebb)[0]);
                         }
 
                         for (i, param) in func.parameters.iter().enumerate() {
-                            let i = if trans.get_ty(&func.returns).is_struct() {
+                            let i = if trans.get_ty(&func.returns).is_struct()
+                                || trans.get_ty(&func.returns).is_array()
+                            {
                                 i + 1
                             } else {
                                 i
@@ -247,24 +259,34 @@ impl<T: Backend> Codegen<T> {
 
                             let val = trans.builder.ebb_params(entry_ebb)[i];
                             let var = Variable::new(trans.variables.len());
-                            let slot = trans.builder.create_stack_slot(
-                                StackSlotData::new(
-                                    StackSlotKind::ExplicitSlot,
-                                    ty_size(&trans.get_ty(&param.1)) as _
-                                )
+                            let slot = trans.builder.create_stack_slot(StackSlotData::new(
+                                StackSlotKind::ExplicitSlot,
+                                ty_size(&trans.get_ty(&param.1)) as _,
+                            ));
+                            let addr = trans.builder.ins().stack_addr(
+                                trans.module.target_config().pointer_type(),
+                                slot,
+                                0,
                             );
-                            let addr = trans.builder.ins().stack_addr(trans.module.target_config().pointer_type(),slot,0);
-                            trans.builder.ins().store(MemFlags::new(),val,addr,0);
+                            trans.builder.ins().store(MemFlags::new(), val, addr, 0);
                             trans
                                 .builder
                                 .declare_var(var, trans.module.target_config().pointer_type());
                             trans.builder.def_var(var, addr);
+                            let i = if trans.get_ty(&func.returns).is_struct()
+                                || trans.get_ty(&func.returns).is_array()
+                            {
+                                i - 1
+                            } else {
+                                i
+                            };
                             let var = Var {
                                 name: param.0.clone(),
                                 ty: ebb_params[i],
                                 wty: trans.get_ty(&param.1),
                                 argument: false,
                                 value: var,
+                                initialized: true,
                             };
                             trans.variables.insert(param.0.clone(), var);
                         }
@@ -281,6 +303,7 @@ impl<T: Backend> Codegen<T> {
                                 wty: trans.get_ty(ty),
                                 argument: true,
                                 value: var,
+                                initialized: true,
                             };
                             trans.variables.insert(name.to_owned(), var);
                         }
@@ -346,6 +369,7 @@ pub struct FunctionTranslator<'a, T: Backend> {
     pub func_info: &'a HashMap<String, Function>,
     pub builder: FunctionBuilder<'a>,
     pub variables: HashMap<String, Var>,
+    constants: &'a HashMap<String, Box<Expr>>,
     return_addr: Option<Value>,
     complex_types: &'a HashMap<String, CType>,
     terminated: bool,
@@ -513,7 +537,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
         }
     }
 
-    pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Variable>) {
+    pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Var>) {
         match &expr.kind {
             ExprKind::Null => (self.builder.ins().iconst(types::I64, 0), None),
             ExprKind::Integer(value, suffix) => {
@@ -581,6 +605,54 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     self.builder.ins().load(ty, MemFlags::new(), value.0, 0),
                     value.1,
                 );
+            }
+            ExprKind::Array(exprs) => {
+                let ty = self.ty_info.get(&expr.id).unwrap().clone();
+                let (size, ty) = if let TypeKind::Array(ty, size) = &ty.kind {
+                    (*size, *ty.clone())
+                } else {
+                    unreachable!()
+                };
+                let csize = size.unwrap() as u32 * ty_size(&ty) as u32;
+                let slot = StackSlotData::new(StackSlotKind::ExplicitSlot, csize as _);
+                let slot = self.builder.create_stack_slot(slot);
+                let addr = self.builder.ins().stack_addr(
+                    self.module.target_config().pointer_type(),
+                    slot,
+                    0,
+                );
+
+                for (i, val) in exprs.iter().enumerate() {
+                    let val = self.translate_expr(val).0;
+                    self.builder.ins().store(
+                        MemFlags::new(),
+                        val,
+                        addr,
+                        i as i32 * ty_size(&ty) as i32,
+                    );
+                }
+
+                (addr, None)
+            }
+            ExprKind::Subscript(value, index) => {
+                let ty = self.ty_info.get(&expr.id).unwrap().clone();
+
+                let cval = self.translate_expr(value).0; //if !ty.is_pointer() || ty.is_array_wo_len() { self.retrieve_from_load(value) } else {self.translate_expr(value).0};
+                let cindex = self.translate_expr(index).0;
+                let size = ty_size(self.ty_info.get(&value.id).unwrap().get_subty().unwrap());
+                let offset = self.builder.ins().imul_imm(cindex, size as i64);
+                let offset = self
+                    .builder
+                    .ins()
+                    .sextend(self.module.target_config().pointer_type(), offset);
+                let addr = self.builder.ins().iadd(cval, offset);
+
+                (
+                    self.builder
+                        .ins()
+                        .load(ty_to_cranelift(&ty), MemFlags::new(), addr, 0),
+                    None,
+                )
             }
             ExprKind::Call(name, this, parameters) => {
                 let mut sig = self.module.make_signature();
@@ -683,7 +755,27 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     }
                     var
                 } else {
-                    unimplemented!()
+                    if self.constants.contains_key(name) {
+                        let value = self
+                            .translate_expr(&self.constants.get(name).unwrap().clone())
+                            .0;
+                        return (value, None);
+                    } else {
+                        let extern_var =
+                            self.module.declare_data(name, Linkage::Import, true, None);
+                        let extern_var = match extern_var {
+                            Ok(val) => val,
+                            Err(e) => {
+                                eprintln!("{}", e);
+                                std::process::exit(-1);
+                            }
+                        };
+                        let data = self
+                            .module
+                            .declare_data_in_func(extern_var, &mut self.builder.func);
+                        let ty = ty_to_cranelift(self.ty_info.get(&expr.id).unwrap());
+                        return (self.builder.ins().symbol_value(ty, data), None);
+                    }
                 };
 
                 let ty = ty_to_cranelift(self.ty_info.get(&expr.id).unwrap());
@@ -822,6 +914,21 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 };
 
                 self.builder.use_var(value.value)
+            }
+            ExprKind::Subscript(value, index) => {
+                let cval = self.translate_expr(value).0;
+                let cindex = self.translate_expr(index).0;
+                let size = ty_size(self.ty_info.get(&value.id).unwrap().get_subty().unwrap());
+                let offset = self.builder.ins().imul_imm(cindex, size as i64);
+                let offset = self
+                    .builder
+                    .ins()
+                    .sextend(self.module.target_config().pointer_type(), offset);
+                let addr = self.builder.ins().iadd(cval, offset);
+
+                /*let ty = self.ty_info.get(&expr.id).unwrap().clone();
+                (self.builder.ins().load(ty_to_cranelift(&ty),MemFlags::new(),addr,0),None)*/
+                addr
             }
             ExprKind::Deref(val) => self.translate_expr(val).0,
             _ => self.translate_expr(expr).0,
@@ -997,6 +1104,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     wty: ty.clone(),
                     argument: false,
                     value: variable,
+                    initialized: val.is_some(),
                 };
 
                 self.variables.insert(name.to_owned(), var);

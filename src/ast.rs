@@ -56,6 +56,13 @@ impl Type {
         Type { pos, kind }
     }
 
+    pub fn is_array_wo_len(&self) -> bool {
+        match &self.kind {
+            TypeKind::Array(_, None) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_void(&self) -> bool {
         match &self.kind {
             TypeKind::Void => true,
