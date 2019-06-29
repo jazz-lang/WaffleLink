@@ -151,7 +151,10 @@ impl Context {
             if home_path.is_some() {
                 home_path.as_ref().unwrap()
             } else {
-                env!("HOMEPATH")
+                
+                if cfg!(windows) { option_env!("HOMEPATH").unwrap()} else {
+                    unimplemented!()
+                }
             }
         );
         let home_path = std::path::Path::new(&home_path);
