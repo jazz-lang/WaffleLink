@@ -547,7 +547,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
             ExprKind::Character(ch) => {
                 (self.builder.ins().iconst(types::I8,*ch as u32 as u8 as i64),None)
             }
-            ExprKind::Null => (self.builder.ins().iconst(types::I64, 0), None),
+            ExprKind::Null => (self.builder.ins().iconst(self.module.target_config().pointer_type(), 0), None),
             ExprKind::Integer(value, suffix) => {
                 use crate::lexer::IntSuffix;
                 let value = *value;
