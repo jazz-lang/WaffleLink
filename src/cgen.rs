@@ -401,7 +401,7 @@ impl CCodeGen {
                 self.write(&format!("{:?}", str));
             }
             ExprKind::Character(character) => {
-                self.write(&format!("{:?}", character));
+                self.write(&format!("(char){}", *character as u32));
             }
             ExprKind::Bool(boolean) => {
                 self.write(&format!("{}", boolean));
