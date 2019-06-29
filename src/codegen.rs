@@ -59,7 +59,7 @@ pub fn ty_size(ty: &CType) -> usize {
                         1
                     }
                 }
-                _ => unreachable!(),
+                x => panic!("{}",x),
             }
         }
         _ => unimplemented!(),
@@ -390,7 +390,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 match name {
                     n if [
                         "int", "uint", "ulong", "long", "short", "ushort", "ubyte", "byte",
-                        "usize", "isize",
+                        "usize", "isize","char"
                     ]
                     .contains(&n) =>
                     {
@@ -539,6 +539,11 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
 
     pub(crate) fn translate_expr(&mut self, expr: &Expr) -> (Value, Option<Var>) {
         match &expr.kind {
+            ExprKind::SizeOf(ty) => {
+                let ty = self.get_ty(ty);
+                let iconst = self.builder.ins().iconst(self.module.target_config().pointer_type(),ty_size(&ty) as i64);
+                (iconst,None)
+            }
             ExprKind::Character(ch) => {
                 (self.builder.ins().iconst(types::I8,*ch as u32 as u8 as i64),None)
             }

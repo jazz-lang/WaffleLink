@@ -14,7 +14,7 @@ pub struct CStructure {
 fn exists_basic(name: &str) -> bool {
     match name {
         "int" | "uint" | "ubyte" | "byte" | "ushort" | "short" | "ulong" | "long" | "float32"
-        | "float64" | "bool" | "char" => true,
+        | "float64" | "bool" | "char" | "usize" | "isize" => true,
         _ => false,
     }
 }
