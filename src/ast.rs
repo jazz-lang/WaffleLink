@@ -303,6 +303,7 @@ impl Function {
             return self.name.clone();
         } else {
             let mut name = String::new();
+            name.push_str("waffle_");
             if self.this.is_some() {
                 name.push_str(&format!(
                     "${}_",
