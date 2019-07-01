@@ -59,7 +59,7 @@ pub fn ty_size(ty: &CType) -> usize {
                         1
                     }
                 }
-                x => panic!("{}",x),
+                x => panic!("{}", x),
             }
         }
         _ => unimplemented!(),
@@ -390,7 +390,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 match name {
                     n if [
                         "int", "uint", "ulong", "long", "short", "ushort", "ubyte", "byte",
-                        "usize", "isize","char"
+                        "usize", "isize", "char",
                     ]
                     .contains(&n) =>
                     {
@@ -448,32 +448,29 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 }
             }
             _ => match op {
-                            "+" => return self.builder.ins().iadd(x, y),
-                            "-" => return self.builder.ins().isub(x, y),
-                            "/" => return self.builder.ins().sdiv(x, y),
-                            "*" => return self.builder.ins().imul(x, y),
-                            ">>" => return self.builder.ins().sshr(x, y),
-                            "<<" => return self.builder.ins().ishl(x, y),
-                            ">" => return self.builder.ins().icmp(IntCC::SignedGreaterThan, x, y),
-                            "<" => return self.builder.ins().icmp(IntCC::SignedLessThan, x, y),
-                            ">=" => {
-                                return self.builder.ins().icmp(
-                                    IntCC::SignedGreaterThanOrEqual,
-                                    x,
-                                    y,
-                                )
-                            }
-                            "<=" => {
-                                return self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, x, y)
-                            }
-                            "|" => return self.builder.ins().bor(x, y),
-                            "&" => return self.builder.ins().band(x, y),
-                            "^" => return self.builder.ins().bxor(x, y),
-                            "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
-                            "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
-                            _ => unimplemented!(),
-                        }
-            x => panic!("{:?}",x),
+                "+" => return self.builder.ins().iadd(x, y),
+                "-" => return self.builder.ins().isub(x, y),
+                "/" => return self.builder.ins().sdiv(x, y),
+                "*" => return self.builder.ins().imul(x, y),
+                ">>" => return self.builder.ins().sshr(x, y),
+                "<<" => return self.builder.ins().ishl(x, y),
+                ">" => return self.builder.ins().icmp(IntCC::SignedGreaterThan, x, y),
+                "<" => return self.builder.ins().icmp(IntCC::SignedLessThan, x, y),
+                ">=" => {
+                    return self
+                        .builder
+                        .ins()
+                        .icmp(IntCC::SignedGreaterThanOrEqual, x, y)
+                }
+                "<=" => return self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, x, y),
+                "|" => return self.builder.ins().bor(x, y),
+                "&" => return self.builder.ins().band(x, y),
+                "^" => return self.builder.ins().bxor(x, y),
+                "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
+                "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
+                _ => unimplemented!(),
+            },
+            x => panic!("{:?}", x),
         }
     }
 
@@ -567,13 +564,24 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
         match &expr.kind {
             ExprKind::SizeOf(ty) => {
                 let ty = self.get_ty(ty);
-                let iconst = self.builder.ins().iconst(self.module.target_config().pointer_type(),ty_size(&ty) as i64);
-                (iconst,None)
+                let iconst = self.builder.ins().iconst(
+                    self.module.target_config().pointer_type(),
+                    ty_size(&ty) as i64,
+                );
+                (iconst, None)
             }
-            ExprKind::Character(ch) => {
-                (self.builder.ins().iconst(types::I8,*ch as u32 as u8 as i64),None)
-            }
-            ExprKind::Null => (self.builder.ins().iconst(self.module.target_config().pointer_type(), 0), None),
+            ExprKind::Character(ch) => (
+                self.builder
+                    .ins()
+                    .iconst(types::I8, *ch as u32 as u8 as i64),
+                None,
+            ),
+            ExprKind::Null => (
+                self.builder
+                    .ins()
+                    .iconst(self.module.target_config().pointer_type(), 0),
+                None,
+            ),
             ExprKind::Integer(value, suffix) => {
                 use crate::lexer::IntSuffix;
                 let value = *value;
@@ -1020,7 +1028,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let cond_value = self.translate_expr(cond).0;
                 let else_block = self.builder.create_ebb();
                 let merge_block = self.builder.create_ebb();
-                
+
                 self.builder.ins().brz(cond_value, else_block, &[]);
                 if let StmtKind::Block(stmts) = &**then {
                     for stmt in stmts.iter() {

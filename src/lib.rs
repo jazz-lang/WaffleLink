@@ -151,8 +151,9 @@ impl Context {
             if home_path.is_some() {
                 home_path.as_ref().unwrap()
             } else {
-                
-                if cfg!(windows) { option_env!("HOMEPATH").unwrap()} else {
+                if cfg!(windows) {
+                    option_env!("HOMEPATH").unwrap()
+                } else {
                     unimplemented!()
                 }
             }

@@ -370,7 +370,13 @@ impl CCodeGen {
                 }
             }
             ExprKind::Member(object, field) => {
-                let ty = self.get_ty(&self.ty_info.get(&object.id).expect(&format!("type info not found {}",object.pos)).clone());
+                let ty = self.get_ty(
+                    &self
+                        .ty_info
+                        .get(&object.id)
+                        .expect(&format!("type info not found {}", object.pos))
+                        .clone(),
+                );
                 self.gen_expr(object);
                 if ty.is_pointer() {
                     self.write("->");
