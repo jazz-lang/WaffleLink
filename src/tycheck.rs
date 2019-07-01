@@ -199,6 +199,8 @@ impl<'a> TypeChecker<'a> {
                         if this_ty.get_pointee().unwrap().is_interface() {
                             error!("Interface can not be `This` type", this_ty.pos);
                         }
+
+                        
                         if self
                             .methods
                             .contains_key(&format!("{}", this_ty.get_subty().unwrap()))
@@ -603,6 +605,7 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Member(object, name) => {
                 let ty = self.check_expr(object);
+                self.type_info.insert(object.id,ty.clone());
                 let ty = if ty.is_struct() {
                     ty
                 } else if ty.is_pointer() {

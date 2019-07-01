@@ -370,7 +370,7 @@ impl CCodeGen {
                 }
             }
             ExprKind::Member(object, field) => {
-                let ty = self.get_ty(&self.ty_info.get(&object.id).unwrap().clone());
+                let ty = self.get_ty(&self.ty_info.get(&object.id).expect(&format!("type info not found {}",object.pos)).clone());
                 self.gen_expr(object);
                 if ty.is_pointer() {
                     self.write("->");
@@ -491,11 +491,11 @@ impl CCodeGen {
                 let name = if this.is_some() {
                     let ty = self
                         .ty_info
-                        .get(&this.as_ref().unwrap().id)
+                        .get(&this.as_ref().expect("info not found").id)
                         .unwrap()
                         .clone();
                     if ty.is_pointer() {
-                        format!("${}_{}", ty.get_subty().unwrap(), name)
+                        format!("${}_{}", ty.get_subty().expect("subtype not found"), name)
                     } else {
                         format!("${}_{}", ty, name)
                     }
@@ -505,7 +505,7 @@ impl CCodeGen {
 
                 self.write(&format!("{}(", name));
                 if this.is_some() {
-                    let this = this.as_ref().unwrap().clone();
+                    let this = this.as_ref().expect("unreachable").clone();
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
                     if ty.is_pointer() {
                         self.gen_expr(&this);

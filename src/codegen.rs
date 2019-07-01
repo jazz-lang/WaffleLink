@@ -447,7 +447,33 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                     _ => unreachable!(),
                 }
             }
-            _ => unimplemented!(),
+            _ => match op {
+                            "+" => return self.builder.ins().iadd(x, y),
+                            "-" => return self.builder.ins().isub(x, y),
+                            "/" => return self.builder.ins().sdiv(x, y),
+                            "*" => return self.builder.ins().imul(x, y),
+                            ">>" => return self.builder.ins().sshr(x, y),
+                            "<<" => return self.builder.ins().ishl(x, y),
+                            ">" => return self.builder.ins().icmp(IntCC::SignedGreaterThan, x, y),
+                            "<" => return self.builder.ins().icmp(IntCC::SignedLessThan, x, y),
+                            ">=" => {
+                                return self.builder.ins().icmp(
+                                    IntCC::SignedGreaterThanOrEqual,
+                                    x,
+                                    y,
+                                )
+                            }
+                            "<=" => {
+                                return self.builder.ins().icmp(IntCC::SignedLessThanOrEqual, x, y)
+                            }
+                            "|" => return self.builder.ins().bor(x, y),
+                            "&" => return self.builder.ins().band(x, y),
+                            "^" => return self.builder.ins().bxor(x, y),
+                            "==" => return self.builder.ins().icmp(IntCC::Equal, x, y),
+                            "!=" => return self.builder.ins().icmp(IntCC::NotEqual, x, y),
+                            _ => unimplemented!(),
+                        }
+            x => panic!("{:?}",x),
         }
     }
 
@@ -994,7 +1020,7 @@ impl<'a, T: Backend> FunctionTranslator<'a, T> {
                 let cond_value = self.translate_expr(cond).0;
                 let else_block = self.builder.create_ebb();
                 let merge_block = self.builder.create_ebb();
-
+                
                 self.builder.ins().brz(cond_value, else_block, &[]);
                 if let StmtKind::Block(stmts) = &**then {
                     for stmt in stmts.iter() {
