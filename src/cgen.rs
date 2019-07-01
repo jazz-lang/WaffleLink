@@ -182,9 +182,9 @@ impl CCodeGen {
                         }
                     }
 
-                    for (name, _) in func.parameters.iter() {
+                   /* for (name, _) in func.parameters.iter() {
                         self.variables.insert(name.to_string(), name.to_string());
-                    }
+                    }*/
                     self.write(")\n");
 
                     let mut code_with_temps = String::new();
@@ -522,10 +522,10 @@ impl CCodeGen {
                             kind: ExprKind::AddrOf(this.clone()),
                         });
 
-                        if arguments.len() != 0 {
-                            self.write(",");
-                        }
                     }
+                }
+                if this.is_some() && !arguments.is_empty() {
+                    self.write(",");
                 }
                 for (i, argument) in arguments.iter().enumerate() {
                     self.gen_expr(argument);
