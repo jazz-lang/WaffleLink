@@ -1,0 +1,11 @@
+import "std"
+
+extern func write(fd int,contents *void,count int) int
+
+func main() int {
+	var c = ' '
+	var r = c.is_whitespace()
+	printf("%i\n",r)
+
+	return 0
+}

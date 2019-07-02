@@ -1,0 +1,15 @@
+extern func exit(code int) void
+extern func printf(s *char,...) void
+func compiler_panic(s *char) void {
+	printf("compiler panic: ")
+	println(s)
+
+	exit(1)
+	return;
+}
+
+func error_at(l Location,msg *char) {
+	var str_value = l.to_string()
+	printf("error at %s: %s\n",str_value,msg)
+	return;
+}

@@ -1,0 +1,228 @@
+const TOK_AT: int = 0
+const TOK_STR: int = 1
+const TOK_CHAR: int = 2
+const TOK_INT: int = 3
+const TOK_FLOAT: int = 4
+const TOK_IDENT: int = 5
+const TOK_END: int = 6
+const TOK_LQUOTE: int = 7
+const TOK_RQUOTE: int = 8
+const TOK_FUN: int = 9
+const TOK_WHILE: int = 10
+const TOK_IF: int = 11
+const TOK_ELSE: int = 12
+const TOK_LOOP: int = 13
+const TOK_CONTINUE: int = 14
+const TOK_BREAK: int = 15
+const TOK_RETURN: int = 16
+const TOK_TRUE: int = 17
+const TOK_FALSE: int = 18
+const TOK_NULL: int = 19
+const TOK_INLINE: int = 20
+const TOK_IMPORT: int = 21
+const TOK_EXTERN: int = 22
+const TOK_ENUM: int = 23
+const TOK_STRUCT: int = 24
+const TOK_CONST: int = 25
+const TOK_SIZEOF: int = 26
+const TOK_UNDERSCORE: int = 27
+const TOK_VAR: int = 28
+const TOK_DEFER: int = 29
+const TOK_DOLLAR: int = 30
+const TOK_ADD: int = 31
+const TOK_SUB: int = 32
+const TOK_MUL: int = 33
+const TOK_DIV: int = 34
+const TOK_MOD: int = 35
+const TOK_NOT: int = 36
+const TOK_LPAREN: int = 37
+const TOK_RPAREN: int = 38
+const TOK_LBRACKET: int = 39
+const TOK_RBRACKET: int = 40
+const TOK_LBRACE: int = 41
+const TOK_RBRACE: int = 42
+const TOK_COMMA: int = 43
+const TOK_SEMI: int = 44
+const TOK_DOT: int = 45
+const TOK_COLON: int = 46
+const TOK_SEP: int = 47
+const TOK_ARROW: int = 48
+const TOK_TILDE: int = 49
+const TOK_BITOR: int = 50
+const TOK_BITAND: int = 51
+const TOK_CARET: int = 52
+const TOK_AND: int = 53
+const TOK_OR: int = 54
+const TOK_INTERNAL: int = 55
+const TOK_FOR: int = 56
+const TOK_EQ: int = 57
+const TOK_EQEQ: int = 58
+const TOK_GT: int = 59
+const TOK_LT: int = 60
+const TOK_GE: int = 61
+const TOK_LE: int = 62
+const TOK_NE: int = 63
+const TOK_AS: int = 64
+const TOK_GTGT: int = 65
+const TOK_LTLT: int = 66
+
+struct Token {
+	kind int,
+	value *char,
+	value2 *char,
+	pos Location
+}
+
+func empty_token() Token {
+	var tok Token 
+	tok.kind = TOK_END
+	tok.pos = new_location("<>",-1,-1)
+	return tok
+}
+
+
+func (t *Token) is(kind int) bool {
+	if t.kind == kind {
+		return true
+	}
+
+	return false
+}
+
+struct Lexer {
+	r *Reader
+}
+
+func (l *Lexer) cur() *char {
+	return l.r.cur()
+}
+
+func (l *Lexer) next() char {
+	return l.r.next()
+}
+
+func (l *Lexer) read_char() {
+	l.r.advance()
+	return;
+}
+
+func (l *Lexer) is_comment_start() bool {
+	var c = l.cur()
+	if c != null as *char {
+		return *c == '/' && l.next() == '/'
+	} else {
+		return false
+	}
+	return false
+ }
+
+func (l *Lexer) read_operator() Token {
+	var tok = empty_token()
+
+	var ch = *l.cur()
+	var nch char 
+	var _c = l.cur()
+	if _c == null as *char {
+		nch = 'x'
+	} else {
+		nch = *_c
+	}
+	
+	var kind int = TOK_END
+
+	if ch == '+' {
+		kind = TOK_ADD
+	} else if ch == '-' {
+		if nch == '>' {
+			l.read_char()
+			kind = TOK_ARROW
+		} else {
+			kind = TOK_SUB
+		}
+		
+	} else if ch == '/' {
+		kind = TOK_DIV
+	} else if ch == '*' {
+		kind = TOK_MUL
+	} else if ch == '%' {
+		kind = TOK_MOD
+	} else if ch == '(' {
+		kind = TOK_LPAREN
+	} else if ch == ')' {
+		kind = TOK_RPAREN
+	} else if ch == '[' {
+		kind = TOK_LBRACKET
+	} else if ch == ']' {
+		kind = TOK_RBRACKET
+	} else if ch == '{' {
+		kind = TOK_LBRACE
+	} else if ch == '}' {
+		kind = TOK_RBRACE
+	} else if ch == '|' {
+		if nch == '|' {
+			l.read_char()
+			kind = TOK_OR
+		} else {
+			kind = TOK_BITOR
+		}
+	} else if ch == '&' {
+		if nch == '&' {
+			l.read_char()
+			kind = TOK_AND
+		} else {
+			kind = TOK_BITAND
+		}
+	} else if ch == '^' {
+		kind = TOK_CARET
+	} else if ch == '~' {
+		kind = TOK_TILDE
+	} else if ch == ',' {
+		kind = TOK_COMMA
+	} else if ch == ';' {
+		kind = TOK_SEMI
+	} else if ch == ':' {
+		kind = TOK_COLON // separator ignored now
+	} else if ch == '.' {
+		kind = TOK_DOT
+	} else if ch == '=' {
+		if nch == '=' {
+			l.read_char()
+			kind = TOK_EQEQ
+		} else {
+			kind = TOK_EQ
+		}
+	} else if ch == '<' {
+		if nch == '=' {
+			l.read_char()
+			kind = TOK_LE
+		} else if nch == '<' {
+			l.read_char()
+			kind = TOK_LTLT
+		} else {
+			kind = TOK_LT
+		}
+	} else if ch == '>' {
+		if nch == '=' {
+			l.read_char()
+			kind = TOK_GE
+		} else if nch == '<' {
+			l.read_char()
+			kind = TOK_GTGT
+		} else {
+			kind = TOK_GT
+		}
+	} else if ch == '!' {
+		if nch == '=' {
+			l.read_char()
+			kind = TOK_NE
+		} else {
+			kind = TOK_NOT
+		}
+	} else {
+		var pos = l.r.loc()
+		var p = pos.to_string()
+		printf("%s : Unknwon character '%c'",p,ch)
+	}
+
+	return tok
+}

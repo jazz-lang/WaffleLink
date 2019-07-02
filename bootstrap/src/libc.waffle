@@ -1,0 +1,69 @@
+extern func strlen(s *char) int
+extern func strcmp(s1 *char,s2 *char) int
+extern func calloc(count int,size usize) *void
+extern func sprintf(buf *char,fmt *char,...) void
+extern func isdigit(ch int) bool
+extern func memcpy(dest *void,src *void,cnt int) *void;
+func (c *char) to_digit(radix uint) *uint {
+	if (radix <= 36) == false {
+		compiler_panic("to_digit: radix is too high (maximum 36)")
+	}
+
+	var ch = *c
+
+	var val uint = 0 as uint
+
+	if radix < 10 {
+		if ch == '0' || ch =='1' || ch == '2' || ch == '3' || ch == '4' || ch == '5'
+		|| ch == '6' || ch == '7' || ch == '8' || ch == '9' {
+			val = ch as uint - '0' as uint
+		} else {
+			return null as *uint
+		}
+	} else  {
+		if ch == '0' || ch =='1' || ch == '2' || ch == '3' || ch == '4' || ch == '5'
+		|| ch == '6' || ch == '7' || ch == '8' || ch == '9' {
+			val = ch as uint - '0' as uint
+		} else if ch >= 'a' && ch <= 'z' {
+			val = ch as uint - 'a' as uint + 10 as uint
+		} else if ch >= 'A' && ch <= 'Z' {
+			val = ch as uint - 'A' as uint + 10 as uint
+		} else {
+			return null as *uint
+		}
+	}
+	if val < radix {
+		var ptr = calloc(1,sizeof(uint)) as *uint
+		memcpy(ptr as *void,(&val) as *void,0)
+		return ptr
+	} else {
+		return null as *uint
+	}
+
+
+}
+
+func (ch *char) is_digit(radix uint) bool {
+	var result = null as *uint
+	result = ch.to_digit(radix)
+	if result == null as *uint {
+		return false
+	} else {
+		return true
+	}
+}
+
+
+
+func (ch *char) is_whitespace() bool {
+	var c = *ch
+	if c == ' ' {
+		return true
+	} else if c >= 9 as char && c <= 13 as char {
+		return true
+	} else {
+		return false
+	}
+
+	return false
+}
