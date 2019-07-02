@@ -4,9 +4,13 @@ struct string {
 }
 
 
+extern func memcpy(dst *void,src *void,cnt int) *void
+
 func string_new(data *char,len int) string {
+    var buf = calloc(1,len)
+    memcpy(buf as *void,data as *void,0)
     return string {
-        value: data,
+        value: buf,
         len: len
     }
 }
@@ -24,4 +28,18 @@ func (s* string) equals(s2 string) bool {
 
 func (s *string) cstr() *char {
     return s.value
+}
+
+extern func sprintf(x *char,y *char,...) int
+extern func calloc(x int,y int) *void
+func (x *int) str() string {
+    var buf = calloc(1,40) as *char
+    sprintf(buf,"%i",*x);
+    return string_new(buf,strlen(buf));
+}
+
+func println(x string) {
+    var cstr = x.cstr()
+    printf("%s",cstr)
+    return;
 }
