@@ -518,7 +518,9 @@ impl<'a> TypeChecker<'a> {
                             error!("too much arguments", pos);
                         }
                     }
+                    let mut max_i = 0;
                     for (i, param) in func.parameters.into_iter().enumerate() {
+                        max_i = i;
                         if param.1.is_interface() {
                             let expr_ty = self.check_expr(&arguments[i]);
                             let name = if let TypeKind::Interface(name, _) = &param.1.kind {
@@ -549,7 +551,12 @@ impl<'a> TypeChecker<'a> {
                             self.type_info.insert(arguments[i].id, expr_ty);
                         }
                     }
-
+                    for param in arguments.iter().enumerate() {
+                        if param.0 <= max_i {
+                            continue;
+                        }
+                        self.check_expr(&param.1);
+                    }
                     self.type_info.insert(expr.id, *func.returns.clone());
 
                     return *func.returns;
