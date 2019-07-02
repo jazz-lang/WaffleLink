@@ -1,12 +1,10 @@
-extern func strlen(s *char) int
-extern func strcmp(s1 *char,s2 *char) int
-extern func calloc(count int,size usize) *void
-extern func sprintf(buf *char,fmt *char,...) void
+
+
 extern func isdigit(ch int) bool
-extern func memcpy(dest *void,src *void,cnt int) *void;
+extern func realloc(x *void,size int) *void
 func (c *char) to_digit(radix uint) *uint {
 	if (radix <= 36) == false {
-		compiler_panic("to_digit: radix is too high (maximum 36)")
+		compiler_panic(c"to_digit: radix is too high (maximum 36)")
 	}
 
 	var ch = *c
@@ -33,7 +31,7 @@ func (c *char) to_digit(radix uint) *uint {
 		}
 	}
 	if val < radix {
-		var ptr = calloc(1,sizeof(uint)) as *uint
+		var ptr = calloc(1,sizeof(uint) as int) as *uint
 		memcpy(ptr as *void,(&val) as *void,0)
 		return ptr
 	} else {

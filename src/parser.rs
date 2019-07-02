@@ -1055,11 +1055,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_parentheses(&mut self) -> ExprResult {
-        self.advance_token()?;
+        let pos = self.advance_token()?.position;
         let exp = self.parse_expression()?;
         self.expect_token(TokenKind::RParen)?;
 
-        Ok(exp)
+        Ok(box Expr {
+            id: self.generate_id(),
+            pos: pos,
+            kind: ExprKind::Paren(exp)
+        })
     }
 
     fn parse_array_lit(&mut self) -> ExprResult {

@@ -1,3 +1,18 @@
+const TOKEN_STRINGS = 
+[	
+	c"@",
+	c"string",
+	c"char",
+	c"int",
+	c"float",
+	c"ident",
+	c"end",
+	c"lquote",
+	c"rquoute",
+	c"func",
+	c"while",
+	c"if",
+] 
 const TOK_AT: int = 0
 const TOK_STR: int = 1
 const TOK_CHAR: int = 2
@@ -66,6 +81,8 @@ const TOK_AS: int = 64
 const TOK_GTGT: int = 65
 const TOK_LTLT: int = 66
 
+
+
 struct Token {
 	kind int,
 	value *char,
@@ -73,10 +90,27 @@ struct Token {
 	pos Location
 }
 
+func is_identifier_start(ch char) bool 
+{
+	if (ch >='a' && ch <= 'z')  {
+		return true
+	} else if (ch >= 'A' && ch <= 'Z') {
+		return true
+	} else if ch == '_' {
+		return true
+	}
+	return false
+}
+
+func is_identifier(c char) bool {
+	return is_identifier_start(c) || c.is_digit(10 as uint)
+}
+
+
 func empty_token() Token {
 	var tok Token 
 	tok.kind = TOK_END
-	tok.pos = new_location("<>",-1,-1)
+	tok.pos = new_location(c"<>",-1,-1)
 	return tok
 }
 
@@ -93,7 +127,13 @@ struct Lexer {
 	r *Reader
 }
 
-func (l *Lexer) cur() *char {
+func lexer_new(r *Reader) Lexer {
+	return Lexer {
+		r: r
+	}
+}
+
+func (l *Lexer) cur() char {
 	return l.r.cur()
 }
 
@@ -108,24 +148,221 @@ func (l *Lexer) read_char() {
 
 func (l *Lexer) is_comment_start() bool {
 	var c = l.cur()
-	if c != null as *char {
-		return *c == '/' && l.next() == '/'
+	if c != 0 as char {
+		return c == '/' && l.next() == '/'
 	} else {
 		return false
 	}
 	return false
- }
+}
+
+func get_keyword_or_ident(val *char,pos Location) Token {
+	var tok = empty_token()
+	tok.pos = pos
+	if strcmp(val,c"func") == 0 {
+		tok.kind = TOK_FUN
+	} else if strcmp(val,c"struct") == 0 {
+		tok.kind = TOK_STRUCT
+	} else if strcmp(val,c"const") == 0 {
+		tok.kind = TOK_CONST
+	} else if strcmp(val,c"var") == 0 {
+		tok.kind = TOK_VAR
+	} else if strcmp(val,c"extern") == 0 {
+		tok.kind = TOK_EXTERN
+	} else if strcmp(val,c"else") == 0 {
+		tok.kind = TOK_ELSE
+	} else if strcmp(val,c"if") == 0 {
+		tok.kind = TOK_IF
+	} else if strcmp(val,c"while") == 0 {
+		tok.kind = TOK_WHILE
+	} else if strcmp(val,c"for") == 0 {
+		tok.kind = TOK_FOR
+	} else if strcmp(val,c"sizeof") == 0 {
+		tok.kind = TOK_SIZEOF
+	} else if strcmp(val,c"null") == 0 {
+		tok.kind = TOK_NULL
+	} else if strcmp(val,c"import") == 0 {
+		tok.kind = TOK_IMPORT
+	} else if strcmp(val,c"false") == 0  {
+		tok.kind = TOK_FALSE
+	} else if strcmp(val,c"true") == 0 {
+		tok.kind = TOK_TRUE
+	} else if strcmp(val,c"break") == 0 {
+		tok.kind = TOK_BREAK
+	} else if strcmp(val,c"continue") == 0 {
+		tok.kind = TOK_CONTINUE
+	} else if strcmp(val,c"loop") == 0 {
+		tok.kind = TOK_LOOP
+	} else {
+		tok.kind = TOK_IDENT
+		tok.value = val
+
+		return tok
+	}
+
+	tok.value = c""
+	tok.value2 = c""
+
+	return tok
+}
+
+func (l *Lexer) read_escaped_char(pos Location,unclosed char) char {
+	if l.cur() != 0 as char {
+		var c = l.cur()
+		l.read_char()
+		if c == '\\' {
+			var ch = 0 as char
+			if l.cur() != 0 as char {
+				ch = l.cur()
+			} else {
+				error_at(pos,c"unclosed character")
+			}
+
+			l.read_char()
+
+			if ch == '\\' {
+				return '\\'
+			} else if ch == 'n' {
+				return '\n'
+			} else if ch == 't' {
+				return '\t' 
+			} else if ch == 'r' {
+				return '\r'
+			} else if ch == '\"' {
+				return '\"'
+			} else if ch == '0' {
+				return '0'
+			} else {
+				var ps = pos.to_string()
+				printf(c"%s: ",ps)
+				printf(c"Invalid escape sequence '%c'\n",ch)
+				exit(-1)
+			}
+		} else {
+			return c
+		}
+
+	} else {
+		error_at(pos,c"unclosed character")
+	}
+} 
+
+func (l *Lexer) read_identifier() Token {
+	var pos = l.r.loc()
+	var value = malloc(1) as *char
+	var i = 0
+	while is_identifier(l.cur()) {
+		var ch = l.cur()
+		value = realloc(value as *void,i + 1) as *char
+		value[i] = ch
+		l.read_char()
+		i = i + 1
+	}
+	return get_keyword_or_ident(value,pos)
+}
+
+func (l *Lexer) loc() Location {
+	return l.r.loc()
+}
+
+func is_digit_or_underscore(ch char,base int) bool {
+	return ch.is_digit(base as uint) || ch == '_'
+}
+
+func (l *Lexer) read_number() Token {
+	var pos = l.loc()
+	var tok = empty_token()
+	var base = 0
+	var is_hex = false
+	var is_bin = false
+	if l.cur() == '0' {
+		var next = l.next()
+		if next != 0 as char {
+			if next == 'x' {
+				l.read_char()
+				l.read_char()
+				base = 16 
+			} else if next == 'b' {
+				l.read_char()
+				l.read_char()
+				base = 2
+			}
+		} else {
+			base = 10
+		}
+	} else {
+		base = 10
+	}
+
+	var buffer = malloc(1) as *char
+	var i = 0
+	while l.cur() != 0 as char && is_digit_or_underscore(l.cur(),base) {
+		buffer = realloc(buffer as *void,i + 1) as *char
+		var cur = l.cur()
+		l.read_char()
+		buffer[i] = cur	
+		i = i + 1
+	}
+	if base == 10 && l.cur() != 0 as char && l.cur() == '.' {
+		var n = l.next()
+		if !n.is_digit(10 as uint) {
+
+		}
+		l.read_char()
+		
+		buffer = realloc(buffer as *void,i + 1) as *char
+		buffer[i] = '.'
+		i = i + 1
+		while l.cur() != 0 as char && is_digit_or_underscore(l.cur(),base) {
+			buffer = realloc(buffer as *void,i + 1) as *char
+			buffer[i] = l.cur()	
+			l.read_char()
+			i = i + 1
+		}
+		if l.cur() != 0 as char && (l.cur() == 'e' || l.cur() == 'E') {
+			buffer = realloc(buffer as *void,i + 1) as *char
+			buffer[i] = l.cur()
+			i = i + 1
+			l.read_char()
+			if l.cur() != 0 as char {
+				if (l.cur() == '+' || l.cur() == '-') {
+					buffer = realloc(buffer as *void,i + 1) as *char
+					buffer[i] = l.cur()
+					i = i + 1
+					l.read_char()
+				}
+			}
+			while l.cur() != 0 as char && is_digit_or_underscore(l.cur(),base) {
+				buffer = realloc(buffer as *void,i + 1) as *char
+				buffer[i] = l.cur()	
+				i = i + 1
+			}
+		}
+		tok.value = buffer
+		tok.kind = TOK_FLOAT
+		return tok
+	}
+
+	buffer = realloc(buffer as *void,i + 1) as *char
+	buffer[i] = 0 as char
+	
+	tok.value = buffer
+	tok.kind = TOK_INT
+	return tok
+
+
+}
 
 func (l *Lexer) read_operator() Token {
 	var tok = empty_token()
 
-	var ch = *l.cur()
+	var ch = l.cur()
 	var nch char 
 	var _c = l.cur()
-	if _c == null as *char {
+	if _c == 0 as char {
 		nch = 'x'
 	} else {
-		nch = *_c
+		nch = _c
 	}
 	
 	var kind int = TOK_END
@@ -221,8 +458,9 @@ func (l *Lexer) read_operator() Token {
 	} else {
 		var pos = l.r.loc()
 		var p = pos.to_string()
-		printf("%s : Unknwon character '%c'",p,ch)
+		printf(c"%s : Unknwon character '%c'",p,ch)
 	}
 
 	return tok
 }
+

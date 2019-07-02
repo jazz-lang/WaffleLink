@@ -322,6 +322,7 @@ use crate::lexer::{FloatSuffix, IntSuffix};
 
 #[derive(Clone, Debug)]
 pub enum ExprKind {
+    Paren(Box<Expr>),
     Integer(u64, IntSuffix),
     UInt(u64),
     Float(f64, FloatSuffix),

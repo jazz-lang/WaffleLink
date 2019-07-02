@@ -3,13 +3,14 @@ struct Reader {
 	src *char,
 	pos int,
 	next_pos int,
-	cur *char,
+	cur char,
 	line int,
 	col int,
 	tabwidth int
 }
 
-func (r *Reader) cur() *char {
+
+func (r *Reader) cur() char {
 	return r.cur
 }
 
@@ -17,18 +18,31 @@ func (r *Reader) loc() Location {
 	return new_location(r.filename,r.line,r.col)
 }
 
+func reader_from_str(s *char) Reader {
+	var r Reader
+	r.filename = c"<sring>"
+	r.src = s
+	r.pos = 0
+	r.next_pos = 0
+	r.cur = r.src[0]
+	r.line = 0
+	r.col = 0
+	r.tabwidth = 0
+	return r
+}
+
 func (r *Reader) advance() char {
 	if r.src == null as *char {
-		compiler_panic("Null source")
+		compiler_panic(c"Null source")
 	}
 	//assertm(r.src != null as *char,"Source must be non null")
 	if r.cur as usize == 0 as usize {
-		compiler_panic("advancing from end of file")
+		compiler_panic(c"advancing from end of file")
 	}
-	if *r.cur == '\n' {
+	if r.cur == '\n' {
 		r.line = r.line + 1
 		r.col = r.col + 1
-	} else if *r.cur == '\t' {
+	} else if r.cur == '\t' {
 		var tabdepth = (r.col - 1) / r.tabwidth
 		r.col = 1 + r.tabwidth * ( tabdepth + 1)
 	} else {
@@ -41,11 +55,11 @@ func (r *Reader) advance() char {
 		var ch = r.src[r.next_pos + 1]
 		r.pos = r.next_pos
 		r.next_pos = r.next_pos + 1
-		r.cur = &ch
+		r.cur = ch
 		c = ch
 	} else {
 		c = 0 as char 
-		r.cur = null as *char
+		r.cur = 0 as char
 	}
 
 	return c

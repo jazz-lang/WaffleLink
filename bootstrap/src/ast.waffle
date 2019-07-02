@@ -19,16 +19,16 @@ func (l *Location) to_string() *char {
 	if l.file != null as *char {
 		size = size + strlen(l.file)
 	}
-	var buf = calloc(1,size as usize) as *char
+	var buf = calloc(1,size) as *char
 	var file *char
 	if l.file != null as *char {
 		file = l.file
 	} else {
-		file = "<no-file>"
+		file = c"<no-file>"
 	}
 	var line = l.line
 	var col = l.column
-	sprintf(buf,"%s:%i:%i",file,line,col)
+	sprintf(buf,c"%s:%i:%i",file,line,col)
 	return buf
 }
 

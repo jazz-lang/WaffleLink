@@ -643,7 +643,9 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Deref(deref) => {
                 let val_ty = self.check_expr(deref);
-                assert!(val_ty.is_pointer() || val_ty.is_option());
+                if !(val_ty.is_pointer() || val_ty.is_option()) {
+                    error!(&format!("Pointer type expected,found '{}'",val_ty),pos);
+                }
                 self.type_info
                     .insert(expr.id, val_ty.get_subty().unwrap().clone());
                 return val_ty.get_subty().clone().unwrap().clone();
@@ -682,6 +684,11 @@ impl<'a> TypeChecker<'a> {
                 let boxed = box Type::new(expr.pos.clone(), TypeKind::Void);
                 let ty = Type::new(expr.pos.clone(), TypeKind::Pointer(boxed));
                 self.type_info.insert(expr.id, ty.clone());
+                return ty;
+            }
+            ExprKind::Paren(exp) => {
+                let ty = self.check_expr(exp);
+                self.type_info.insert(expr.id,ty.clone());
                 return ty;
             }
             ExprKind::CString(_) => {

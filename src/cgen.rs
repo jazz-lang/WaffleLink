@@ -302,6 +302,11 @@ impl Gen {
 
     fn gen_expr(&mut self, expr: &Expr) {
         match &expr.kind {
+            ExprKind::Paren(expr) => {
+                self.write("(");
+                self.gen_expr(expr);
+                self.write(")");
+            }
             ExprKind::CString(s) => {
                 self.write(&format!("{:?}", s));
             }

@@ -3,9 +3,12 @@ import "std"
 extern func write(fd int,contents *void,count int) int
 
 func main() int {
-	var c = ' '
-	var r = c.is_whitespace()
-	printf("%i\n",r)
-
+	var r = reader_from_str(c"128.64")
+	var l = lexer_new(&r)
+	var ident = l.read_number()
+	var strs = TOKEN_STRINGS
+	var str = strs[ident.kind]
+	var val = ident.value
+	printf(c"Token kind: '%s',value: '%s'\n",str,val)
 	return 0
 }
