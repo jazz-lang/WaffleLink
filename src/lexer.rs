@@ -323,6 +323,7 @@ impl Lexer {
                 self.read_comment()?;
             } else if ch == Some('c') {
                 if is_quote(self.next()) {
+                    self.read_char();
                     let string = if let TokenKind::String(s) = &self.read_string().unwrap().kind {
                         Token::new(TokenKind::CString(s.clone()), pos)
                     } else {

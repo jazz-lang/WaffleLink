@@ -27,6 +27,7 @@ pub struct TypeChecker<'a> {
     structures: HashMap<String, CStructure>,
     interfaces: HashMap<String, Interface>,
     current_func: Option<Function>,
+    pub call_info: HashMap<usize, Function>,
     globals: HashMap<String, (Type, bool)>,
     locals: HashMap<String, Type>,
     pub complex: HashMap<String, Type>,
@@ -61,6 +62,7 @@ impl<'a> TypeChecker<'a> {
             locals: HashMap::new(),
             methods: HashMap::new(),
             complex: HashMap::new(),
+            call_info: HashMap::new(),
         }
     }
 
@@ -311,27 +313,21 @@ impl<'a> TypeChecker<'a> {
                     }
                     if func.this.is_none() &&  self.functions.contains_key(&func.name) {
                         let real_func = self.functions.get(&func.name).unwrap().clone();
-
                         self.locals.clear();
                         for param in real_func.parameters.iter() {
                             self.locals.insert(param.0.clone(),*param.1.clone());
                         }
-
                         self.check_stmt(real_func.body.as_ref().unwrap());
                         self.locals.clear();
                     } else if func.this.is_some() {
-
-
                         let this: (String,Box<Type>)= func.this.as_ref().unwrap().clone();
                         let this_ty = self.infer_type(&this.1);
                         let funcs = this_ty.get
                         self.locals.clear();
-
                         self.locals.insert(this.0,this_ty.clone());
                         for param in func.parameters.into_iter() {
                             self.locals.insert(param.0.clone(),*param.1.clone());
                         }
-
                         self.check_stmt(func.body.as_ref().unwrap());
                     }
                 }
@@ -374,8 +370,7 @@ impl<'a> TypeChecker<'a> {
                 return ty;
             }
             ExprKind::String(_) => {
-                let char_ty = Type::new(pos.clone(), TypeKind::Basic("char".to_owned()));
-                let ty = Type::new(pos.clone(), TypeKind::Pointer(box char_ty));
+                let ty = self.complex.get("string").unwrap().clone();
                 self.type_info.insert(expr.id, ty.clone());
 
                 return ty;
@@ -515,6 +510,7 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Call(func, object, arguments) => {
                 if self.functions.contains_key(func) && object.is_none() {
                     let func = self.functions.get(func).unwrap().clone();
+                    self.call_info.insert(expr.id, func.clone());
                     if !func.variadic {
                         if arguments.len() < func.parameters.len() {
                             error!("not enough arguments", pos);
@@ -588,11 +584,16 @@ impl<'a> TypeChecker<'a> {
                                 .collect::<Vec<_>>();
                             let argument_tys = arguments
                                 .iter()
-                                .map(|x| self.check_expr(x))
+                                .map(|x| {
+                                    let ty = self.check_expr(x);
+                                    self.type_info.insert(x.id, ty.clone());
+                                    ty
+                                })
                                 .collect::<Vec<_>>();
 
                             if tys == argument_tys {
                                 self.type_info.insert(expr.id, *method.returns.clone());
+                                self.call_info.insert(expr.id, method.clone());
                                 return *method.returns.clone();
                             }
                         }
@@ -682,6 +683,12 @@ impl<'a> TypeChecker<'a> {
                 let ty = Type::new(expr.pos.clone(), TypeKind::Pointer(boxed));
                 self.type_info.insert(expr.id, ty.clone());
                 return ty;
+            }
+            ExprKind::CString(_) => {
+                let ch = Type::new(pos.clone(), TypeKind::Basic("char".to_owned()));
+                let ptr = Type::new(pos.clone(), TypeKind::Pointer(box ch));
+                self.type_info.insert(expr.id, ptr.clone());
+                return ptr;
             }
             _ => unimplemented!(),
         };

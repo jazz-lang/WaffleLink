@@ -1,74 +1,34 @@
+use super::ast::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
-pub struct CCodeGen {
+pub struct Gen {
     pub buffer: String,
     pub ty_info: HashMap<usize, Type>,
+    pub call_info: HashMap<usize, Function>,
+    pub complex_types: HashMap<String, Type>,
     pub variables: HashMap<String, String>,
     c_variables: HashSet<String>,
-    pub complex_types: HashMap<String, Type>,
     tmp_id: usize,
     temps: String,
 }
 
 static mut FN_TY_C: i32 = 0;
 static mut FUNC_TYPES: Option<String> = None;
-use super::ast::*;
 
-impl CCodeGen {
-    pub fn new() -> CCodeGen {
-        CCodeGen {
+impl Gen {
+    pub fn new() -> Gen {
+        Gen {
             buffer: String::new(),
             ty_info: HashMap::new(),
-            variables: HashMap::new(),
+            call_info: HashMap::new(),
             complex_types: HashMap::new(),
+            variables: HashMap::new(),
+            c_variables: HashSet::new(),
+
             tmp_id: 0,
             temps: String::new(),
-            c_variables: HashSet::new(),
         }
     }
-}
-
-fn ty_to_c(ty: &Type) -> String {
-    match &ty.kind {
-        TypeKind::Basic(basic) => basic.to_owned(),
-        TypeKind::Structure(name, _) => name.to_owned(),
-        TypeKind::Pointer(to) => format!("{}*", ty_to_c(to)),
-        TypeKind::Void => "void".to_owned(),
-        TypeKind::Optional(ty) => format!("{}*", ty_to_c(ty)),
-        TypeKind::Function(returns, params) => {
-            let ty_ = unsafe { FUNC_TYPES.as_mut().unwrap() };
-            ty_.push_str("typedef ");
-            ty_.push_str(&ty_to_c(returns));
-            ty_.push_str(" ");
-            ty_.push_str(&format!("(*_{})", unsafe { FN_TY_C }));
-            unsafe {
-                FN_TY_C += 1;
-            }
-            ty_.push_str("(");
-            for (i, param) in params.iter().enumerate() {
-                ty_.push_str(&ty_to_c(param));
-                if i != params.len() - 1 {
-                    ty_.push_str(", ");
-                }
-            }
-            ty_.push_str(");\n");
-            format!("/* {} */_{}", ty, unsafe { FN_TY_C - 1 })
-        }
-        TypeKind::Array(ty_, _) => {
-            let mut ty = String::new();
-            ty.push_str(&ty_to_c(ty_));
-            /*ty.push_str("[");
-            if size.is_some() {
-                ty.push_str(&format!("{}", size.unwrap()));
-            }
-            ty.push_str("]");*/
-            return ty;
-        }
-        _ => unimplemented!(),
-    }
-}
-
-impl CCodeGen {
     fn get_ty(&self, ty: &Type) -> Type {
         if ty.is_basic() {
             if let TypeKind::Basic(name) = &ty.kind {
@@ -182,7 +142,7 @@ impl CCodeGen {
                         }
                     }
 
-                   /* for (name, _) in func.parameters.iter() {
+                    /* for (name, _) in func.parameters.iter() {
                         self.variables.insert(name.to_string(), name.to_string());
                     }*/
                     self.write(")\n");
@@ -342,6 +302,9 @@ impl CCodeGen {
 
     fn gen_expr(&mut self, expr: &Expr) {
         match &expr.kind {
+            ExprKind::CString(s) => {
+                self.write(&format!("{:?}", s));
+            }
             ExprKind::Array(values) => {
                 self.write("{ ");
                 for (i, value) in values.iter().enumerate() {
@@ -404,7 +367,7 @@ impl CCodeGen {
                 }
             }
             ExprKind::String(str) => {
-                self.write(&format!("{:?}", str));
+                self.write(&format!("waffle_string_new({:?},{})", str, str.len()));
             }
             ExprKind::Character(character) => {
                 self.write(&format!("(char){}", *character as u32));
@@ -434,7 +397,10 @@ impl CCodeGen {
             }
             ExprKind::Undefined => {}
             ExprKind::StructConstruct(_, fields) => {
+                let ty = self.get_ty( self.ty_info.get(&expr.id).unwrap());
+                self.write(&format!("({})",ty));
                 self.write("{");
+                
                 for (i, field) in fields.iter().enumerate() {
                     self.write(&format!(".{} = ", field.0));
                     self.gen_expr(&field.1);
@@ -487,28 +453,20 @@ impl CCodeGen {
                     self.write(&format!("_{}", self.tmp_id));
                     self.tmp_id += 1;
                 }
-
+                ExprKind::String(s) => {
+                    self.temps.push_str(&format!("string _{} = waffle_string_new({:?},{});\n",self.tmp_id,s,s.len()));
+                    self.write("&");
+                    self.write(&format!("_{}",self.tmp_id));
+                    self.tmp_id += 1;
+                }
                 _ => {
                     self.write("&");
                     self.gen_expr(expr);
                 }
             },
-            ExprKind::Call(name, this, arguments) => {
-                let name = if this.is_some() {
-                    let ty = self
-                        .ty_info
-                        .get(&this.as_ref().expect("info not found").id)
-                        .unwrap()
-                        .clone();
-                    if ty.is_pointer() {
-                        format!("${}_{}", ty.get_subty().expect("subtype not found"), name)
-                    } else {
-                        format!("${}_{}", ty, name)
-                    }
-                } else {
-                    name.to_owned()
-                };
-
+            ExprKind::Call(_, this, arguments) => {
+                let fun = self.call_info.get(&expr.id).unwrap();
+                let name = fun.mangle_name();
                 self.write(&format!("{}(", name));
                 if this.is_some() {
                     let this = this.as_ref().expect("unreachable").clone();
@@ -521,7 +479,6 @@ impl CCodeGen {
                             pos: this.pos.clone(),
                             kind: ExprKind::AddrOf(this.clone()),
                         });
-
                     }
                 }
                 if this.is_some() && !arguments.is_empty() {
@@ -542,7 +499,47 @@ impl CCodeGen {
                 self.write(" = ");
                 self.gen_expr(from);
             }
-            _ => unimplemented!(),
+            ExprKind::UInt(_) => unreachable!(), // we don't emit this expression yet
         }
+    }
+}
+
+fn ty_to_c(ty: &Type) -> String {
+    match &ty.kind {
+        TypeKind::Basic(basic) => basic.to_owned(),
+        TypeKind::Structure(name, _) => name.to_owned(),
+        TypeKind::Pointer(to) => format!("{}*", ty_to_c(to)),
+        TypeKind::Void => "void".to_owned(),
+        TypeKind::Optional(ty) => format!("{}*", ty_to_c(ty)),
+        TypeKind::Function(returns, params) => {
+            let ty_ = unsafe { FUNC_TYPES.as_mut().unwrap() };
+            ty_.push_str("typedef ");
+            ty_.push_str(&ty_to_c(returns));
+            ty_.push_str(" ");
+            ty_.push_str(&format!("(*_{})", unsafe { FN_TY_C }));
+            unsafe {
+                FN_TY_C += 1;
+            }
+            ty_.push_str("(");
+            for (i, param) in params.iter().enumerate() {
+                ty_.push_str(&ty_to_c(param));
+                if i != params.len() - 1 {
+                    ty_.push_str(", ");
+                }
+            }
+            ty_.push_str(");\n");
+            format!("/* {} */_{}", ty, unsafe { FN_TY_C - 1 })
+        }
+        TypeKind::Array(ty_, _) => {
+            let mut ty = String::new();
+            ty.push_str(&ty_to_c(ty_));
+            /*ty.push_str("[");
+            if size.is_some() {
+                ty.push_str(&format!("{}", size.unwrap()));
+            }
+            ty.push_str("]");*/
+            return ty;
+        }
+        _ => unimplemented!(),
     }
 }

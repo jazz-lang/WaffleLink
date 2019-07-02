@@ -299,14 +299,14 @@ pub struct Function {
 
 impl Function {
     pub fn mangle_name(&self) -> String {
-        if self.external || self.internal {
+        if self.external || self.internal  || (&self.name == "main" && self.this.is_none() ) {
             return self.name.clone();
         } else {
             let mut name = String::new();
-            //name.push_str("waffle_");
+            name.push_str("waffle_");
             if self.this.is_some() {
                 name.push_str(&format!(
-                    "${}_",
+                    "{}_",
                     self.this.as_ref().unwrap().1.get_subty().unwrap()
                 ));
             }
@@ -351,7 +351,7 @@ pub enum ExprKind {
     /// Subscript: `array[index]`
     Subscript(Box<Expr>, Box<Expr>),
     SizeOf(Box<Type>),
-
+    CString(String),
     /// Struct creation:
     /// ```rust
     /// x: Foo = Foo {bar: 0,baz: 42}

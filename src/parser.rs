@@ -381,6 +381,20 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    fn parse_cstring(&mut self) -> ExprResult {
+        let string = self.advance_token()?;
+
+        if let TokenKind::CString(value) = string.kind {
+            Ok(Box::new(Expr {
+                id: self.generate_id(),
+                pos: string.position,
+                kind: ExprKind::CString(value),
+            }))
+        } else {
+            unreachable!();
+        }
+    }
+
     fn parse_string(&mut self) -> ExprResult {
         let string = self.advance_token()?;
 
@@ -693,7 +707,6 @@ impl<'a> Parser<'a> {
             let name = self.expect_identifier()?;
             self.expect_token(TokenKind::Colon);
             let ty = self.parse_type()?;
-
             Ok((name,Box::new(ty)))
         });*/
         let params = {
@@ -1070,6 +1083,7 @@ impl<'a> Parser<'a> {
             TokenKind::LitChar(_) => self.parse_lit_char(),
             TokenKind::LitInt(_, _, _) => self.parse_lit_int(),
             TokenKind::LitFloat(_, _) => self.parse_lit_float(),
+            TokenKind::CString(_) => self.parse_cstring(),
             TokenKind::String(_) => self.parse_string(),
             TokenKind::True | TokenKind::False => self.parse_bool_literal(),
             TokenKind::Null => self.parse_null(),

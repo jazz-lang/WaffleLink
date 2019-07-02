@@ -1,20 +1,14 @@
 #![feature(box_syntax)]
-#![feature(const_fn)]
-#![feature(const_transmute)]
-
-pub static mut DUMP_IR: bool = false;
 
 #[macro_use]
 pub mod macros;
 pub mod ast;
 pub mod cgen;
-pub mod codegen;
+pub mod check;
 pub mod err;
-pub mod jit;
 pub mod lexer;
 pub mod parser;
 pub mod reader;
-pub mod tycheck;
 #[derive(Clone)]
 pub struct File {
     pub ast: Vec<ast::Element>,
@@ -35,6 +29,7 @@ pub struct Context {
     pub library: bool,
     pub merged: Option<File>,
     pub path: String,
+    pub imported_std: bool
 }
 
 use ast::Element;
@@ -144,21 +139,15 @@ impl Context {
                 imports.insert(name.name.clone());
             }
         });
-
-        let home_path = option_env!("HOME").to_owned();
-        let home_path = format!(
-            "{}/.jazz",
-            if home_path.is_some() {
-                home_path.as_ref().unwrap()
-            } else {
-                if cfg!(windows) {
-                    option_env!("HOMEPATH").unwrap()
-                } else {
-                    unimplemented!()
-                }
-            }
-        );
+        if !self.imported_std {
+            imports.insert("std".to_owned());
+            self.imported_std = true;
+        }
+        let data_path = dirs::home_dir().expect("unimplemented");
+        let home_path = data_path;
+        let home_path = format!("{}/.jazz", home_path.to_str().unwrap());
         let home_path = std::path::Path::new(&home_path);
+        let got_std = self.imported_std;
         let files = imports
             .iter()
             .map(|import| {
@@ -168,6 +157,7 @@ impl Context {
                     files: vec![],
                     import_search_paths: vec![],
                     path: self.path.clone(),
+                    imported_std: got_std
                 };
                 let mut full_path = String::new();
                 full_path.push_str(home_path.to_str().unwrap());

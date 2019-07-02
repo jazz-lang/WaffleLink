@@ -1,28 +1,27 @@
-extern func int_to_str(i int) *char
-extern func long_to_str(l long) *char
-extern func uint_to_str(i uint) *char
-extern func ulong_to_str(i ulong) *char
-
-func (v *int) to_string() *char {
-	return int_to_str(*v)
+struct string {
+    value *char,
+    len int
 }
 
-func (v *long) to_string() *char {
-	return long_to_str(*v)
+
+func string_new(data *char,len int) string {
+    return string {
+        value: data,
+        len: len
+    }
 }
 
-func (v *uint) to_string() *char {
-	return uint_to_str(*v)
+
+extern func strcmp(s1 *char,s2 *char) int
+
+func (s *string) compare(s2 *string) int {
+    return strcmp(s.value,s2.value)
 }
 
-func (v *ulong) to_string() *char {
-	return ulong_to_str(*v)
+func (s* string) equals(s2 string) bool {
+    return s.compare(&s2) == 0
 }
 
-extern func puts(s *char) void
-
-func println(s *char) void {
-	puts(s)
-	return;
+func (s *string) cstr() *char {
+    return s.value
 }
-
