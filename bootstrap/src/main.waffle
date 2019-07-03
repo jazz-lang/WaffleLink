@@ -1,16 +1,38 @@
 import "std"
 
-extern func write(fd int,contents *void,count int) int
 
-func main() int {
-	var r = reader_from_str(c"
-	struct Point {
-		x int,
-		y int
+func read_file(filename *char) *char {
+	var buffer = null as *char
+
+	var string_size = 0
+	var read_size = 0
+	var handler = fopen(filename,c"r")
+	if handler != null as *FILE {
+		fseek(handler,0,SEEK_END)
+		string_size = ftell(handler)
+		rewind(handler)
+
+		buffer = malloc(sizeof(char) as int * (string_size + 1)) as *char
+		read_size = fread(buffer,sizeof(char) as int,string_size,handler)
+		buffer[string_size] = '\0'
+		if string_size != read_size {
+			free(buffer as *void)
+			buffer = null as *char
+		}
+		fclose(handler)
 	}
-	func main { 
-		var x = c\"42\" 
-	}")
+
+	return buffer
+}
+
+func main(argc int,argv **char) int {
+	if argv[1] == null as *char {
+		println("expected filename as argument")
+		exit(-1)
+	}
+	var buffer = read_file(argv[1])
+
+	var r = reader_from_str(buffer)
 	var l = lexer_new(&r)
 	var tok = l.read_token()
 	var token_strings = TOKEN_STRINGS

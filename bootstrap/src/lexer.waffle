@@ -250,6 +250,8 @@ func get_keyword_or_ident(val *char,pos Location) Token {
 		tok.kind = TOK_CONTINUE
 	} else if strcmp(val,c"loop") == 0 {
 		tok.kind = TOK_LOOP
+	} else if strcmp(val,c"as") == 0 {
+		tok.kind = TOK_AS
 	} else {
 		tok.kind = TOK_IDENT
 		tok.value = val
@@ -264,7 +266,7 @@ func get_keyword_or_ident(val *char,pos Location) Token {
 }
 
 func (l *Lexer) read_escaped_char(pos Location,unclosed *char) char {
-	if l.cur() != 0 as char {
+	if l.cur() != '\0' {
 		var c = l.cur()
 		l.read_char()
 		if c == '\\' {
@@ -302,19 +304,24 @@ func (l *Lexer) read_escaped_char(pos Location,unclosed *char) char {
 	} else {
 		error_at(pos,c"unclosed character")
 	}
+
+	return '\0'
 } 
 
 func (l *Lexer) read_identifier() Token {
 	var pos = l.r.loc()
 	var value = malloc(1) as *char
+
 	var i = 0
 	while is_identifier(l.cur()) {
 		var ch = l.cur()
-		value = realloc(value as *void,i + 1) as *char
+		value = realloc(value as *void,i + 2 ) as *char
 		value[i] = ch
 		l.read_char()
 		i = i + 1
 	}
+	
+	value[i] = '\0'
 	return get_keyword_or_ident(value,pos)
 }
 
@@ -395,6 +402,8 @@ func (l *Lexer) read_number() Token {
 				i = i + 1
 			}
 		}
+		buffer = realloc(buffer as *void,i + 1) as *char
+		buffer[i] = 0 as char
 		tok.value = buffer
 		tok.kind = TOK_FLOAT
 		return tok
@@ -405,6 +414,7 @@ func (l *Lexer) read_number() Token {
 	
 	tok.value = buffer
 	tok.kind = TOK_INT
+	l.read_char()
 	return tok
 
 

@@ -2,6 +2,19 @@
 
 extern func isdigit(ch int) bool
 extern func realloc(x *void,size int) *void
+extern func write(fd int,contents *void,count int) int
+extern func free(v *void) void
+struct FILE {}
+extern func fopen(fname *char,mode *char) *FILE
+extern func fgetc(f *FILE) char
+extern func fclose(f *FILE) void
+extern func ftell(f *FILE) int
+const SEEK_END: int = 2 
+extern func fseek(f *FILE,x int, y int) void
+extern func rewind(x *FILE) void
+extern func fread(b *char,x int, y int,f *FILE) int
+
+const EOF = -1 as char
 func (c *char) to_digit(radix uint) *uint {
 	if (radix <= 36) == false {
 		compiler_panic(c"to_digit: radix is too high (maximum 36)")

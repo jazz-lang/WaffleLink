@@ -33,11 +33,20 @@ func (l *Location) to_string() *char {
 }
 
 
-const INT_EXPR: int = 0
-const FLOAT_EXPR: int = 1
-const STR_EXPR: int = 2
-const BIN_EXPR: int = 3
-const CSTR_EXPR: int = 4
+const EXPR_INT: int = 0
+const EXPR_FLOAT: int = 1
+const EXPR_STR: int = 2
+const EXPR_BINARY: int = 3
+const EXPR_CSTR: int = 4
+const EXPR_PAR: int = 5
+const EXPR_MEMBER: int = 6
+const EXPR_CALL: int = 7
+const EXPR_STRUCT: int = 8
+const EXPR_SUBSCRIPT: int = 9
+const EXPR_ARRAY: int = 10
+const EXPR_CHAR: int = 11
+const EXPR_BOOL: int = 12
+const EXPR_UNARY: int = 13
 struct Expr {
 	pos Location,
 	id int,
@@ -58,6 +67,96 @@ struct ExrpFloat {
 	kind int,
 	val float64
 }
+
+struct ExprPar {
+	pos Location,
+	id int,
+	kind int,
+	val *Expr
+}
+
+struct ExprMember {
+	pos Location,
+	id int,
+	kind int,
+	object *Expr,
+	field *char
+}
+struct ExprCall {
+	pos Location,
+	id int,
+	kind int,
+	name *char, 
+	this *Expr, // Option<Expr>
+	args **Expr,
+	count int
+}
+
+struct ExprStruct {
+	pos Location,
+	id int,
+	kind int,
+	name *char,
+	field_names **char,
+	field_values **Expr,
+	count int
+}
+
+struct ExprSubscript {
+	pos Location,
+	id int,
+	kind int,
+	value *Expr,
+	index *Expr
+}
+
+struct ExprArray {
+	pos Location,
+	id int,
+	kind int,
+	values **Expr,
+	count int
+} 
+
+struct ExprCStr {
+	pos Location,
+	id int,
+	kind int,
+	value *char,
+	len int
+}
+
+struct ExprStr {
+	pos Location,
+	id int,
+	kind int,
+	value *char,
+	len int
+}
+
+struct ExprChar {
+	pos Location,
+	id int,
+	kind int,
+	value char
+}
+
+struct ExprUnary {
+	pos Location,
+	id int,
+	kind int,
+	value *Expr,
+	op *char
+}
+
+struct ExprBool {
+	pos Location,
+	id int,
+	kind int,
+	value bool
+}
+
+
 
 struct ExprBinary {
 	pos Location,
