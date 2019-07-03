@@ -27,7 +27,7 @@ func reader_from_str(s *char) Reader {
 	r.cur = r.src[0]
 	r.line = 0
 	r.col = 0
-	r.tabwidth = 0
+	r.tabwidth = 4
 	return r
 }
 

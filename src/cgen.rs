@@ -190,8 +190,8 @@ impl Gen {
                 }
                 self.write("}\n");
             }
-            StmtKind::Break => self.write("break"),
-            StmtKind::Continue => self.write("continue"),
+            StmtKind::Break => self.write("break;"),
+            StmtKind::Continue => self.write("continue;"),
             StmtKind::If(cond, then, or) => {
                 self.write("if (");
                 self.gen_expr(cond);

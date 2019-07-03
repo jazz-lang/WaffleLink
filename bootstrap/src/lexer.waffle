@@ -12,6 +12,63 @@ const TOKEN_STRINGS =
 	c"func",
 	c"while",
 	c"if",
+	c"else",
+	c"loop",
+	c"continue",
+	c"break",
+	c"return",
+	c"true",
+	c"false",
+	c"null",
+	c"inline",
+	c"import",
+	c"extern",
+	c"enum",
+	c"struct",
+	c"const",
+	c"sizeof",
+	c"underscore",
+	c"var",
+	c"defer",
+	c"$",
+	c"+",
+	c"-",
+	c"*",
+	c"/",
+	c"%",
+	c"!",
+	c"(",
+	c")",
+	c"[",
+	c"]",
+	c"{",
+	c"}",
+	c",",
+	c";",
+	c".",
+	c":",
+	c"::",
+	c"->",
+	c"~",
+	c"|",
+	c"&",
+	c"^",
+	c"&&",
+	c"||",
+	c"internal",
+	c"for",
+	c"=",
+	c"==",
+	c">",
+	c"<",
+	c">=",
+	c"<=",
+	c"!=",
+	c"as",
+	c">>",
+	c"<<",
+	c"C string"
+
 ] 
 const TOK_AT: int = 0
 const TOK_STR: int = 1
@@ -80,7 +137,7 @@ const TOK_NE: int = 63
 const TOK_AS: int = 64
 const TOK_GTGT: int = 65
 const TOK_LTLT: int = 66
-
+const TOK_CSTR: int = 67
 
 
 struct Token {
@@ -206,7 +263,7 @@ func get_keyword_or_ident(val *char,pos Location) Token {
 	return tok
 }
 
-func (l *Lexer) read_escaped_char(pos Location,unclosed char) char {
+func (l *Lexer) read_escaped_char(pos Location,unclosed *char) char {
 	if l.cur() != 0 as char {
 		var c = l.cur()
 		l.read_char()
@@ -353,11 +410,192 @@ func (l *Lexer) read_number() Token {
 
 }
 
+
+
+func (l *Lexer) skip_white() {
+	var ch = l.cur()
+	while ch != 0 as char && ch.is_whitespace() {
+		l.read_char()
+		ch = l.cur()
+	}
+	return;
+}
+
+func (l *Lexer) read_char_literal() Token 
+{
+	var pos = l.loc()
+	l.read_char()
+	var ch = l.read_escaped_char(pos,c"unclosed char")
+	if is_single_quote(ch) {
+		l.read_char()
+		var tok = empty_token()
+		var buf = malloc(2) as *char
+		sprintf(buf,c"%c",ch)
+		tok.value = buf
+	} else {
+		error_at(pos,c"unclosed character")
+	}
+}
+
+func (l *Lexer) read_comment() {
+	var ch = l.cur()
+	while ch != 0 as char && !(ch == '\n') {
+		l.read_char()
+		ch = l.cur()
+	}
+}
+
+func (l *Lexer) is_multi_comment_start() bool {
+	return l.cur() == '/' && l.next() == '*'
+}
+
+func (l *Lexer) is_multi_comment_end() bool {
+	return l.cur() == '*' && l.next() == '/'
+}
+
+func (l *Lexer) read_multi_line_comment() {
+	var pos = l.loc()
+
+	l.read_char()
+	l.read_char()
+
+	while l.cur() != '\0' && !l.is_multi_comment_end() {
+		l.read_char()
+	}
+
+	if l.cur() == '\0' {
+		error_at(pos,c"Unclosed comment")
+	}
+
+	l.read_char()
+	l.read_char()
+	return;
+}
+func is_quote(c char) bool {
+	return c == '\"'
+}
+
+func is_single_quote(c char) bool {
+	return c == '\''
+}
+
+func is_operator(c char) bool {
+	if c == '^' 
+	|| c == '+'
+	|| c == '-'
+	|| c == '*'
+	|| c == '/'
+	|| c == '%'
+	|| c == '&'
+	|| c == '|'
+	|| c == ','
+	|| c == '='
+	|| c == '!'
+	|| c == '~'
+	|| c == ';'
+	|| c == ':'
+	|| c == '.'
+	|| c == '(' || c == ')'
+	|| c == '{' || c == '}'
+	|| c == '[' || c == ']'
+	|| c == '<' || c == '>'
+	{
+		
+		return true
+	} else {
+		return false
+	}
+	return false
+}
+
+func (l *Lexer) read_string() Token {
+	var pos = l.loc()
+	var buffer = malloc(40) as *char
+	var i = 0
+	l.read_char()
+	while l.cur() != 0 as char {
+		if is_quote(l.cur()) {
+			break
+		}
+		var ch = l.read_escaped_char(pos,c"unclosed string")
+		
+		sprintf(buffer,c"%s%c",buffer,ch)
+		buffer = realloc(buffer as *void,40 + i) as *char
+		i = i + 1
+	}
+	var res = l.cur() == '\"'
+	if res {
+		
+		l.read_char()
+		
+		var tok = empty_token()
+		tok.kind = TOK_STR
+		tok.pos = pos
+		tok.value = buffer
+		return tok
+	} else {
+		printf(c"%i\n",l.cur())
+		error_at(pos,c"Unclosed string")
+	}
+}
+
+func (l *Lexer) read_token() Token {
+	var tok = empty_token()
+
+	while true {
+		l.skip_white()
+
+		var pos = l.loc()
+		var ch = l.cur()
+
+		if ch == '\0' {
+			tok.kind = TOK_END
+			tok.value = c""
+			return tok
+		}
+
+		if ch.is_digit(10 as uint) {
+			return l.read_number()
+		} else if l.is_comment_start() {
+			l.read_comment()
+		} else if ch == 'c' {
+			if is_quote(l.next()) {
+				l.read_char()
+
+				var str = l.read_string()
+				str.kind = TOK_CSTR
+
+				return str
+			} else {
+				return l.read_identifier()
+			}
+		} else if l.is_multi_comment_start() {
+			l.read_multi_line_comment()
+		} else if is_identifier_start(ch) {
+			return l.read_identifier()
+		} else if is_quote(ch) {
+			return l.read_string()
+		} else if is_single_quote(ch) {
+			return l.read_char_literal()
+		} else if is_operator(ch) {
+			var op = l.read_operator()
+			
+			return op
+		} else {
+			var buf = malloc(40) as *char
+			sprintf(buf,c"%s: unknown char '%c'",pos.to_string(),ch)
+		}
+
+	}
+}
+
 func (l *Lexer) read_operator() Token {
 	var tok = empty_token()
 
 	var ch = l.cur()
+	l.read_char()
 	var nch char 
+
 	var _c = l.cur()
 	if _c == 0 as char {
 		nch = 'x'
@@ -365,102 +603,102 @@ func (l *Lexer) read_operator() Token {
 		nch = _c
 	}
 	
-	var kind int = TOK_END
 
 	if ch == '+' {
-		kind = TOK_ADD
+		tok.kind = TOK_ADD
 	} else if ch == '-' {
 		if nch == '>' {
 			l.read_char()
-			kind = TOK_ARROW
+			tok.kind = TOK_ARROW
 		} else {
-			kind = TOK_SUB
+			tok.kind = TOK_SUB
 		}
 		
 	} else if ch == '/' {
-		kind = TOK_DIV
+		tok.kind = TOK_DIV
 	} else if ch == '*' {
-		kind = TOK_MUL
+		tok.kind = TOK_MUL
 	} else if ch == '%' {
-		kind = TOK_MOD
+		tok.kind = TOK_MOD
 	} else if ch == '(' {
-		kind = TOK_LPAREN
+		tok.kind = TOK_LPAREN
 	} else if ch == ')' {
-		kind = TOK_RPAREN
+		tok.kind = TOK_RPAREN
 	} else if ch == '[' {
-		kind = TOK_LBRACKET
+		tok.kind = TOK_LBRACKET
 	} else if ch == ']' {
-		kind = TOK_RBRACKET
+		tok.kind = TOK_RBRACKET
 	} else if ch == '{' {
-		kind = TOK_LBRACE
+		tok.kind = TOK_LBRACE
 	} else if ch == '}' {
-		kind = TOK_RBRACE
+		tok.kind = TOK_RBRACE
 	} else if ch == '|' {
 		if nch == '|' {
 			l.read_char()
-			kind = TOK_OR
+			tok.kind = TOK_OR
 		} else {
-			kind = TOK_BITOR
+			tok.kind = TOK_BITOR
 		}
 	} else if ch == '&' {
 		if nch == '&' {
 			l.read_char()
-			kind = TOK_AND
+			tok.kind = TOK_AND
 		} else {
-			kind = TOK_BITAND
+			tok.kind = TOK_BITAND
 		}
 	} else if ch == '^' {
-		kind = TOK_CARET
+		tok.kind = TOK_CARET
 	} else if ch == '~' {
-		kind = TOK_TILDE
+		tok.kind = TOK_TILDE
 	} else if ch == ',' {
-		kind = TOK_COMMA
+		tok.kind = TOK_COMMA
 	} else if ch == ';' {
-		kind = TOK_SEMI
+		tok.kind = TOK_SEMI
 	} else if ch == ':' {
-		kind = TOK_COLON // separator ignored now
+		tok.kind = TOK_COLON // separator ignored now
 	} else if ch == '.' {
-		kind = TOK_DOT
+		tok.kind = TOK_DOT
 	} else if ch == '=' {
 		if nch == '=' {
 			l.read_char()
-			kind = TOK_EQEQ
+			tok.kind = TOK_EQEQ
 		} else {
-			kind = TOK_EQ
+			tok.kind = TOK_EQ
 		}
 	} else if ch == '<' {
 		if nch == '=' {
 			l.read_char()
-			kind = TOK_LE
+			tok.kind = TOK_LE
 		} else if nch == '<' {
 			l.read_char()
-			kind = TOK_LTLT
+			tok.kind = TOK_LTLT
 		} else {
-			kind = TOK_LT
+			tok.kind = TOK_LT
 		}
 	} else if ch == '>' {
 		if nch == '=' {
 			l.read_char()
-			kind = TOK_GE
+			tok.kind = TOK_GE
 		} else if nch == '<' {
 			l.read_char()
-			kind = TOK_GTGT
+			tok.kind = TOK_GTGT
 		} else {
-			kind = TOK_GT
+			tok.kind = TOK_GT
 		}
 	} else if ch == '!' {
 		if nch == '=' {
 			l.read_char()
-			kind = TOK_NE
+			tok.kind = TOK_NE
 		} else {
-			kind = TOK_NOT
+			tok.kind = TOK_NOT
 		}
 	} else {
 		var pos = l.r.loc()
 		var p = pos.to_string()
 		printf(c"%s : Unknwon character '%c'",p,ch)
 	}
-
+	tok.pos = l.r.loc()
+	tok.value = c""
 	return tok
 }
 

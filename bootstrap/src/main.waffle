@@ -3,12 +3,30 @@ import "std"
 extern func write(fd int,contents *void,count int) int
 
 func main() int {
-	var r = reader_from_str(c"128.64")
+	var r = reader_from_str(c"
+	struct Point {
+		x int,
+		y int
+	}
+	func main { 
+		var x = c\"42\" 
+	}")
 	var l = lexer_new(&r)
-	var ident = l.read_number()
-	var strs = TOKEN_STRINGS
-	var str = strs[ident.kind]
-	var val = ident.value
-	printf(c"Token kind: '%s',value: '%s'\n",str,val)
+	var tok = l.read_token()
+	var token_strings = TOKEN_STRINGS
+	while tok.kind != TOK_END {
+		if tok.value != null as *char {
+			if strlen(tok.value) != 0 {
+				printf(c"%s: %s\n",token_strings[tok.kind],tok.value)
+			} else {
+				printf(c"%s\n",token_strings[tok.kind])
+			}
+		} else {
+			printf(c"%i\n",tok.kind)
+		}
+		
+		tok = l.read_token()
+	}
+	
 	return 0
 }

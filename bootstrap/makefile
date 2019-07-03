@@ -1,6 +1,6 @@
 all: build
 build:
-	waffle src --emit-c -o waffle --cc clang
+	waffle src -o waffle --cc clang
 
 		
 clean:
