@@ -27,7 +27,7 @@ func read_file(filename *char) *char {
 
 
 func main() int {
-	printf(c"%x",hash_cstr(c"Дарова ебана 228"))
+	printf(c"%x",hash_cstr(c"test"))
 
 	return 0
 }
