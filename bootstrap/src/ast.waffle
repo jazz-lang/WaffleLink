@@ -47,44 +47,70 @@ const EXPR_ARRAY: int = 10
 const EXPR_CHAR: int = 11
 const EXPR_BOOL: int = 12
 const EXPR_UNARY: int = 13
+const EXPR_NULL: int = 14
+const EXPR_DEREF: int = 15
+const EXPR_ADDROF: int = 16
+const EXPR_CONV: int = 17
+const EXPR_NONE: int = 18
 struct Expr {
-	pos Location,
-	id int,
-	kind int
+	pos Location, // expression location: file.waffle:line:col
+	ty *Type, // expression return type, set on typechecking
+	kind int // expression kind,e.g EXPR_CHAR
 }
 
+struct ExprAddrOf {
+	pos Location,
+	ty *Type,
+	kind int,
+	val *Expr
+}
+
+struct ExprDeref {
+	pos Location,
+	ty *Type,
+	kind int,
+	val *Expr
+}
+
+struct ExprConv {
+	pos Location,
+	ty *Type,
+	kind int,
+	val *Expr,
+	to *Type
+}
 
 struct ExprInt {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	val ulong
 }
 
 struct ExrpFloat {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	val float64
 }
 
 struct ExprPar {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	val *Expr
 }
 
 struct ExprMember {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	object *Expr,
 	field *char
 }
 struct ExprCall {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	name *char, 
 	this *Expr, // Option<Expr>
@@ -94,7 +120,7 @@ struct ExprCall {
 
 struct ExprStruct {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	name *char,
 	field_names **char,
@@ -104,7 +130,7 @@ struct ExprStruct {
 
 struct ExprSubscript {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value *Expr,
 	index *Expr
@@ -112,7 +138,7 @@ struct ExprSubscript {
 
 struct ExprArray {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	values **Expr,
 	count int
@@ -120,7 +146,7 @@ struct ExprArray {
 
 struct ExprCStr {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value *char,
 	len int
@@ -128,7 +154,7 @@ struct ExprCStr {
 
 struct ExprStr {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value *char,
 	len int
@@ -136,14 +162,14 @@ struct ExprStr {
 
 struct ExprChar {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value char
 }
 
 struct ExprUnary {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value *Expr,
 	op *char
@@ -151,7 +177,7 @@ struct ExprUnary {
 
 struct ExprBool {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	value bool
 }
@@ -160,9 +186,71 @@ struct ExprBool {
 
 struct ExprBinary {
 	pos Location,
-	id int,
+	ty *Type,
 	kind int,
 	op *char,
 	x *Expr,
 	y *Expr
+}
+
+
+const TYPE_BASIC = 0
+const TYPE_PTR = 1
+const TYPE_OPTION = 2
+const TYPE_ARRAY = 3
+const TYPE_STRUCT = 4
+const TYPE_FUNC = 5
+const TYPE_VOID = 6
+struct Type {
+	kind int,
+	pos Location
+}
+
+struct TypeBasic {
+	kind int,
+	pos Location,
+	name *char
+}
+
+struct TypePtr {
+	kind int,
+	pos Location,
+	subtype *Type
+}
+
+struct TypeOption {
+	kind int,
+	pos Location,
+	subtype *Type
+}
+
+struct TypeArray {
+	kind int,
+	pos Location,
+	subtype *Type,
+	len int,
+	has_size bool
+}
+
+struct StructField 
+{
+	pos Location,
+	name *char,
+	ty *Type
+}
+
+struct TypeStruct {
+	kind int,
+	pos Location,
+	name *char,
+	fields *StructField,
+	count int
+}
+
+struct TypeFunc {
+	kind int,
+	pos Location,
+	params **Type,
+	count int,
+	returns *Type
 }

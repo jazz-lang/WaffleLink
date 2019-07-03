@@ -1,0 +1,50 @@
+struct IdGen {
+	id int
+}
+
+func (i *IdGen) gen() int {
+	var id = i.id
+	i.id = i.id + 1
+	return id
+}
+
+struct Parser {
+	idgen IdGen,
+	lexer Lexer,
+	token Token
+}
+
+func (p *Parser) gen_id() int {
+	return p.idgen.gen()
+}
+
+func (p *Parser) advance_token() Token {
+	var tok = p.lexer.read_token()
+	var old = p.token
+	p.token = tok
+	return old
+}
+
+func (p *Parser) expect(kind int) Token {
+	if p.token.kind == kind {
+		var token = p.advance_token()
+
+		return token
+	} else {
+		var pos = p.lexer.loc()
+		var strings = TOKEN_STRINGS
+
+		printf(c"error %s: Expected '%s',found '%s'",pos.to_string(), strings[kind],strings[p.token.kind])
+	}
+}
+
+func (p *Parser) expect_identifier() *char {
+	var tok = p.advance_token()
+	if tok.kind == TOK_IDENT {
+		return tok.value
+	} else 
+	{
+		var strings = TOKEN_STRINGS
+		printf(c"error %s: Expected identifier,found '%s'",tok.pos.to_string(),strings[tok.kind])
+	}
+}

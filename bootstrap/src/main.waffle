@@ -25,6 +25,13 @@ func read_file(filename *char) *char {
 	return buffer
 }
 
+
+func main() int {
+	printf(c"%x",hash_cstr(c"Дарова ебана 228"))
+
+	return 0
+}
+/*
 func main(argc int,argv **char) int {
 	if argv[1] == null as *char {
 		println("expected filename as argument")
@@ -51,4 +58,4 @@ func main(argc int,argv **char) int {
 	}
 	
 	return 0
-}
+}*/
