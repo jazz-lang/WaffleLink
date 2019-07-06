@@ -21,6 +21,24 @@ extern func malloc(x int) *void
 
 extern func strcmp(s1 *char,s2 *char) int
 
+func (s *string) push(x char) {
+    var new_buf = malloc(s.len + 2) as *char
+    sprintf(new_buf,c"%s%c",s.value,x)
+    new_buf[s.len + 2] = '\0' 
+    s.value = new_buf
+    s.len = s.len + 1
+    return
+}
+
+func (s *string) push_str(x string) {
+    var new_buf = malloc(s.len + x.len + 1) as *char
+    sprintf(new_buf,c"%s%s",s.value,x.value)
+    new_buf[s.len + x.len + 1] = '\0'
+    s.value = new_buf
+    s.len = s.len + x.len + 1
+    return
+}
+
 func (s string) compare(s2 string) int {
     return strcmp(s.value,s2.value)
 }
