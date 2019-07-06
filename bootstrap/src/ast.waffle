@@ -87,7 +87,7 @@ struct ExprInt {
 	val ulong
 }
 
-struct ExrpFloat {
+struct ExprFloat {
 	pos Location,
 	ty *Type,
 	kind int,
@@ -193,6 +193,72 @@ struct ExprBinary {
 	y *Expr
 }
 
+struct Stmt {
+	kind int
+}
+
+const STMT_EXPR = 0
+const STMT_IF = 1
+const STMT_WHILE = 2
+const STMT_FOR = 3
+const STMT_BLOCK = 4
+const STMT_LOOP = 5
+const STMT_BREAK = 6
+const STMT_CONTINUE = 7
+const STMT_VAR = 8
+
+struct StmtExpr {
+	kind int,
+	expr *Expr
+}
+
+struct StmtIf {
+	kind int,
+	cond *Expr,
+	then *Stmt,
+	otherwise *Stmt
+}
+
+struct StmtWhile {
+	kind int,
+	cond *Expr,
+	then *Stmt
+}
+
+struct StmtFor {
+	kind int,
+	var_decl *Stmt,
+	cond *Expr,
+	after *Expr,
+	body *Stmt
+}
+
+struct StmtBlock {
+	kind int,
+	stmts **Stmt,
+	count int
+}
+
+struct StmtLoop {
+	kind int,
+	stmts **Stmt,
+	count int
+}
+
+struct StmtBreak {
+	kind int,
+}
+
+struct StmtContinue {
+	kind int
+}
+
+struct StmtVar {
+	kind int,
+	name *char,
+	ty *Type, // Option<Type>
+	val *Expr // Option<Expr>
+}
 
 const TYPE_BASIC = 0
 const TYPE_PTR = 1

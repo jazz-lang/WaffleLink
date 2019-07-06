@@ -10,17 +10,17 @@ struct Reader {
 }
 
 
-func (r *Reader) cur() char {
+func (r Reader) cur() char {
 	return r.cur
 }
 
-func (r *Reader) loc() Location {
+func (r Reader) loc() Location {
 	return new_location(r.filename,r.line,r.col)
 }
 
 func reader_from_str(s *char) Reader {
 	var r Reader
-	r.filename = c"<sring>"
+	r.filename = c"<string>"
 	r.src = s
 	r.pos = 0
 	r.next_pos = 0
@@ -65,7 +65,7 @@ func (r *Reader) advance() char {
 	return c
 }
 
-func (r *Reader) next() char 
+func (r Reader) next() char 
 {
 	if r.next_pos < strlen(r.src) {
 		var ch = r.src[r.next_pos + 1]

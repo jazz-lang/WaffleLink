@@ -172,7 +172,7 @@ func empty_token() Token {
 }
 
 
-func (t *Token) is(kind int) bool {
+func (t Token) is(kind int) bool {
 	if t.kind == kind {
 		return true
 	}
@@ -190,11 +190,11 @@ func lexer_new(r *Reader) Lexer {
 	}
 }
 
-func (l *Lexer) cur() char {
+func (l Lexer) cur() char {
 	return l.r.cur()
 }
 
-func (l *Lexer) next() char {
+func (l Lexer) next() char {
 	return l.r.next()
 }
 
@@ -203,7 +203,7 @@ func (l *Lexer) read_char() {
 	return;
 }
 
-func (l *Lexer) is_comment_start() bool {
+func (l Lexer) is_comment_start() bool {
 	var c = l.cur()
 	if c != 0 as char {
 		return c == '/' && l.next() == '/'
@@ -325,7 +325,7 @@ func (l *Lexer) read_identifier() Token {
 	return get_keyword_or_ident(value,pos)
 }
 
-func (l *Lexer) loc() Location {
+func (l Lexer) loc() Location {
 	return l.r.loc()
 }
 

@@ -26,12 +26,8 @@ func read_file(filename *char) *char {
 }
 
 
-func main() int {
-	printf(c"%x",hash_cstr(c"test"))
 
-	return 0
-}
-/*
+
 func main(argc int,argv **char) int {
 	if argv[1] == null as *char {
 		println("expected filename as argument")
@@ -40,22 +36,12 @@ func main(argc int,argv **char) int {
 	var buffer = read_file(argv[1])
 
 	var r = reader_from_str(buffer)
+	r.filename = argv[1]
 	var l = lexer_new(&r)
-	var tok = l.read_token()
-	var token_strings = TOKEN_STRINGS
-	while tok.kind != TOK_END {
-		if tok.value != null as *char {
-			if strlen(tok.value) != 0 {
-				printf(c"%s: %s\n",token_strings[tok.kind],tok.value)
-			} else {
-				printf(c"%s\n",token_strings[tok.kind])
-			}
-		} else {
-			printf(c"%i\n",tok.kind)
-		}
-		
-		tok = l.read_token()
-	}
-	
+	var p = parser_new(l)
+	p.advance_token()
+	p.expect(TOK_IMPORT)
+
+	free(buffer as *void)
 	return 0
-}*/
+}
