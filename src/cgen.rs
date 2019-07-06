@@ -470,20 +470,34 @@ impl Gen {
                 }
             },
             ExprKind::Call(_, this, arguments) => {
-                let fun = self.call_info.get(&expr.id).unwrap();
+                let fun: &Function = self.call_info.get(&expr.id).unwrap();
                 let name = fun.mangle_name();
+                let fun_this = fun.this.clone();
                 self.write(&format!("{}(", name));
                 if this.is_some() {
+                    let fun_this = fun_this.unwrap().1;
                     let this = this.as_ref().expect("unreachable").clone();
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
-                    if ty.is_pointer() {
-                        self.gen_expr(&this);
+                    if fun_this.is_pointer() {
+                        if ty.is_pointer() {
+                            self.gen_expr(&this);
+                        } else {
+                            self.gen_expr(&Expr {
+                                id: 0,
+                                pos: this.pos.clone(),
+                                kind: ExprKind::AddrOf(this.clone()),
+                            });
+                        }
                     } else {
-                        self.gen_expr(&Expr {
-                            id: 0,
-                            pos: this.pos.clone(),
-                            kind: ExprKind::AddrOf(this.clone()),
-                        });
+                        if ty.is_pointer() {
+                            self.gen_expr(&Expr {
+                                id: 0,
+                                pos: this.pos.clone(),
+                                kind: ExprKind::Deref(this.clone())
+                            })
+                        } else {
+                            self.gen_expr(&this)
+                        }
                     }
                 }
                 if this.is_some() && !arguments.is_empty() {

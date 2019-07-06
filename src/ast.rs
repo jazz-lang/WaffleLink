@@ -307,7 +307,8 @@ impl Function {
             if self.this.is_some() {
                 name.push_str(&format!(
                     "{}_",
-                    self.this.as_ref().unwrap().1.get_subty().unwrap()
+                    if self.this.as_ref().unwrap().1.is_pointer() { self.this.as_ref().unwrap().1.get_subty().unwrap() }
+                    else { &self.this.as_ref().unwrap().1 }
                 ));
             }
 

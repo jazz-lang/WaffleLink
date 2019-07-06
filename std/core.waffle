@@ -21,65 +21,65 @@ extern func malloc(x int) *void
 
 extern func strcmp(s1 *char,s2 *char) int
 
-func (s *string) compare(s2 *string) int {
+func (s string) compare(s2 string) int {
     return strcmp(s.value,s2.value)
 }
 
-func (s* string) neq(s2 string) bool {
+func (s string) neq(s2 string) bool {
     return !s.equals(s2)
 }
 
 
-func (s* string) equals(s2 string) bool {
-    return s.compare(&s2) == 0
+func (s string) equals(s2 string) bool {
+    return s.compare(s2) == 0
 }
 
-func (s *string) cstr() *char {
+func (s string) cstr() *char {
     return s.value
 }
 extern func strlen(x *char) int
 extern func sprintf(x *char,y *char,...) int
 extern func calloc(x int,y int) *void
-func (x *int) str() string {
+func (x int) str() string {
     var buf = calloc(1,40) as *char
     var fmt = "%i".cstr()
-    sprintf(buf,fmt,*x);
+    sprintf(buf,fmt,x);
     return string_new(buf,strlen(buf));
 }
 
 func (x *long) str() string {
     var buf = calloc(1,40) as *char
-    sprintf(buf,c"%li",*x)
+    sprintf(buf,c"%li",x)
     return string_new(buf,strlen(buf))
 }
 
-func (x *usize) str() string {
+func (x usize) str() string {
     var buf = calloc(1,40) as *char
-    sprintf(buf,c"%lu",*x);
+    sprintf(buf,c"%lu",x);
     return string_new(buf,strlen(buf))
 }
 
-func (x *isize) str() string {
+func (x isize) str() string {
     var buf = calloc(1,40) as *char
-    sprintf(buf,c"%li",*x) // TODO: Determine platform pointer size
+    sprintf(buf,c"%li",x) // TODO: Determine platform pointer size
     return string_new(buf,strlen(buf))
 }
 
-func (x *float32) str() string {
+func (x float32) str() string {
     var buf = calloc(1,40) as *char
-    sprintf(buf,c"%f",*x)
+    sprintf(buf,c"%f",x)
     return string_new(buf,strlen(buf))
 }
 
-func (x *float64) str() string {
+func (x float64) str() string {
     var buf = calloc(1,60) as *char
-    sprintf(buf,c"%lf",*x)
+    sprintf(buf,c"%lf",x)
     return string_new(buf,strlen(buf))
 }
 
-func (x *char) str() string {
+func (x char) str() string {
     var buf = calloc(1,1) as *char
-    sprintf(buf,c"%c",*x)
+    sprintf(buf,c"%c",x)
     return string_new(buf,strlen(buf))
 }
 

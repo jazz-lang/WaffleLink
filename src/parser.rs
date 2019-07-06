@@ -265,7 +265,7 @@ impl<'a> Parser<'a> {
 
     fn parse_return(&mut self) -> StmtResult {
         let _ = self.expect_token(TokenKind::Return)?.position;
-        let expr = if self.token.is(TokenKind::Semicolon) {
+        let expr = if self.token.is(TokenKind::Semicolon) || self.token.is(TokenKind::RBrace) {
             None
         } else {
             let expr = self.parse_expression()?;
@@ -273,7 +273,7 @@ impl<'a> Parser<'a> {
         };
 
         if self.token.is(TokenKind::Semicolon) {
-            self.expect_semicolon()?;
+            self.advance_token()?;
         }
 
         Ok(Box::new(StmtKind::Return(expr)))

@@ -193,18 +193,22 @@ impl<'a> TypeChecker<'a> {
                 Element::Func(func) => {
                     if let Some(this) = func.this.clone() {
                         let this_ty = self.infer_type(&this.1);
-                        assert!(this_ty.is_pointer());
-
-                        if this_ty.get_pointee().unwrap().is_pointer() {
-                            error!("Methods for pointers not implemented", this_ty.pos);
+                        if this_ty.is_pointer() {
+                            if this_ty.get_pointee().unwrap().is_pointer() {
+                                error!("Methods for pointers not implemented", this_ty.pos);
+                            }
+                            if this_ty.get_pointee().unwrap().is_interface() {
+                                error!("Interface can not be `This` type", this_ty.pos);
+                            }
+                        } else {
+                            if this_ty.is_interface() {
+                                error!("Interface can not be `This` type", this_ty.pos);
+                            }
                         }
-                        if this_ty.get_pointee().unwrap().is_interface() {
-                            error!("Interface can not be `This` type", this_ty.pos);
-                        }
-
+                        
                         if self
                             .methods
-                            .contains_key(&format!("{}", this_ty.get_subty().unwrap()))
+                            .contains_key(&format!("{}", if this_ty.is_pointer() {this_ty.get_subty().unwrap()} else {&this_ty}))
                         {
                             let mut func = func.clone();
                             if this_ty.is_interface() {
@@ -219,7 +223,7 @@ impl<'a> TypeChecker<'a> {
                             func.this = Some((this.0.clone(), box this_ty.clone()));
                             let methods = self
                                 .methods
-                                .get_mut(&format!("{}", this_ty.get_subty().unwrap()))
+                                .get_mut(&format!("{}", if this_ty.is_pointer() { this_ty.get_subty().unwrap() } else {&this_ty}))
                                 .unwrap();
                             for method in methods.into_iter() {
                                 if method.name == func.name {
@@ -243,7 +247,7 @@ impl<'a> TypeChecker<'a> {
 
                             func.this = Some((this.0.clone(), box this_ty.clone()));
                             self.methods.insert(
-                                format!("{}", this_ty.get_pointee().unwrap().clone()),
+                                format!("{}", if this_ty.is_pointer() {this_ty.get_pointee().unwrap().clone()} else {this_ty}),
                                 vec![func],
                             );
                         }
@@ -602,12 +606,14 @@ impl<'a> TypeChecker<'a> {
                                 self.type_info.insert(expr.id, *method.returns.clone());
                                 self.call_info.insert(expr.id, method.clone());
                                 return *method.returns.clone();
+                            } else {
+                                error!(&format!("method '{}' arguments does not match",method.name),pos)
                             }
                         }
                     }
-                    error!("Method not found", pos);
+                    error!(&format!("Method '{}' not found",func), pos);
                 } else {
-                    error!(&format!("function `{}` not found", func), pos);
+                    error!(&format!("function '{}' not found", func), pos);
                 }
             }
             ExprKind::Member(object, name) => {
