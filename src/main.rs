@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 use structopt::StructOpt;
 use waffle::cgen::Gen;
 #[derive(StructOpt)]
@@ -119,7 +118,7 @@ extern "C" {
 fn linker(cc: &str, filename: &str, libs: &Vec<String>, opt_level: usize, output: &str) {
     let lib = if cfg!(windows) { "" } else { "-lc -lpthread" };
     let mut linker = String::from(&format!(
-        "{} -O{} {} {} -o {}  ",
+        "{} -O{} -std=c11 {} {} -o {}  ",
         cc, opt_level, lib, filename, output
     ));
     for lib in libs.iter() {

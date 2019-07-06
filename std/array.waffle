@@ -1,0 +1,71 @@
+struct array {
+	len int,
+	capacity int,
+	element_size int,
+	data *void
+}
+
+pub func new_array_from_c_array(c_array *void,len int,elm_size int) array {
+	var arr = array {
+		len: len,
+		capacity: len * 2,
+		element_size: elm_size,
+		data: malloc((len * 2) * elm_size) 
+	}
+	memcpy(arr.data,c_array,len * elm_size)
+	return arr
+}
+
+func new_array(len int,elm_size int) array {
+	var arr = array {
+		len: len,
+		capacity: len * 2,
+		element_size: elm_size,
+		data: malloc((len * 2) * elm_size)
+	}
+	return arr
+}
+
+func (arr *array) push(val *void) {
+	if arr.len >= arr.capacity - 1 {
+		var cap = (arr.len + 1) * 2
+		if arr.capacity == 0 {
+			arr.data = malloc(cap * arr.element_size)
+		} else {
+			arr.data = realloc(arr.data,cap * arr.element_size)
+		}
+		arr.capacity = cap
+	}
+	memcpy(arr.data + arr.element_size * arr.len,val,arr.element_size)
+	arr.len = arr.len + 1
+}
+
+func (a *array) insert(i int,val *void) {
+	if i > a.len {
+		println("array.insert: index larger than length")
+		exit(1)
+	}
+	a.push(val)
+	var size = a.element_size
+	memmove(a.data + (i + 1) * size,a.data + i  + size,(a.len - 1) * size)
+}
+
+func (a *array) prepend(val *void) {
+	a.insert(0,val)
+}
+
+func (a array) set(i int,val *void) {
+	if i < 0 || i >= a.len {
+		println("array.set: index out of bounds")
+		exit(1)
+	}
+	memcpy(a.data + a.element_size * i,val,a.element_size)
+}
+
+func (a array) _get(i int) *void {
+	if i < 0 || i >= a.len {
+		println("array index out of bounds")
+		exit(1)
+	}
+	return a.data + i * a.element_size
+}

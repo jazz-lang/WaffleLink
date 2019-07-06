@@ -407,7 +407,7 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Assign(to, from) => {
                 let ty_to = self.check_expr(to);
                 let ty_from = self.check_expr(from);
-                if (ty_to != ty_from) && (!ty_from.is_array() && !ty_to.is_array_wo_len()) {
+                if ((ty_to != ty_from) && (!ty_from.is_array() && !ty_to.is_array_wo_len())) && !(ty_to.is_pointer() && ty_from.is_pointer()) {
                     error!(&format!("can not assign `{}` to `{}`", ty_from, ty_to), pos)
                 }
                 self.type_info.insert(expr.id, ty_from.clone());
@@ -416,7 +416,13 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Binary(op, lhs, rhs) => {
                 let ty1 = self.check_expr(lhs);
                 let ty2 = self.check_expr(rhs);
-
+                if op == "<<" && ty1.is_array() {
+                    return Type::new(pos,TypeKind::Void);
+                } else if op == "<<" && ty1.is_pointer() {
+                    if ty1.get_subty().unwrap().is_array() {
+                        return Type::new(pos,TypeKind::Void);
+                    }
+                }
                 if (ty1.is_basic() && ty2.is_basic()) || (ty1.is_pointer() && ty2.is_pointer()) {
                     let op: &str = op;
                     match op {
@@ -546,7 +552,7 @@ impl<'a> TypeChecker<'a> {
                         } else {
                             let expr_ty = self.check_expr(&arguments[i]);
 
-                            if expr_ty != *param.1 {
+                            if (expr_ty != *param.1) && !(expr_ty.is_pointer() && param.1.is_pointer()){
                                 error!(
                                     &format!("expected `{}` type,found `{}`", param.1, expr_ty),
                                     pos
@@ -566,10 +572,19 @@ impl<'a> TypeChecker<'a> {
                     return *func.returns;
                 } else if object.is_some() {
                     let object: Type = self.check_expr(&*object.as_ref().unwrap());
+                    let mut is_array = false;
                     let obj_ty = if object.is_pointer() | object.is_option() {
-                        object.get_subty().unwrap().clone()
+                        if object.get_subty().unwrap().is_array() {
+                            is_array = true;
+                            "array".to_owned()
+                        } else {
+                            format!("{}",object.get_subty().unwrap().clone())
+                        }
                     } else if object.is_struct() || object.is_basic() {
-                        object
+                        format!("{}",object)
+                    } else if object.is_array() {
+                        is_array = true;
+                        "array".to_owned()  
                     } else {
                         error!(
                             &format!(
@@ -580,7 +595,7 @@ impl<'a> TypeChecker<'a> {
                         );
                     };
 
-                    let methods = self.methods.get(&format!("{}", obj_ty)).clone();
+                    let methods = self.methods.get(&obj_ty).clone();
 
                     if methods.is_none() {
                         error!(&format!("type `{}` does not have any method", obj_ty), pos);
@@ -588,6 +603,7 @@ impl<'a> TypeChecker<'a> {
                     let methods = methods.unwrap().clone();
                     for method in methods.into_iter() {
                         if &method.name == func {
+                            
                             let tys = method
                                 .parameters
                                 .iter()
@@ -601,8 +617,15 @@ impl<'a> TypeChecker<'a> {
                                     ty
                                 })
                                 .collect::<Vec<_>>();
-
-                            if tys == argument_tys {
+                            let mut params_equal = if tys.is_empty() {true} else {false};
+                            if is_array {
+                                params_equal = true;
+                            } else {
+                                for (ty,ty2) in tys.iter().zip(argument_tys.iter()) {
+                                    params_equal = (ty == ty2) || (ty.is_pointer() && ty2.is_pointer());
+                                }
+                            }
+                            if params_equal {
                                 self.type_info.insert(expr.id, *method.returns.clone());
                                 self.call_info.insert(expr.id, method.clone());
                                 return *method.returns.clone();
@@ -671,14 +694,17 @@ impl<'a> TypeChecker<'a> {
             ExprKind::StructConstruct(name, fields) => {
                 let ty: CStructure = self.structures.get(name).unwrap().clone();
                 assert!(ty.fields.len() == fields.len());
+                let mut fields_real = std::collections::HashSet::<String>::new();
+                ty.fields.iter().for_each(|(x,_)| {fields_real.insert(x.to_owned());});
                 for (i, field) in fields.iter().enumerate() {
                     let field: (String, Box<Expr>) = field.clone();
-                    if field.0 != ty.fields[i].0 {
+                    if !fields_real.contains(&field.0) {
                         eprintln!("{} {}", field.0, ty.fields[i].0);
                         std::process::exit(1);
                     }
+
                     let vty = self.check_expr(&field.1);
-                    if vty != ty.fields[i].1 {
+                    if (vty != ty.fields[i].1) && !(vty.is_pointer() && ty.fields[i].1.is_pointer()) {
                         error!(
                             &format!(
                                 "field `{}` expected `{}` type,found `{}`",

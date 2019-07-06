@@ -16,5 +16,5 @@ const SEEK_END: int = 2
 extern func fseek(f *FILE,x int, y int) void
 extern func rewind(x *FILE) void
 extern func fread(b *char,x int, y int,f *FILE) int
-
+extern func memmove(dst *void,src *void,cnt int) *void
 const EOF = -1 as char
