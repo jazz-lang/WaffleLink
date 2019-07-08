@@ -120,7 +120,12 @@ impl Type {
             _ => false,
         }
     }
-
+    pub fn pointer_to_array(&self) -> bool {
+        match &self.kind {
+            TypeKind::Pointer(ptr) => ptr.is_array(),
+            _ => false,
+        }
+    }
     pub fn is_pointee(&self, to: &TypeKind) -> bool {
         match &self.kind {
             TypeKind::Pointer(ptr) => ptr.kind == *to,
@@ -299,17 +304,42 @@ pub struct Function {
 
 impl Function {
     pub fn mangle_name(&self) -> String {
-        if self.external || self.internal  || (&self.name == "main" && self.this.is_none() ) {
+        if self.external || self.internal || (&self.name == "main" && self.this.is_none()) {
             return self.name.clone();
         } else {
             let mut name = String::new();
             name.push_str("waffle_");
             if self.this.is_some() {
-                name.push_str(&format!(
-                    "{}_",
-                    if self.this.as_ref().unwrap().1.is_pointer() { self.this.as_ref().unwrap().1.get_subty().unwrap() }
-                    else { &self.this.as_ref().unwrap().1 }
-                ));
+                if self.this.as_ref().unwrap().1.is_array()
+                    || self.this.as_ref().unwrap().1.pointer_to_array()
+                {
+                    name.push_str(&format!(
+                        "array{}_",
+                        if self.this.as_ref().unwrap().1.is_array() {
+                            self.this.as_ref().unwrap().1.get_subty().unwrap()
+                        } else {
+                            self.this
+                                .as_ref()
+                                .unwrap()
+                                .1
+                                .get_subty()
+                                .unwrap()
+                                .get_subty()
+                                .unwrap()
+                        }
+                    ));
+                } else {
+                    name.push_str(&format!(
+                        "{}_",
+                        if self.this.as_ref().unwrap().1.is_pointer() {
+                            let subty = self.this.as_ref().unwrap().1.get_subty().unwrap();
+                            subty
+                        } else {
+                            let this = &self.this.as_ref().unwrap().1;
+                            this
+                        }
+                    ));
+                }
             }
 
             name.push_str(&self.name);
@@ -395,6 +425,8 @@ pub enum StmtKind {
     /// }
     /// ```
     While(Box<Expr>, Box<StmtKind>),
+    ForIn(String, Box<Expr>, Box<StmtKind>),
+    ForLoop(Box<StmtKind>),
     /// For statement:
     /// ```go
     /// for i := 0, i < 100, i++ {

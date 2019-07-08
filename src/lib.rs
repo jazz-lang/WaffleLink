@@ -29,7 +29,7 @@ pub struct Context {
     pub library: bool,
     pub merged: Option<File>,
     pub path: String,
-    pub imported_std: bool
+    pub imported_std: bool,
 }
 
 use ast::Element;
@@ -157,7 +157,7 @@ impl Context {
                     files: vec![],
                     import_search_paths: vec![],
                     path: self.path.clone(),
-                    imported_std: got_std
+                    imported_std: got_std,
                 };
                 let mut full_path = String::new();
                 full_path.push_str(home_path.to_str().unwrap());

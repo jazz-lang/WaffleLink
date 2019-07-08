@@ -205,11 +205,17 @@ impl<'a> TypeChecker<'a> {
                                 error!("Interface can not be `This` type", this_ty.pos);
                             }
                         }
-                        
-                        if self
-                            .methods
-                            .contains_key(&format!("{}", if this_ty.is_pointer() {this_ty.get_subty().unwrap()} else {&this_ty}))
-                        {
+
+                        if self.methods.contains_key(&format!(
+                            "{}",
+                            if this_ty.is_pointer() {
+                                format!("{}", this_ty.get_subty().unwrap())
+                            } else if this_ty.is_array() {
+                                format!("array{}[]", this_ty.get_subty().as_ref().unwrap())
+                            } else {
+                                format!("{}", &this_ty)
+                            }
+                        )) {
                             let mut func = func.clone();
                             if this_ty.is_interface() {
                                 unimplemented!()
@@ -223,7 +229,14 @@ impl<'a> TypeChecker<'a> {
                             func.this = Some((this.0.clone(), box this_ty.clone()));
                             let methods = self
                                 .methods
-                                .get_mut(&format!("{}", if this_ty.is_pointer() { this_ty.get_subty().unwrap() } else {&this_ty}))
+                                .get_mut(&format!(
+                                    "{}",
+                                    if this_ty.is_pointer() {
+                                        this_ty.get_subty().unwrap()
+                                    } else {
+                                        &this_ty
+                                    }
+                                ))
                                 .unwrap();
                             for method in methods.into_iter() {
                                 if method.name == func.name {
@@ -247,7 +260,16 @@ impl<'a> TypeChecker<'a> {
 
                             func.this = Some((this.0.clone(), box this_ty.clone()));
                             self.methods.insert(
-                                format!("{}", if this_ty.is_pointer() {this_ty.get_pointee().unwrap().clone()} else {this_ty}),
+                                format!(
+                                    "{}",
+                                    if this_ty.is_pointer() {
+                                        format!("{}", this_ty.get_subty().unwrap())
+                                    } else if this_ty.is_array() {
+                                        format!("array{}[]", this_ty.get_subty().as_ref().unwrap())
+                                    } else {
+                                        format!("{}", &this_ty)
+                                    }
+                                ),
                                 vec![func],
                             );
                         }
@@ -407,7 +429,9 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Assign(to, from) => {
                 let ty_to = self.check_expr(to);
                 let ty_from = self.check_expr(from);
-                if ((ty_to != ty_from) && (!ty_from.is_array() && !ty_to.is_array_wo_len())) && !(ty_to.is_pointer() && ty_from.is_pointer()) {
+                if ((ty_to != ty_from) && (!ty_from.is_array() && !ty_to.is_array_wo_len()))
+                    && !(ty_to.is_pointer() && ty_from.is_pointer())
+                {
                     error!(&format!("can not assign `{}` to `{}`", ty_from, ty_to), pos)
                 }
                 self.type_info.insert(expr.id, ty_from.clone());
@@ -417,10 +441,10 @@ impl<'a> TypeChecker<'a> {
                 let ty1 = self.check_expr(lhs);
                 let ty2 = self.check_expr(rhs);
                 if op == "<<" && ty1.is_array() {
-                    return Type::new(pos,TypeKind::Void);
+                    return Type::new(pos, TypeKind::Void);
                 } else if op == "<<" && ty1.is_pointer() {
                     if ty1.get_subty().unwrap().is_array() {
-                        return Type::new(pos,TypeKind::Void);
+                        return Type::new(pos, TypeKind::Void);
                     }
                 }
                 if (ty1.is_basic() && ty2.is_basic()) || (ty1.is_pointer() && ty2.is_pointer()) {
@@ -552,7 +576,9 @@ impl<'a> TypeChecker<'a> {
                         } else {
                             let expr_ty = self.check_expr(&arguments[i]);
 
-                            if (expr_ty != *param.1) && !(expr_ty.is_pointer() && param.1.is_pointer()){
+                            if (expr_ty != *param.1)
+                                && !(expr_ty.is_pointer() && param.1.is_pointer())
+                            {
                                 error!(
                                     &format!("expected `{}` type,found `{}`", param.1, expr_ty),
                                     pos
@@ -578,13 +604,20 @@ impl<'a> TypeChecker<'a> {
                             is_array = true;
                             "array".to_owned()
                         } else {
-                            format!("{}",object.get_subty().unwrap().clone())
+                            format!("{}", object.get_subty().unwrap().clone())
                         }
                     } else if object.is_struct() || object.is_basic() {
-                        format!("{}",object)
-                    } else if object.is_array() {
+                        format!("{}", object)
+                    } else if object.is_array() || object.pointer_to_array() {
                         is_array = true;
-                        "array".to_owned()  
+                        format!(
+                            "array{}[]",
+                            if object.is_array() {
+                                object.get_subty().unwrap()
+                            } else {
+                                object.get_subty().unwrap().get_subty().unwrap()
+                            }
+                        )
                     } else {
                         error!(
                             &format!(
@@ -603,7 +636,6 @@ impl<'a> TypeChecker<'a> {
                     let methods = methods.unwrap().clone();
                     for method in methods.into_iter() {
                         if &method.name == func {
-                            
                             let tys = method
                                 .parameters
                                 .iter()
@@ -617,12 +649,13 @@ impl<'a> TypeChecker<'a> {
                                     ty
                                 })
                                 .collect::<Vec<_>>();
-                            let mut params_equal = if tys.is_empty() {true} else {false};
+                            let mut params_equal = if tys.is_empty() { true } else { false };
                             if is_array {
                                 params_equal = true;
                             } else {
-                                for (ty,ty2) in tys.iter().zip(argument_tys.iter()) {
-                                    params_equal = (ty == ty2) || (ty.is_pointer() && ty2.is_pointer());
+                                for (ty, ty2) in tys.iter().zip(argument_tys.iter()) {
+                                    params_equal =
+                                        (ty == ty2) || (ty.is_pointer() && ty2.is_pointer());
                                 }
                             }
                             if params_equal {
@@ -630,11 +663,14 @@ impl<'a> TypeChecker<'a> {
                                 self.call_info.insert(expr.id, method.clone());
                                 return *method.returns.clone();
                             } else {
-                                error!(&format!("method '{}' arguments does not match",method.name),pos)
+                                error!(
+                                    &format!("method '{}' arguments does not match", method.name),
+                                    pos
+                                )
                             }
                         }
                     }
-                    error!(&format!("Method '{}' not found",func), pos);
+                    error!(&format!("Method '{}' not found", func), pos);
                 } else {
                     error!(&format!("function '{}' not found", func), pos);
                 }
@@ -647,7 +683,30 @@ impl<'a> TypeChecker<'a> {
                 } else if ty.is_pointer() {
                     ty.get_subty().unwrap().clone()
                 } else {
-                    unimplemented!();
+                    if ty.is_array() || ty.pointer_to_array() {
+                        let name: &str = name;
+                        match name {
+                            "len" => {
+                                let ty = Type::new(pos.clone(), TypeKind::Basic("int".to_owned()));
+                                self.type_info.insert(expr.id, ty.clone());
+                                return ty;
+                            }
+                            "data" => {
+                                let ty = Type::new(
+                                    pos.clone(),
+                                    TypeKind::Pointer(Box::new(Type::new(
+                                        pos.clone(),
+                                        TypeKind::Void,
+                                    ))),
+                                );
+                                self.type_info.insert(expr.id, ty.clone());
+                                return ty;
+                            }
+                            _ => unimplemented!(),
+                        }
+                    } else {
+                        unimplemented!()
+                    }
                 };
                 if let TypeKind::Structure(_name_, fields) = &ty.kind {
                     for field in fields.iter() {
@@ -680,7 +739,7 @@ impl<'a> TypeChecker<'a> {
             ExprKind::Deref(deref) => {
                 let val_ty = self.check_expr(deref);
                 if !(val_ty.is_pointer() || val_ty.is_option()) {
-                    error!(&format!("Pointer type expected,found '{}'",val_ty),pos);
+                    error!(&format!("Pointer type expected,found '{}'", val_ty), pos);
                 }
                 self.type_info
                     .insert(expr.id, val_ty.get_subty().unwrap().clone());
@@ -695,7 +754,9 @@ impl<'a> TypeChecker<'a> {
                 let ty: CStructure = self.structures.get(name).unwrap().clone();
                 assert!(ty.fields.len() == fields.len());
                 let mut fields_real = std::collections::HashSet::<String>::new();
-                ty.fields.iter().for_each(|(x,_)| {fields_real.insert(x.to_owned());});
+                ty.fields.iter().for_each(|(x, _)| {
+                    fields_real.insert(x.to_owned());
+                });
                 for (i, field) in fields.iter().enumerate() {
                     let field: (String, Box<Expr>) = field.clone();
                     if !fields_real.contains(&field.0) {
@@ -704,7 +765,8 @@ impl<'a> TypeChecker<'a> {
                     }
 
                     let vty = self.check_expr(&field.1);
-                    if (vty != ty.fields[i].1) && !(vty.is_pointer() && ty.fields[i].1.is_pointer()) {
+                    if (vty != ty.fields[i].1) && !(vty.is_pointer() && ty.fields[i].1.is_pointer())
+                    {
                         error!(
                             &format!(
                                 "field `{}` expected `{}` type,found `{}`",
@@ -727,7 +789,7 @@ impl<'a> TypeChecker<'a> {
             }
             ExprKind::Paren(exp) => {
                 let ty = self.check_expr(exp);
-                self.type_info.insert(expr.id,ty.clone());
+                self.type_info.insert(expr.id, ty.clone());
                 return ty;
             }
             ExprKind::CString(_) => {
@@ -742,6 +804,28 @@ impl<'a> TypeChecker<'a> {
 
     pub fn check_stmt(&mut self, s: &StmtKind) {
         match s {
+            StmtKind::ForLoop(body) => {
+                self.check_stmt(body);
+            }
+            StmtKind::ForIn(name, expr, body) => {
+                let old_locals = self.locals.clone();
+                let ty = self.check_expr(expr);
+                if !ty.is_array() && !ty.pointer_to_array() {
+                    
+                    error!(format!("Array expected,found '{}'", ty), expr.pos);
+                }
+                let subty = if ty.is_array() {
+                    ty.get_subty().unwrap()
+                } else {
+                    ty.get_subty().unwrap().get_subty().unwrap()
+                };
+
+                self.locals.insert(name.to_owned(), subty.to_owned());
+
+                self.check_stmt(body);
+
+                self.locals = old_locals;
+            }
             StmtKind::Return(val) => {
                 if val.is_none() && self.current_func.as_ref().unwrap().returns.is_void() {
                     return;

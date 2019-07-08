@@ -69,3 +69,57 @@ func (a array) _get(i int) *void {
 	}
 	return a.data + i * a.element_size
 }
+// TODO: Generics
+
+func (x float64[]) str() string {
+	var str = "["
+	for var i = 0, i < x.len, i = i + 1 {
+		str.push_str(x[i].str())
+		if i != x.len - 1 {
+			str.push_str(",")
+		}
+	}
+	str.push(']')
+	return str
+}
+
+func (x int[]) str() string {
+	var str = "["
+	for var i = 0, i < x.len, i = i + 1 {
+		str.push_str(x[i].str())
+		if i != x.len - 1 {
+			str.push_str(",")
+		}
+	}
+	str.push(']')
+	return str
+}
+
+func (x string[]) str() string {
+	var str = "["
+	var i = 0
+	for value in x {
+		str.push_str(value)
+		if i != x.len - 1 {
+			str.push_str(",")
+		}
+		i = i + 1
+	}
+	str.push(']')
+
+	return str
+}
+
+func (x char[]) str() string {
+	var str = "["
+	var i = 0
+	for value in x {
+		str.push(value)
+		if i != x.len - 1 {
+			str.push(',')
+		}
+		i = i + 1
+	}
+	str.push(']')
+	return str
+}

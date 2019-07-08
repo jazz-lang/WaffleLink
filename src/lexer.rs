@@ -19,6 +19,7 @@ pub enum TokenKind {
     Fun,
     While,
     If,
+    In,
     Else,
     Loop,
     Break,
@@ -139,7 +140,7 @@ impl TokenKind {
             TokenKind::SizeOf => "sizeof",
             TokenKind::Underscore => "_",
             TokenKind::Defer => "defer",
-
+            TokenKind::In => "in",
             // Operators
             TokenKind::At => "@",
             TokenKind::Add => "+",
@@ -901,7 +902,7 @@ fn keywords_in_map() -> HashMap<&'static str, TokenKind> {
 
     keywords.insert("pub", TokenKind::Pub);
     keywords.insert("static", TokenKind::Static);
-
+    keywords.insert("in", TokenKind::In);
     keywords.insert("const", TokenKind::Const);
 
     keywords

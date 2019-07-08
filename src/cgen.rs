@@ -92,9 +92,10 @@ impl Gen {
                     self.write(");\n");
                 }
                 Element::Const(constant) => {
-                    self.write(&format!("\n#define {} ", constant.name));
+                    let ty = self.get_ty(self.ty_info.get(&constant.value.id).unwrap());
+                    self.write(&format!("\nconst {} {} = ", ty_to_c(&ty), constant.name));
                     self.gen_expr(&constant.value);
-                    self.write("\n");
+                    self.write(";\n");
                 }
                 Element::Var(var) => {
                     self.write(&ty_to_c(&var.ty));
@@ -279,6 +280,40 @@ impl Gen {
                 self.gen_statement(body);
                 self.write("\n");
             }
+            StmtKind::ForLoop(body) => {
+                self.write("for (;;) {\n");
+                self.write("\t");
+                self.gen_statement(body);
+                self.write("}\n");
+            }
+            StmtKind::ForIn(name, expr, body) => {
+                let expr_ty = self.get_ty(self.ty_info.get(&expr.id).unwrap());
+                let counter = self.tmp_id;
+                self.tmp_id += 1;
+                let iter_value = self.tmp_id;
+                self.write(&format!("for (int _{} = 0;_{} < ", counter, counter));
+                self.gen_expr(&Expr {
+                    pos: expr.pos.clone(),
+                    id: expr.id,
+                    kind: ExprKind::Member(expr.clone(), "len".to_owned()),
+                });
+                self.write(";");
+                self.write(&format!("_{}++) {{\n", counter));
+                let ret_ty = if expr_ty.pointer_to_array() {
+                    expr_ty.get_subty().unwrap().get_subty().unwrap()
+                } else {
+                    expr_ty.get_subty().unwrap()
+                };
+                self.variables.insert(name.to_owned(),format!("_{}",iter_value));
+                let ptr_ty = Type::new(ret_ty.pos.clone(), TypeKind::Pointer(box ret_ty.clone()));
+                self.write(&format!("\t{} _{} = ",ty_to_c(ret_ty),iter_value)); self.write(&format!("*({})(waffle_array__get(", ty_to_c(&ptr_ty)));
+                self.gen_expr(expr);
+                self.write(",");
+                self.write(&format!("_{}",counter));
+                self.write("));\n");
+                self.gen_statement(body);
+                self.write("}");
+            }
             _ => unimplemented!(),
         }
     }
@@ -297,7 +332,7 @@ impl Gen {
                 let ty = self.get_ty(self.ty_info.get(&expr.id).unwrap());
                 let subty = ty.get_subty().unwrap();
                 self.write("waffle_new_array_from_c_array(");
-                self.write(&format!("({}[{}]){{",subty,values.len()));
+                self.write(&format!("({}[{}]){{", subty, values.len()));
                 for (i, value) in values.iter().enumerate() {
                     self.gen_expr(value);
                     if i != values.len() {
@@ -305,21 +340,24 @@ impl Gen {
                     }
                 }
                 self.write("}");
-                self.write(&format!(",{},sizeof({})",values.len(),ty_to_c(subty)));
+                self.write(&format!(",{},sizeof({})", values.len(), ty_to_c(subty)));
                 self.write(")");
             }
             ExprKind::Binary(op, lhs, rhs) => {
                 let lhs_ty = self.get_ty(self.ty_info.get(&lhs.id).unwrap());
                 let rhs_ty = self.get_ty(self.ty_info.get(&rhs.id).unwrap());
-                
-                if lhs_ty.is_array() && op == "<<" {
-                    self.write(&format!("{} _{} = ",ty_to_c(&rhs_ty),self.tmp_id));
+
+                if (lhs_ty.is_array() || lhs_ty.pointer_to_array()) && op == "<<" {
+                    self.write(&format!("{} _{} = ", ty_to_c(&rhs_ty), self.tmp_id));
                     self.gen_expr(rhs);
                     self.write(";");
-                    self.write("waffle_array_push(&");
+                    self.write("waffle_array_push(");
+                    if !lhs_ty.pointer_to_array() {
+                        self.write("&");
+                    }
                     self.gen_expr(lhs);
                     self.write(",");
-                    self.write(&format!("&_{}",self.tmp_id));
+                    self.write(&format!("&_{}", self.tmp_id));
                     self.write(")");
                     self.tmp_id += 1;
                     return;
@@ -401,11 +439,8 @@ impl Gen {
                 let vty = self.get_ty(self.ty_info.get(&val.id).unwrap());
                 if vty.is_array() {
                     let ret_ty = self.get_ty(self.ty_info.get(&expr.id).unwrap());
-                    let ptr_ty = Type::new(
-                        ret_ty.pos.clone(),
-                        TypeKind::Pointer(box ret_ty)
-                    );
-                    self.write(&format!("*({})(waffle_array__get(",ty_to_c(&ptr_ty)));
+                    let ptr_ty = Type::new(ret_ty.pos.clone(), TypeKind::Pointer(box ret_ty));
+                    self.write(&format!("*({})(waffle_array__get(", ty_to_c(&ptr_ty)));
                     self.gen_expr(val);
                     self.write(",");
                     self.gen_expr(idx);
@@ -416,15 +451,13 @@ impl Gen {
                     self.gen_expr(idx);
                     self.write("]");
                 }
-
-                
             }
             ExprKind::Undefined => {}
             ExprKind::StructConstruct(_, fields) => {
-                let ty = self.get_ty( self.ty_info.get(&expr.id).unwrap());
-                self.write(&format!("({})",ty));
+                let ty = self.get_ty(self.ty_info.get(&expr.id).unwrap());
+                self.write(&format!("({})", ty));
                 self.write("{");
-                
+
                 for (i, field) in fields.iter().enumerate() {
                     self.write(&format!(".{} = ", field.0));
                     self.gen_expr(&field.1);
@@ -478,9 +511,14 @@ impl Gen {
                     self.tmp_id += 1;
                 }
                 ExprKind::String(s) => {
-                    self.temps.push_str(&format!("string _{} = waffle_string_new({:?},{});\n",self.tmp_id,s,s.len()));
+                    self.temps.push_str(&format!(
+                        "string _{} = waffle_string_new({:?},{});\n",
+                        self.tmp_id,
+                        s,
+                        s.len()
+                    ));
                     self.write("&");
-                    self.write(&format!("_{}",self.tmp_id));
+                    self.write(&format!("_{}", self.tmp_id));
                     self.tmp_id += 1;
                 }
                 _ => {
@@ -499,7 +537,7 @@ impl Gen {
                     let ty = self.ty_info.get(&this.id).unwrap().clone();
                     let this_ty = if !ty.is_pointer() {
                         ty.clone()
-                    } else  {
+                    } else {
                         ty.get_subty().unwrap().clone()
                     };
                     if fun_this.is_pointer() {
@@ -517,7 +555,7 @@ impl Gen {
                             self.gen_expr(&Expr {
                                 id: 0,
                                 pos: this.pos.clone(),
-                                kind: ExprKind::Deref(this.clone())
+                                kind: ExprKind::Deref(this.clone()),
                             })
                         } else {
                             self.gen_expr(&this)
@@ -527,7 +565,7 @@ impl Gen {
                 if this.is_some() && !arguments.is_empty() {
                     self.write(",");
                 }
-                
+
                 for (i, argument) in arguments.iter().enumerate() {
                     self.gen_expr(argument);
                     if i != arguments.len() - 1 {

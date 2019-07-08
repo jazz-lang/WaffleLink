@@ -814,15 +814,29 @@ impl<'a> Parser<'a> {
 
         let mut opts = ExprParsingOpts::new();
         opts.parse_struct_lit(false);
-        let var = self.parse_var()?;
-        self.expect_token(TokenKind::Comma)?;
-        let cond = self.parse_expression()?;
-        self.expect_token(TokenKind::Comma)?;
-        let then = self.parse_expression()?;
+        if self.token.is(TokenKind::Var) {
+            let var = self.parse_var()?;
+            self.expect_token(TokenKind::Comma)?;
+            let cond = self.parse_expression()?;
+            self.expect_token(TokenKind::Comma)?;
+            let then = self.parse_expression()?;
 
-        let body = self.parse_statement()?;
+            let body = self.parse_statement()?;
 
-        Ok(Box::new(StmtKind::For(var, cond, then, body)))
+            Ok(Box::new(StmtKind::For(var, cond, then, body)))
+        } else if self.token.is(TokenKind::LBrace) {
+            self.advance_token()?;
+            let body = self.parse_statement()?;
+
+            Ok(Box::new(StmtKind::ForLoop(body)))
+        } else {
+            
+            let name = self.expect_identifier()?;
+            self.expect_token(TokenKind::In)?;
+            let expr = self.parse_expression_with_opts(&opts)?;
+            let body = self.parse_block()?;
+            Ok(Box::new(StmtKind::ForIn(name, expr, body)))
+        }
     }
 
     fn parse_while(&mut self) -> StmtResult {
@@ -1062,7 +1076,7 @@ impl<'a> Parser<'a> {
         Ok(box Expr {
             id: self.generate_id(),
             pos: pos,
-            kind: ExprKind::Paren(exp)
+            kind: ExprKind::Paren(exp),
         })
     }
 

@@ -43,7 +43,7 @@ fn main() {
         library: false,
         merged: None,
         path: String::new(),
-        imported_std: false
+        imported_std: false,
     };
     context.parse(opts.path.to_str().unwrap());
     use waffle::check::TypeChecker;
