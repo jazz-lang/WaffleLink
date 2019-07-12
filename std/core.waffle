@@ -39,6 +39,10 @@ func (s *string) push_str(x string) {
     return
 }
 
+func (s string) get(x int) char {
+    return s.value[x]
+}
+
 func (s string) compare(s2 string) int {
     return strcmp(s.value,s2.value)
 }
@@ -81,6 +85,12 @@ func (x isize) str() string {
     var buf = calloc(1,40) as *char
     sprintf(buf,c"%li",x) // TODO: Determine platform pointer size
     return string_new(buf,strlen(buf))
+}
+
+func (x uint) str() string {
+    var buf = calloc(1,40) as *char
+    sprintf(buf,c"%u",x);
+    return string_new(buf,strlen(buf));
 }
 
 func (x float32) str() string {
