@@ -1,7 +1,0 @@
-extern func puts(s *char) void
-
-func main() int {
-	puts("Hello,World!")
-
-	return 0
-}
