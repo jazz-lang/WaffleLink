@@ -50,7 +50,7 @@ pub struct Config {
     #[structopt(
         long = "gc",
         help = "GC Variant to use for process heap garbage collection.",
-        default_value = "generational"
+        default_value = "generational mark-sweep"
     )]
     pub gc: crate::heap::GCVariant,
 }

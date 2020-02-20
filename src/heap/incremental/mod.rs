@@ -236,8 +236,8 @@ impl IncrementalCollector {
         }
         if !obj.is_permanent() {
             paint_grey(obj);
+            log::trace!("Mark {:p} '{}'", obj.raw.raw, obj);
         }
-        log::trace!("Mark {:p} '{}'", obj.raw.raw, obj);
         self.grey.push_front(obj);
     }
 
@@ -385,9 +385,10 @@ impl HeapTrait for IncrementalCollector {
         }
 
         self.live += 1;
+        let mut needs_gc = false;
         let mut ptr = self
             .allocator
-            .allocate(std::mem::size_of::<Cell>(), &mut false)
+            .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
         if ptr.is_null() {
             self.major();
@@ -405,6 +406,10 @@ impl HeapTrait for IncrementalCollector {
         let ptr = CellPointer {
             raw: crate::util::tagged::TaggedPointer::new(ptr),
         };
+        if needs_gc {
+            self.write_barrier(ptr); // we do not want to sweep new cell.
+            self.major();
+        }
         paint_partial_white(self, ptr);
 
         ptr
