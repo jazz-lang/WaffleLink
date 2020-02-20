@@ -232,18 +232,13 @@ impl Process {
         let mut current = Some(&**ctx);
         while let Some(context) = current {
             context.registers.iter().for_each(|x| {
-                if x.is_cell() && !x.is_null_or_undefined() && !x.is_empty() {
+                if x.is_cell() {
                     unsafe { cb(&x.u.ptr) }
                 }
             });
 
             context.stack.iter().for_each(|x| {
                 if x.is_cell() {
-                    unsafe {
-                        if x.u.as_int64 as u64 == 0xfffe00000000002a {
-                            panic!();
-                        }
-                    }
                     unsafe { cb(&x.u.ptr) }
                 }
             });

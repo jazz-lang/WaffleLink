@@ -2,8 +2,8 @@ pub mod cms;
 pub mod freelist;
 pub mod freelist_alloc;
 pub mod gc_pool;
+pub mod generational;
 pub mod incremental;
-pub mod semispace;
 use crate::runtime::cell::*;
 use crate::runtime::config::*;
 use crate::runtime::value::*;
@@ -53,15 +53,6 @@ impl std::str::FromStr for GCVariant {
 
 pub fn initialize_process_heap(variant: GCVariant, config: &Config) -> Box<dyn HeapTrait> {
     match variant {
-        GCVariant::GenerationalSemispace => Box::new(semispace::GenerationalCopyGC {
-            heap: semispace::Heap::new(
-                align_usize(config.young_size, page_size()),
-                align_usize(config.old_size, page_size()),
-            ),
-            gc: semispace::GC::new(),
-            threshold: config.young_threshold,
-            mature_threshold: config.mature_threshold,
-        }),
         GCVariant::IncrementalMarkSweep => Box::new(incremental::IncrementalCollector::new(
             false,
             align_usize(config.heap_size, page_size()),

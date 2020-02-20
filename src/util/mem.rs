@@ -526,6 +526,11 @@ impl Access {
 pub struct Address(pub usize);
 
 impl Address {
+    pub fn to_cell(&self) -> crate::runtime::cell::CellPointer {
+        crate::runtime::cell::CellPointer {
+            raw: super::tagged::TaggedPointer::new(self.to_mut_ptr()),
+        }
+    }
     #[inline(always)]
     pub const fn from(val: usize) -> Address {
         Address(val)

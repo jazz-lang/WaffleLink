@@ -7,6 +7,7 @@ use crate::bytecode;
 use crate::heap::space::Space;
 use crate::interpreter::context::Context;
 use crate::util::arc::Arc;
+use crate::util::mem::Address;
 use crate::util::ptr::*;
 use crate::util::tagged::*;
 use bytecode::basicblock::BasicBlock;
@@ -81,6 +82,11 @@ pub type AttributesMap = ahash::AHashMap<Arc<String>, Value>;
 pub const MARK_BIT: usize = 0;
 
 impl Cell {
+    pub fn copy_to_addr(&self, obj: Address) {
+        unsafe {
+            std::ptr::copy(self as *const Cell, obj.to_mut_ptr(), 1);
+        }
+    }
     pub fn with_prototype(value: CellValue, prototype: CellPointer) -> Self {
         Self {
             value,
@@ -619,4 +625,12 @@ pub extern "C" fn cell_lookup_attribute(cell: *const Cell, key: Value) -> Value 
 pub extern "C" fn cell_set_prototype(cell: *const Cell, prototype: *const Cell) {
     let pointer = CellPointer::from(cell);
     pointer.set_prototype(CellPointer::from(prototype));
+}
+
+impl Drop for Cell {
+    fn drop(&mut self) {
+        std::mem::replace(&mut self.value, CellValue::None);
+        self.drop_attributes();
+        self.generation = 127;
+    }
 }

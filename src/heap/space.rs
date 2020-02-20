@@ -1,13 +1,10 @@
 use crate::util::mem::*;
 use crate::util::ptr::*;
-use intrusive_collections::{LinkedList, LinkedListLink};
-
-intrusive_adapter!(pub SpaceAdapter = Box<Page> : Page {hook: LinkedListLink});
-
+use std::collections::LinkedList;
 pub struct Space {
     pub top: Address,
     pub limit: Address,
-    pub pages: LinkedList<SpaceAdapter>,
+    pub pages: LinkedList<Page>,
     pub size: usize,
     pub size_limit: usize,
     pub page_size: usize,
@@ -19,7 +16,7 @@ impl Space {
         Self {
             top: Address::null(),
             limit: Address::null(),
-            pages: LinkedList::new(SpaceAdapter::new()),
+            pages: LinkedList::new(),
             size: 0,
             allocated_size: 0,
             page_size: 0,
@@ -27,11 +24,11 @@ impl Space {
         }
     }
     pub fn new(page_size: usize) -> Self {
-        let mut pages = LinkedList::new(SpaceAdapter::new());
+        let mut pages = LinkedList::new();
         let page = Page::new(page_size);
-        pages.push_back(Box::new(page));
-        let top = Address::from_ptr(&pages.back().get().unwrap().top);
-        let limit = Address::from_ptr(&pages.back().get().unwrap().limit);
+        pages.push_back(page);
+        let top = Address::from_ptr(&pages.back().unwrap().top);
+        let limit = Address::from_ptr(&pages.back().unwrap().limit);
         let mut space = Space {
             top,
             limit,
@@ -59,7 +56,7 @@ impl Space {
         self.size += real_size;
         self.top = Address::from_ptr(&page.top);
         self.limit = Address::from_ptr(&page.limit);
-        self.pages.push_back(Box::new(page));
+        self.pages.push_back(page);
     }
 
     pub fn fast_allocate(&mut self, bytes: usize, needs_gc: &mut bool) -> Address {
@@ -115,26 +112,39 @@ impl Space {
         self.clear();
         while space.pages.is_empty() != true {
             self.pages.push_back(space.pages.pop_back().unwrap());
-            self.size += self.pages.back().get().unwrap().size;
+            self.size += self.pages.back().unwrap().size;
         }
         self.allocated_size = space.allocated_size;
-        let page = self.pages.back().get().unwrap();
+        let page = self.pages.back().unwrap();
         self.top = Address::from_ptr(&page.top);
         self.limit = Address::from_ptr(&page.limit);
     }
 
+    pub fn contains(&self, addr: Address) -> bool {
+        for page in self.pages.iter() {
+            let page: &Page = page;
+            if addr >= page.data && addr <= page.limit {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn clear(&mut self) {
         self.size = 0;
-        while let Some(_) = self.pages.pop_back() {}
+        while let Some(page) = self.pages.pop_back() {
+            page.uncommit();
+        }
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Page {
     pub data: Address,
     pub top: Address,
     pub limit: Address,
     pub size: usize,
-    pub hook: LinkedListLink,
 }
 
 impl Page {
@@ -147,13 +157,10 @@ impl Page {
             data,
             limit,
             size,
-            hook: LinkedListLink::new(),
         }
     }
-}
 
-impl Drop for Page {
-    fn drop(&mut self) {
-        uncommit(self.data, self.size);
+    fn uncommit(&self) {
+        uncommit(self.data, self.size)
     }
 }
