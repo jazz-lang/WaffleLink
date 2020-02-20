@@ -11,12 +11,15 @@ pub extern "C" fn spawn(
     arguments: &[Value],
 ) -> Result<Return, Value> {
     let new_proc = Process::from_function(arguments[0], &state.config)
-        .map_err(|err| process.allocate_string(state, &err))?;
+        .map_err(|err| Process::allocate_string(process, state, &err))?;
     state.scheduler.schedule(new_proc.clone());
-    let new_proc_ptr = process.allocate(Cell::with_prototype(
-        CellValue::Process(new_proc),
-        state.process_prototype.as_cell(),
-    ));
+    let new_proc_ptr = Process::allocate(
+        process,
+        Cell::with_prototype(
+            CellValue::Process(new_proc),
+            state.process_prototype.as_cell(),
+        ),
+    );
     Ok(Return::Value(new_proc_ptr))
 }
 
@@ -30,11 +33,11 @@ pub extern "C" fn send(
         process.clone()
     } else {
         this.process_value()
-            .map_err(|err: String| process.allocate_string(state, &err))?
+            .map_err(|err: String| Process::allocate_string(process, state, &err))?
     };
     let receiver = arguments[0]
         .process_value()
-        .map_err(|err| process.allocate_string(state, &err))?;
+        .map_err(|err| Process::allocate_string(&process, state, &err))?;
     if receiver == process {
         receiver.send_message_from_self(
             arguments
@@ -43,7 +46,7 @@ pub extern "C" fn send(
                 .unwrap_or(Value::from(VTag::Undefined)),
         );
     } else {
-        receiver.send_message_from_external_process(arguments[1]);
+        Process::send_message_from_external_process(&receiver, arguments[1]);
         attempt_to_reschedule_process(state, &receiver);
     }
     Ok(Return::Value(Value::from(VTag::Undefined)))
@@ -59,7 +62,7 @@ pub extern "C" fn receive(
         process.clone()
     } else {
         this.process_value()
-            .map_err(|err: String| process.allocate_string(state, &err))?
+            .map_err(|err: String| Process::allocate_string(process, state, &err))?
     };
     let proc = process;
     if let Some(msg) = proc.receive_message() {
@@ -83,14 +86,18 @@ pub extern "C" fn wait_for_message(
         process.clone()
     } else {
         this.process_value()
-            .map_err(|err: String| process.allocate_string(state, &err))?
+            .map_err(|err: String| Process::allocate_string(process, state, &err))?
     };
     process.waiting_for_message();
     if let Some(time) = arguments.get(0) {
         if time.is_number() {
             let time = time.to_number();
             if time == std::f64::INFINITY || time == std::f64::NEG_INFINITY || time.is_nan() {
-                return Err(process.allocate_string(state, "Trying to sleep for +-inf or NAN time"));
+                return Err(Process::allocate_string(
+                    &process,
+                    state,
+                    "Trying to sleep for +-inf or NAN time",
+                ));
             }
             state
                 .timeout_worker
@@ -101,9 +108,11 @@ pub extern "C" fn wait_for_message(
                     state.timeout_worker.suspend(process.clone(), d.clone())
                 }
                 _ => {
-                    return Err(
-                        process.allocate_string(state, "Expected duration in `wait_for_message`")
-                    )
+                    return Err(Process::allocate_string(
+                        &process,
+                        state,
+                        "Expected duration in `wait_for_message`",
+                    ))
                 }
             }
         }
@@ -127,7 +136,7 @@ pub extern "C" fn has_messages(
         process.clone()
     } else {
         this.process_value()
-            .map_err(|err: String| process.allocate_string(state, &err))?
+            .map_err(|err: String| Process::allocate_string(process, state, &err))?
     };
     Ok(Return::Value(Value::from(if process.has_messages() {
         VTag::True
@@ -142,7 +151,8 @@ pub extern "C" fn current(
     _: Value,
     _: &[Value],
 ) -> Result<Return, Value> {
-    Ok(Return::Value(Value::from(process.allocate(
+    Ok(Return::Value(Value::from(Process::allocate(
+        process,
         Cell::with_prototype(
             CellValue::Process(process.clone()),
             state.process_prototype.as_cell(),

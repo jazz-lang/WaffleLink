@@ -1,14 +1,12 @@
 use super::cell::*;
 use super::scheduler;
 use super::value::*;
-use crate::heap::gc_pool::GcPool;
 use crate::heap::PermanentHeap;
 use crate::util::arc::Arc;
 use parking_lot::Mutex;
 use scheduler::process_scheduler::ProcessScheduler;
 use scheduler::timeout_worker::TimeoutWorker;
 pub struct State {
-    pub gc_pool: GcPool,
     pub scheduler: ProcessScheduler,
     pub timeout_worker: TimeoutWorker,
     pub perm_heap: Mutex<PermanentHeap>,
@@ -73,17 +71,14 @@ impl State {
         };
         let scheduler = ProcessScheduler::new(primary, blocking);
         let timeout_worker = TimeoutWorker::new();
-        let gc_workers = if let Some(c) = config.gc_workers {
+        let _gc_workers = if let Some(c) = config.gc_workers {
             c
         } else {
             nof_parallel_worker_threads(5, 8, 8) / 2
         };
-        let gc_pool = GcPool::new(gc_workers);
-
         Arc::new(Self {
             scheduler,
             timeout_worker,
-            gc_pool,
             perm_heap: Mutex::new(perm),
             object_prototype,
             string_prototype,

@@ -1,11 +1,11 @@
 pub mod cms;
 pub mod freelist;
 pub mod freelist_alloc;
-pub mod gc_pool;
 pub mod generational;
 pub mod incremental;
 use crate::runtime::cell::*;
 use crate::runtime::config::*;
+use crate::runtime::process::*;
 use crate::runtime::value::*;
 use crate::util::arc::*;
 pub mod space;
@@ -23,8 +23,8 @@ use structopt::StructOpt;
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Debug, Hash, StructOpt)]
 #[structopt(name = "GC Variant", help = "GC type to use for garbage collection")]
 pub enum GCVariant {
-    #[structopt(name = "semispace", help = "Semisapce generational GC")]
-    GenerationalSemispace,
+    #[structopt(name = "generational", help = "Generational GC")]
+    Generational,
     #[structopt(name = "mark-compact", help = "Mark-Compact GC")]
     MarkCompact,
     #[structopt(name = "mark-sweep", help = "Mark&Sweep GC")]
@@ -41,11 +41,11 @@ impl std::str::FromStr for GCVariant {
         let s = s.to_lowercase();
         let s_: &str = &s;
         Ok(match s_ {
-            "semispace" => Self::GenerationalSemispace,
             "mark-compact" | "mark compact" => Self::MarkCompact,
             "mark-sweep" | "mark and sweep" | "mark&sweep" => Self::MarkAndSweep,
             "incremental mark-sweep" | "incremental-mark-sweep" => Self::IncrementalMarkSweep,
             "generational mark-sweep" => Self::GenIncMarkSweep,
+            "generational" | "ieiunium" => Self::Generational,
             _ => return Err(format!("Unknown GC Type '{}'", s)),
         })
     }
@@ -60,6 +60,10 @@ pub fn initialize_process_heap(variant: GCVariant, config: &Config) -> Box<dyn H
         GCVariant::GenIncMarkSweep => Box::new(incremental::IncrementalCollector::new(
             true,
             align_usize(config.heap_size, page_size()),
+        )),
+        GCVariant::Generational => Box::new(generational::GenerationalHeap::new(
+            align_usize(config.young_size, page_size()),
+            align_usize(config.old_size, page_size()),
         )),
 
         _ => unimplemented!(),
@@ -116,9 +120,9 @@ pub trait HeapTrait {
     /// Returns true if GC should be triggered.
     fn should_collect(&self) -> bool;
     /// Allocate CellPointer
-    fn allocate(&mut self, tenure: GCType, cell: Cell) -> CellPointer;
+    fn allocate(&mut self, proc: &Arc<Process>, tenure: GCType, cell: Cell) -> CellPointer;
     /// Copy object from one heap to another heap.
-    fn copy_object(&mut self, object: Value) -> Value {
+    fn copy_object(&mut self, proc: &Arc<Process>, object: Value) -> Value {
         if !object.is_cell() {
             return object;
         }
@@ -138,7 +142,7 @@ pub trait HeapTrait {
             CellValue::Array(values) => {
                 let new_values = values
                     .iter()
-                    .map(|value| self.copy_object(*value))
+                    .map(|value| self.copy_object(proc, *value))
                     .collect();
                 CellValue::Array(Box::new(new_values))
             }
@@ -149,7 +153,7 @@ pub trait HeapTrait {
                 let upvalues = function
                     .upvalues
                     .iter()
-                    .map(|x| self.copy_object(*x))
+                    .map(|x| self.copy_object(proc, *x))
                     .collect();
                 let native = function.native;
                 let code = function.code.clone();
@@ -167,7 +171,7 @@ pub trait HeapTrait {
             CellValue::Process(proc) => CellValue::Process(proc.clone()),
         };
         let mut copy = if let Some(proto_ptr) = to_copy.prototype {
-            let proto_copy = self.copy_object(Value::from(proto_ptr));
+            let proto_copy = self.copy_object(proc, Value::from(proto_ptr));
             Cell::with_prototype(value_copy, proto_copy.as_cell())
         } else {
             Cell::new(value_copy)
@@ -176,14 +180,14 @@ pub trait HeapTrait {
             let mut map_copy = AttributesMap::with_capacity(map.len());
             for (key, val) in map.iter() {
                 let key_copy = key.clone();
-                let val = self.copy_object(*val);
+                let val = self.copy_object(proc, *val);
                 map_copy.insert(key_copy, val);
             }
 
             copy.set_attributes_map(map_copy);
         }
 
-        Value::from(self.allocate(GCType::Young, copy))
+        Value::from(self.allocate(proc, GCType::Young, copy))
     }
     /// Collect garbage.
     fn collect_garbage(&mut self, proc: &Arc<crate::runtime::process::Process>);
@@ -199,8 +203,6 @@ pub trait HeapTrait {
     }
     /// Clear memory.
     fn clear(&mut self) {}
-    /// "Schedule" pointer into GC mark list.
-    fn schedule(&mut self, _: *mut CellPointer);
     fn write_barrier(&mut self, _: CellPointer) {}
     /// Colours 'parent' as gray object if child is white and parent is black objects.
     fn field_write_barrier(&mut self, _: CellPointer, _: Value) {}

@@ -7,7 +7,6 @@ use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
 use cell::*;
 use context::*;
-use gc_pool::Collection;
 use process::*;
 use scheduler::process_worker::ProcessWorker;
 use value::*;
@@ -42,7 +41,7 @@ macro_rules! throw {
 
 macro_rules! throw_error_message {
     ($rt: expr,$proc: expr,$msg: expr,$context: ident,$index: ident,$bindex: ident) => {
-        let value = $proc.allocate_string(&$rt.state, $msg);
+        let value = Process::allocate_string($proc, &$rt.state, $msg);
         throw!($rt, $proc, value, $context, $index, $bindex)
     };
 }
@@ -429,12 +428,7 @@ impl Runtime {
                     }
                 }
                 Instruction::Gc => {
-                    context.bindex = bindex;
-                    context.index = index;
-                    self.state
-                        .gc_pool
-                        .schedule(Collection::new(process.clone()));
-                    return Ok(Value::empty());
+                    process.local_data_mut().heap.collect_garbage(process);
                 }
                 Instruction::New(dest, function, argc) => {
                     let function = context.get_register(function);
@@ -527,7 +521,10 @@ impl Runtime {
                     for _ in 0..argc {
                         args.push(context.stack.pop().unwrap());
                     }
-                    let this = process.allocate(Cell::with_prototype(CellValue::None, prototype));
+                    let this = Process::allocate(
+                        process,
+                        Cell::with_prototype(CellValue::None, prototype),
+                    );
 
                     if let Some(native_fn) = function.native {
                         let result = native_fn(&self.state, process, this, &args);
@@ -563,7 +560,6 @@ impl Runtime {
                 _ => unimplemented!(),
             }
         };
-
         let ret = return_value?;
         if process.is_pinned() {
             worker.leave_exclusive_mode();
@@ -582,9 +578,7 @@ impl Runtime {
         if !process.local_data().heap.should_collect() {
             return false;
         }
-        self.state
-            .gc_pool
-            .schedule(Collection::new(process.clone()));
+        process.local_data_mut().heap.collect_garbage(process);
         true
     }
 
@@ -619,12 +613,16 @@ impl Runtime {
             if let Ok(message) = error.downcast::<String>() {
                 self.run_default_panic(
                     process,
-                    &Value::from(process.allocate_string(&self.state, &message)),
+                    &Value::from(Process::allocate_string(process, &self.state, &message)),
                 );
             } else {
                 self.run_default_panic(
                     process,
-                    &Value::from(process.allocate_string(&self.state, "Unknown error")),
+                    &Value::from(Process::allocate_string(
+                        process,
+                        &self.state,
+                        "Unknown error",
+                    )),
                 );
             };
         }
@@ -641,7 +639,6 @@ impl Runtime {
 
     pub fn terminate(&self) {
         self.state.scheduler.terminate();
-        self.state.gc_pool.terminate();
         self.state.timeout_worker.terminate();
     }
 }

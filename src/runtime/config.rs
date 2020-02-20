@@ -14,13 +14,13 @@ pub struct Config {
     #[structopt(
         long = "young-size",
         help = "Young space size (default 1024 * 8 * 4)",
-        default_value = "128000"
+        default_value = "32000"
     )]
     pub young_size: usize,
     #[structopt(
         long = "old-size",
         help = "Old space size (default 1024 * 8 * 2)",
-        default_value = "64000"
+        default_value = "128000"
     )]
     pub old_size: usize,
     #[structopt(
@@ -50,7 +50,7 @@ pub struct Config {
     #[structopt(
         long = "gc",
         help = "GC Variant to use for process heap garbage collection.",
-        default_value = "incremental mark-sweep"
+        default_value = "generational"
     )]
     pub gc: crate::heap::GCVariant,
 }

@@ -80,7 +80,7 @@ impl RemembrSet {
     ///
     /// This method takes a mutable reference to `self` as iteration can not
     /// take place when the set is modified concurrently.
-    pub fn iter(&mut self) -> RememberedSetIterator {
+    pub fn iter(&self) -> RememberedSetIterator {
         RememberedSetIterator {
             chunk: &*self.head,
             index: 0,

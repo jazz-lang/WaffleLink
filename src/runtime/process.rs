@@ -170,7 +170,8 @@ impl Process {
         // The channel lock _must_ be acquired first, otherwise we may end up
         // reclaiming memory while another process is allocating message into
         // them.
-        let _channel = self.local_data().channel.lock();
+        let _channel = self.local_data().channel.try_lock();
+        assert!(_channel.is_some());
         // Once terminated we don't want to receive any messages any more, as
         // they will never be received and thus lead to an increase in memory.
         // Thus, we mark the process as terminated. We must do this _after_
@@ -293,8 +294,8 @@ impl Process {
         }
     }
 
-    pub fn send_message_from_external_process(&self, message_to_copy: Value) {
-        let local_data = self.local_data_mut();
+    pub fn send_message_from_external_process(this: &Arc<Process>, message_to_copy: Value) {
+        let local_data = this.local_data_mut();
 
         // The lock must be acquired first, as the receiving process may be
         // garbage collected at this time.
@@ -303,11 +304,11 @@ impl Process {
         // When a process terminates it will acquire the channel lock first.
         // Checking the status after acquiring the lock allows us to obtain a
         // stable view of the status.
-        if self.is_terminated() {
+        if this.is_terminated() {
             return;
         }
 
-        channel.send(local_data.heap.copy_object(message_to_copy));
+        channel.send(local_data.heap.copy_object(this, message_to_copy));
     }
 
     pub fn send_message_from_self(&self, message: Value) {
@@ -367,9 +368,10 @@ impl Process {
         local_data.heap.collect_garbage(this);
     }
 
-    pub fn allocate_string(&self, state: &RcState, string: &str) -> Value {
-        let local_data = self.local_data_mut();
+    pub fn allocate_string(this: &Arc<Process>, state: &RcState, string: &str) -> Value {
+        let local_data = this.local_data_mut();
         let cell = local_data.heap.allocate(
+            this,
             GCType::Young,
             Cell::with_prototype(
                 CellValue::String(Arc::new(String::from(string))),
@@ -383,9 +385,9 @@ impl Process {
         self.local_data().channel.lock().has_messages()
     }
 
-    pub fn allocate(&self, cell: Cell) -> Value {
-        let local_data = self.local_data_mut();
-        let cell = local_data.heap.allocate(GCType::Young, cell);
+    pub fn allocate(this: &Arc<Process>, cell: Cell) -> Value {
+        let local_data = this.local_data_mut();
+        let cell = local_data.heap.allocate(this, GCType::Young, cell);
         Value::from(cell)
     }
 }

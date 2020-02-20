@@ -7,20 +7,8 @@ use waffle::bytecode::*;
 use waffle::heap::cms::atomic_list::AtomicList;
 use waffle::runtime::*;
 use waffle::util::arc::Arc;
-
 fn main() {
-    let l = Arc::new(AtomicList::new());
-    let l2 = l.clone();
-    std::thread::spawn(move || {
-        //std::thread::sleep(std::time::Duration::from_millis(100));
-        l2.push(42);
-    });
-    println!("{:?}", l);
-    println!("{:?}", l.pop());
-}
-/*
-fn main() {
-    simple_logger::init().unwrap();
+    //simple_logger::init().unwrap();
     let mut m = Arc::new(Module::new("Main"));
     let code = basicblock::BasicBlock::new(vec![Instruction::Gc, Instruction::Return(None)], 0);
     let func = Function {
@@ -33,53 +21,53 @@ fn main() {
     };
     let value = RUNTIME.state.allocate_fn(func);
     let proc = Process::from_function(value, &config::Config::default()).unwrap();
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!1");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!1");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!2");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!2");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!3");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!3");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!4");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!4");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!5");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!5");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!6");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!6");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!7");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!7");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!9");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!9");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!11");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!11");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!22");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!22");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!33");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!33");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!44");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!44");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!55");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!55");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!66");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!66");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!77");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!77");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!99");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!99");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!111");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!111");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!222");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!222");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!333");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!333");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!444");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!444");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!555");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!555");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!666");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!666");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!777");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!777");
     m.globals.push(s);
-    let s = proc.allocate_string(&RUNTIME.state, "Wooooow!9999");
+    let s = Process::allocate_string(&proc, &RUNTIME.state, "Wooooow!9999");
     m.globals.push(s);
     RUNTIME.schedule_main_process(proc.clone());
     RUNTIME.start_pools();
@@ -100,4 +88,3 @@ fn main() {
         e.as_millis()
     )
 }
-*/

@@ -197,7 +197,7 @@ impl IncrementalCollector {
 
                 scan = scan.offset(std::mem::size_of::<Cell>());
             }
-            add_freelist!(garbage_start, end);
+            add_freelist!(garbage_start, page.limit);
         }
         self.allocator.freelist = freelist;
         self.live_after_mark -= tried_sweep;
@@ -376,10 +376,10 @@ impl HeapTrait for IncrementalCollector {
             self.grey.push_front(*pointer);
         });
     }
-    fn schedule(&mut self, _ptr: *mut CellPointer) {
-        // do not do anything,we have `trace_process` there.
-    }
-    fn allocate(&mut self, _: GCType, cell: Cell) -> CellPointer {
+    fn allocate(&mut self, proc: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
+        if let None = self.process {
+            self.process = Some(proc.clone());
+        }
         if self.threshold < self.live {
             self.minor();
         }
@@ -387,13 +387,13 @@ impl HeapTrait for IncrementalCollector {
         self.live += 1;
         let mut ptr = self
             .allocator
-            .allocate(std::mem::size_of::<Cell>())
+            .allocate(std::mem::size_of::<Cell>(), &mut false)
             .to_mut_ptr::<Cell>();
         if ptr.is_null() {
             self.major();
             ptr = self
                 .allocator
-                .allocate(std::mem::size_of::<Cell>())
+                .allocate(std::mem::size_of::<Cell>(), &mut false)
                 .to_mut_ptr::<Cell>();
             if ptr.is_null() {
                 panic!("OOM");
