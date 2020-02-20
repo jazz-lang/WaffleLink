@@ -45,5 +45,8 @@ pub enum Instruction {
     Call(u16, u16, u16),
     VirtCall(u16, u16, u16, u16),
     New(u16, u16, u16),
+    /// Triggers full GC cycle.
     Gc,
+    /// Safepoint for GC. This instruction should be placed in `SafepointPass` or by your compiler.
+    GcSafepoint,
 }

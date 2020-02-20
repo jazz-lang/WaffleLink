@@ -18,18 +18,20 @@ And another thing is timeout worker that periodically checks that process receiv
 
 # Garbage collection
 Waffle provides multiple GCs for your choise:
-- Incremental mark&sweep (Enabled by default)
+- Incremental mark&sweep  
 
     Simple mark&sweep GC that uses freelist allocation and incremental collection, recommended for simple programs.
-- Incremental generational mark&sweep
+- Incremental generational mark&sweep (Enabled by default)
 
     Same as above, but also supports generations, recommended for almost every programs that doesn't make heap too fragmented.
  - Ieiunium GC 
   
-    Generational GC with scavenging of nursery. This algorithm is recommended if your program may make fragmentation in heap really big. Recommended for evey kind of programs.
+    Generational GC with scavenging of nursery,copying intermediate space and mark&sweep of old space. Recommended for evey kind of programs.
+
+    NOTE: Ieiunium may be slower than incremental mark&sweep but gives you fast allocation and heap defragmentation.
 - Chaney's Semispace
   
-    Copying GC without generations support, does very fast collectio if heap not that big.
+    Copying GC without generations support, does very fast collection if heap not that big.
 - Mark&Sweep and maybe compact
     
     This algorithm doesn't defragment heap until fragmentation is ~60%. Recommended for every kind of programs.
@@ -42,4 +44,4 @@ Waffle provides multiple GCs for your choise:
 # TODO
 - Priority based process scheduler
 - Implement JIT
-- Finalization support in moving collectors
+- ~~Finalization support in moving collectors~~ (Done!)
