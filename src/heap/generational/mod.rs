@@ -413,8 +413,21 @@ impl GenerationalHeap {
                     garbage_start = Address::null();
                     cell.mark(false);
                 } else if garbage_start.is_non_null() {
-                    // more garbage, do nothing
+                    if cell.get().generation != 127 {
+                        log::trace!("Sweep old {:p} '{}'", cell.raw.raw, cell);
+                        unsafe {
+                            std::ptr::drop_in_place(cell.raw.raw);
+                        }
+                    }
+                    cell.get_mut().generation = 127;
                 } else {
+                    if cell.get().generation != 127 {
+                        log::trace!("Sweep old {:p} '{}'", cell.raw.raw, cell);
+                        unsafe {
+                            std::ptr::drop_in_place(cell.raw.raw);
+                        }
+                        cell.get_mut().generation = 127;
+                    }
                     garbage_start = scan;
                 }
                 scan = scan.offset(std::mem::size_of::<Cell>());
@@ -483,9 +496,11 @@ use super::HeapTrait;
 
 impl HeapTrait for GenerationalHeap {
     fn allocate(&mut self, proc: &Arc<Process>, _: super::GCType, cell: Cell) -> CellPointer {
-        let cell = self.allocate_young(cell);
-        if self.needs_gc == GenerationalGCType::Young {
-            self.trace_process(proc);
+        if self.should_collect()
+            || !self
+                .nursery_space
+                .may_allocate_in_current(std::mem::size_of::<Cell>())
+        {
             self.scavenge();
             if self.needs_gc == GenerationalGCType::Intermediate {
                 if self.minor(proc) {
@@ -493,6 +508,17 @@ impl HeapTrait for GenerationalHeap {
                 }
             }
         }
+        self.needs_gc = GenerationalGCType::None;
+        let cell = self.allocate_young(cell);
+        /*if self.needs_gc == GenerationalGCType::Young {
+            self.trace_process(proc);
+            self.scavenge();
+            if self.needs_gc == GenerationalGCType::Intermediate {
+                if self.minor(proc) {
+                    self.major(proc);
+                }
+            }
+        }*/
         cell
     }
 

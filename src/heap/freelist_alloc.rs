@@ -39,11 +39,9 @@ impl FreeListAllocator {
             log::trace!("free list slot found");
             return object;
         }
-        log::trace!("no free slot, allocating new page");
-        // Free slot not found, allocate new page and allocate memory in new page.
-        self.space.add_page(self.space.page_size);
+        log::trace!("no free slot found");
         *needs_gc = true;
-        self.space.allocate(size, &mut false)
+        Address::null()
     }
 
     pub fn free(&mut self, pointer: Address, size: usize) {

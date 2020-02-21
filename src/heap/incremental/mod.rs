@@ -173,7 +173,7 @@ impl IncrementalCollector {
                     scan = scan.offset(std::mem::size_of::<Cell>());
                     continue;
                 }
-                if self.is_dead(cell) && cell.get().generation != 127 {
+                if !self.is_dead(cell) && cell.get().generation != 127 {
                     if !garbage_start.is_non_null() {
                         garbage_start = Address::from_ptr(cell_ptr);
                     }
@@ -185,6 +185,7 @@ impl IncrementalCollector {
                     tried_sweep += 1;
                 } else {
                     add_freelist!(garbage_start, Address::from_ptr(cell_ptr));
+                    garbage_start = Address::null();
                     if !self.generational {
                         paint_partial_white(self, cell);
                     }
@@ -194,6 +195,24 @@ impl IncrementalCollector {
                         }
                     }
                 }
+
+                /*if !self.is_dead(cell) {
+                    add_freelist!(garbage_start, scan);
+                    garbage_start = Address::null();
+                    if !self.generational {
+                        paint_partial_white(self, cell);
+                    }
+
+                    if self.generational {
+                        if cell.get().generation < 5 {
+                            cell.get_mut().generation += 1;
+                        }
+                    }
+                } else if garbage_start.is_non_null() {
+                    if cell.get().generation != 127 {
+                        unsafe
+                    }
+                }*/
 
                 scan = scan.offset(std::mem::size_of::<Cell>());
             }
@@ -391,13 +410,25 @@ impl HeapTrait for IncrementalCollector {
             .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
         if ptr.is_null() {
-            self.major();
+            self.minor();
             ptr = self
                 .allocator
                 .allocate(std::mem::size_of::<Cell>(), &mut false)
                 .to_mut_ptr::<Cell>();
             if ptr.is_null() {
-                panic!("OOM");
+                ptr = self
+                    .allocator
+                    .allocate(std::mem::size_of::<Cell>(), &mut false)
+                    .to_mut_ptr::<Cell>();
+                if ptr.is_null() {
+                    self.allocator
+                        .space
+                        .add_page(self.allocator.space.page_size);
+                    ptr = self
+                        .allocator
+                        .allocate(std::mem::size_of::<Cell>(), &mut false)
+                        .to_mut_ptr::<Cell>();
+                }
             }
         }
         unsafe {
@@ -406,10 +437,6 @@ impl HeapTrait for IncrementalCollector {
         let ptr = CellPointer {
             raw: crate::util::tagged::TaggedPointer::new(ptr),
         };
-        if needs_gc {
-            self.write_barrier(ptr); // we do not want to sweep new cell.
-            self.major();
-        }
         paint_partial_white(self, ptr);
 
         ptr
