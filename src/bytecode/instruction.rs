@@ -23,6 +23,8 @@ pub enum Instruction {
     StoreStaticById(u16, u32),
     LoadStaticByValue(u16, u16),
     StoreStaticByValue(u16, u16),
+    StoreStack(u16, u32),
+    LoadStack(u16, u32),
     /// Goto B(B) if R(A) is true, otherwise goto to B(C)
     ConditionalBranch(u16, u16, u16),
     /// Goto B(B)
@@ -44,9 +46,39 @@ pub enum Instruction {
     Pop(u16),
     Call(u16, u16, u16),
     VirtCall(u16, u16, u16, u16),
+    TailCall(u16, u16, u16),
     New(u16, u16, u16),
     /// Triggers full GC cycle.
     Gc,
     /// Safepoint for GC. This instruction should be placed in `SafepointPass` or by your compiler.
     GcSafepoint,
+    Binary(BinOp, u16, u16, u16),
+    Unary(UnaryOp, u16, u16, u16),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Div,
+    Mul,
+    Mod,
+    Rsh,
+    Lsh,
+
+    Greater,
+    Less,
+    LessOrEqual,
+    GreaterOrEqual,
+    Equal,
+    NotEqual,
+    And,
+    Or,
+    Xor,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum UnaryOp {
+    Not,
+    Neg,
 }

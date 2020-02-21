@@ -92,8 +92,10 @@ impl Runtime {
             };
         }
         let return_value: Result<Value, Value> = loop {
-            let block = unsafe { context.code.get_unchecked(bindex) };
-            let ins = unsafe { block.instructions.get_unchecked(index) };
+            let ins = {
+                let block = unsafe { context.get().code.get_unchecked(bindex) };
+                unsafe { block.instructions.get_unchecked(index) }
+            };
             index += 1;
             match *ins {
                 Instruction::Return(value) => {
@@ -274,7 +276,8 @@ impl Runtime {
 
                     process.local_data_mut().catch_tables.push(entry);
                 }
-                Instruction::Call(dest, function, argc) => {
+                Instruction::Call(dest, function, argc)
+                | Instruction::TailCall(dest, function, argc) => {
                     let function = context.get_register(function);
                     if !function.is_cell() {
                         throw_error_message!(
@@ -317,7 +320,7 @@ impl Runtime {
                     let mut args = vec![];
 
                     for _ in 0..argc {
-                        args.push(context.stack.pop().unwrap());
+                        args.push(context.get().stack.pop().unwrap());
                     }
 
                     if let Some(native_fn) = function.native {
@@ -338,16 +341,33 @@ impl Runtime {
                             }
                         }
                     } else {
-                        let mut new_context = Context::new();
-                        new_context.return_register = Some(dest);
-                        new_context.stack = args;
-                        new_context.function = cell;
-                        new_context.module = function.module.clone();
-                        new_context.n = context.n + 1;
-                        new_context.code = function.code.clone();
-                        new_context.terminate_upon_return = false;
-                        process.push_context(new_context);
-                        enter_context!(process, context, index, bindex);
+                        if let Instruction::Call { .. } = ins {
+                            let mut new_context = Context::new();
+                            new_context.return_register = Some(dest);
+                            new_context.stack = args;
+                            new_context.function = cell;
+                            new_context.module = function.module.clone();
+                            new_context.n = context.n + 1;
+                            new_context.code = function.code.clone();
+                            new_context.terminate_upon_return = false;
+                            process.push_context(new_context);
+                            enter_context!(process, context, index, bindex);
+                        } else {
+                            assert!(
+                                !process.pop_context(),
+                                "Tail calls cannot be done in global context"
+                            );
+                            let mut new_context = Context::new();
+                            new_context.return_register = Some(dest);
+                            new_context.stack = args;
+                            new_context.function = cell;
+                            new_context.module = function.module.clone();
+                            new_context.n = context.n + 1;
+                            new_context.code = function.code.clone();
+                            new_context.terminate_upon_return = false;
+                            process.push_context(new_context);
+                            enter_context!(process, context, index, bindex);
+                        }
                     }
                 }
                 Instruction::VirtCall(dest, function, this, argc) => {
@@ -429,6 +449,9 @@ impl Runtime {
                 }
                 Instruction::Gc => {
                     process.local_data_mut().heap.collect_garbage(process);
+                }
+                Instruction::GcSafepoint => {
+                    self.gc_safepoint(process);
                 }
                 Instruction::New(dest, function, argc) => {
                     let function = context.get_register(function);
@@ -556,6 +579,125 @@ impl Runtime {
                         enter_context!(process, context, index, bindex);
                     }
                 }
+                Instruction::Binary(op, dest, lhs, rhs) => {
+                    let lhs = context.get_register(lhs);
+                    let rhs = context.get_register(rhs);
+                    assert!(!lhs.is_empty() && !rhs.is_empty());
+                    if lhs.is_number() && rhs.is_number() {
+                        let lhs = lhs.to_number();
+                        let rhs = rhs.to_number();
+                        let result = match op {
+                            BinOp::Add => Value::new_double(lhs + rhs),
+                            BinOp::Sub => Value::new_double(lhs - rhs),
+                            BinOp::Div => Value::new_double(lhs / rhs),
+                            BinOp::Mul => Value::new_double(lhs * rhs),
+                            BinOp::Mod => Value::new_double(lhs % rhs),
+                            BinOp::Lsh => {
+                                Value::new_double(((lhs.ceil() as i64) >> rhs.ceil() as i64) as f64)
+                            }
+                            BinOp::Rsh => {
+                                Value::new_double(((lhs.ceil() as i64) << rhs.ceil() as i64) as f64)
+                            }
+                            BinOp::Equal => Value::from(lhs == rhs),
+                            BinOp::NotEqual => Value::from(lhs != rhs),
+                            BinOp::Greater => Value::from(lhs > rhs),
+                            BinOp::Less => Value::from(lhs < rhs),
+                            BinOp::GreaterOrEqual => Value::from(lhs >= rhs),
+                            BinOp::LessOrEqual => Value::from(lhs <= rhs),
+                            BinOp::And => {
+                                Value::new_double(((lhs.ceil() as i64) & rhs.ceil() as i64) as f64)
+                            }
+                            BinOp::Or => {
+                                Value::new_double(((lhs.ceil() as i64) | rhs.ceil() as i64) as f64)
+                            }
+                            BinOp::Xor => {
+                                Value::new_double(((lhs.ceil() as i64) ^ rhs.ceil() as i64) as f64)
+                            }
+                        };
+                        context.set_register(dest, result);
+                    } else if lhs.is_bool() && rhs.is_bool() {
+                        let lhs = lhs.to_boolean();
+                        let rhs = rhs.to_boolean();
+                        let result = match op {
+                            BinOp::Add => Value::new_int(lhs as i32 + rhs as i32),
+                            BinOp::Sub => Value::new_int(lhs as i32 + rhs as i32),
+                            BinOp::Div => Value::new_int(lhs as i32 + rhs as i32),
+                            BinOp::Mul => Value::new_int(lhs as i32 * rhs as i32),
+                            BinOp::Equal => Value::from(lhs == rhs),
+                            BinOp::NotEqual => Value::from(lhs != rhs),
+                            BinOp::Greater => Value::from(lhs > rhs),
+                            BinOp::Less => Value::from(lhs < rhs),
+                            BinOp::LessOrEqual => Value::from(lhs <= rhs),
+                            BinOp::GreaterOrEqual => Value::from(lhs >= rhs),
+                            _ => Value::from(VTag::Null),
+                        };
+                        context.set_register(dest, result);
+                    } else if lhs.is_null_or_undefined() && rhs.is_null_or_undefined() {
+                        context.set_register(dest, Value::from(lhs == rhs));
+                    } else if lhs.is_cell() && rhs.is_cell() {
+                        let lhs = lhs.as_cell();
+                        let rhs = rhs.as_cell();
+                        if lhs.is_string() {
+                            context.set_register(
+                                dest,
+                                Process::allocate_string(
+                                    process,
+                                    &self.state,
+                                    &format!("{}{}", lhs, rhs),
+                                ),
+                            );
+                            continue;
+                        } else if lhs.is_array() {
+                            match op {
+                                BinOp::Add => match &rhs.get().value {
+                                    CellValue::Array(array) => {
+                                        let mut new_array =
+                                            lhs.array_value().map(|x| x.clone()).unwrap();
+                                        new_array.extend(array.iter().copied());
+                                        context.set_register(
+                                            dest,
+                                            Process::allocate(
+                                                process,
+                                                Cell::with_prototype(
+                                                    CellValue::Array(new_array),
+                                                    self.state.array_prototype.as_cell(),
+                                                ),
+                                            ),
+                                        );
+                                        continue;
+                                    }
+                                    _ => {
+                                        context.set_register(
+                                            dest,
+                                            Process::allocate_string(
+                                                process,
+                                                &self.state,
+                                                &format!("{}{}", lhs, rhs),
+                                            ),
+                                        );
+                                        continue;
+                                    }
+                                },
+                                BinOp::Equal => context.set_register(dest, Value::from(lhs == rhs)),
+                                BinOp::NotEqual => {
+                                    context.set_register(dest, Value::from(lhs != rhs))
+                                }
+                                _ => context.set_register(dest, Value::new_double(0.0)),
+                            }
+                        }
+                        let result = match op {
+                            BinOp::Equal => Value::from(lhs == rhs),
+                            BinOp::NotEqual => Value::from(lhs != rhs),
+                            BinOp::Add => Process::allocate_string(
+                                process,
+                                &self.state,
+                                &format!("{}{}", lhs, rhs),
+                            ),
+                            _ => Value::new_double(std::f64::NAN),
+                        };
+                        context.set_register(dest, result)
+                    }
+                }
 
                 _ => unimplemented!(),
             }
@@ -610,10 +752,16 @@ impl Runtime {
         }));
 
         if let Err(error) = result {
-            if let Ok(message) = error.downcast::<String>() {
+            let _ = if error.is::<Value>() {
+                self.run_default_panic(process, &*error.downcast::<Value>().unwrap());
+            } else if error.is::<String>() {
                 self.run_default_panic(
                     process,
-                    &Value::from(Process::allocate_string(process, &self.state, &message)),
+                    &Value::from(Process::allocate_string(
+                        process,
+                        &self.state,
+                        &error.downcast::<String>().unwrap(),
+                    )),
                 );
             } else {
                 self.run_default_panic(

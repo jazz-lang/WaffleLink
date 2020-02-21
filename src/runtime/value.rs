@@ -317,6 +317,7 @@ impl Value {
             }
         }
     }
+
     pub fn to_string(&self) -> String {
         if self.is_bool() {
             if self.is_true() {
@@ -416,3 +417,13 @@ impl PartialEq for Value {
 }
 
 impl Eq for Value {}
+
+impl From<bool> for Value {
+    fn from(x: bool) -> Self {
+        if x {
+            Self::from(VTag::True)
+        } else {
+            Self::from(VTag::False)
+        }
+    }
+}

@@ -339,6 +339,12 @@ impl CellPointer {
             self.get_mut().attributes.unset_bit(1);
         }
     }
+    pub fn array_value(&self) -> Option<&Box<Vec<Value>>> {
+        match &self.get().value {
+            CellValue::Array(a) => Some(a),
+            _ => None,
+        }
+    }
 
     pub fn get(&self) -> &Cell {
         self.raw.as_ref().unwrap()
