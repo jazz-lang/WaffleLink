@@ -81,6 +81,7 @@ impl Runtime {
         let mut index;
         let mut bindex;
         let mut context: Ptr<Context>;
+        let start = std::time::Instant::now();
         //assert!(process.context_ptr().raw.is_null() == false);
         reset_context!(process, context, index, bindex);
         macro_rules! catch {
@@ -794,6 +795,12 @@ impl Runtime {
             }
         };
         let ret = return_value?;
+        let e = start.elapsed();
+        println!(
+            "Process execution time is {}ns and {}ms",
+            e.as_nanos(),
+            e.as_millis()
+        );
         if top_context {
             if process.is_pinned() {
                 worker.leave_exclusive_mode();

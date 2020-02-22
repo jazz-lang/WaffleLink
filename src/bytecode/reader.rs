@@ -54,7 +54,6 @@ impl<'a> BytecodeReader<'a> {
                     let idx = self.read_u32() as usize;
                     let string = rt.state.intern_string(strings[idx].clone());
                     m.globals.push(Value::from(string));
-                    //m.globals.push(Value::String(Ref(strings[idx].clone())));
                 }
                 TAG_FLOAT => {
                     let bits = self.read_u64();

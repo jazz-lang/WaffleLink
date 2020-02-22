@@ -32,7 +32,7 @@ pub enum WhichValueWord {
     TagWord,
     PayloadWord,
 }
-
+/*
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub enum VTag {
@@ -42,6 +42,15 @@ pub enum VTag {
     False,
     Cell,
     EncodeAsDouble,
+}*/
+
+pub mod VTag {
+    use super::*;
+
+    pub const True: i32 = Value::VALUE_TRUE;
+    pub const False: i32 = Value::VALUE_FALSE;
+    pub const Undefined: i32 = Value::VALUE_UNDEFINED;
+    pub const Null: i32 = Value::VALUE_NULL;
 }
 
 #[derive(Copy, Clone)]
@@ -130,12 +139,14 @@ impl Value {
     }
     #[inline(always)]
     pub fn is_cell(&self) -> bool {
-        let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
-        x && !self.is_number() && !self.is_any_int()
+        //let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
+        //x && !self.is_number() && !self.is_any_int()
+        let result = unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK as i64) };
+        result == 0 && !self.is_bool()
     }
     #[inline(always)]
     pub fn is_number(&self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 && !self.is_cell() }
+        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 }
     }
     #[inline(always)]
     pub fn is_double(&self) -> bool {
@@ -278,6 +289,9 @@ impl Value {
         if self.is_number() {
             return self.to_number() == 1.0;
         }
+        if self.is_bool() {
+            return self.is_true();
+        }
 
         !unsafe { self.u.ptr.is_false() }
     }
@@ -325,7 +339,7 @@ impl Value {
             } else {
                 String::from("false")
             }
-        } else if self.is_number() {
+        } else if self.is_number() && !self.is_cell() {
             self.to_number().to_string()
         } else if self.is_null_or_undefined() {
             if self.is_undefined() {
@@ -333,8 +347,12 @@ impl Value {
             } else {
                 String::from("null")
             }
-        } else {
+        } else if self.is_cell() {
             self.as_cell().to_string()
+        } else if self.is_empty() {
+            panic!()
+        } else {
+            panic!()
         }
     }
 }
@@ -400,8 +418,8 @@ impl From<CellPointer> for Value {
     }
 }
 
-impl From<VTag> for Value {
-    fn from(x: VTag) -> Self {
+impl From<i32> for Value {
+    fn from(x: i32) -> Self {
         Self {
             u: EncodedValueDescriptor {
                 as_int64: x as u8 as _,
