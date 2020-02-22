@@ -56,13 +56,14 @@ pub struct Generator {
 
 pub enum CellValue {
     None,
+    /// Heap allocated number.
+    ///
+    /// Not all numbers allocated in heap, only ones that doesn't fit into NaN-boxed value.
     Number(f64),
-    Bool(bool),
     String(Arc<String>),
     InternedString(Arc<String>),
     Array(Box<Vec<Value>>),
     ByteArray(Box<Vec<u8>>),
-
     Function(Arc<Function>),
     Module(Arc<Module>),
     Process(Arc<Process>),
@@ -431,15 +432,7 @@ impl CellPointer {
         if self.raw.is_null() {
             return true;
         }
-        if self.is_tagged_number() {
-            unreachable!()
-        } else {
-            match self.get().value {
-                CellValue::Bool(true) => false,
-                CellValue::Bool(false) => true,
-                _ => false,
-            }
-        }
+        false
     }
 
     pub fn attributes(&self) -> Vec<Value> {
@@ -557,7 +550,6 @@ impl CellPointer {
                     String::from("{}")
                 }
             }
-            CellValue::Bool(x) => x.to_string(),
         }
     }
 }

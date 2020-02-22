@@ -142,7 +142,6 @@ pub trait HeapTrait {
             CellValue::Duration(d) => CellValue::Duration(d.clone()),
             CellValue::File(_) => panic!("Cannot copy file"),
             CellValue::Number(x) => CellValue::Number(*x),
-            CellValue::Bool(x) => CellValue::Bool(*x),
             CellValue::InternedString(s) => CellValue::InternedString(s.clone()),
             CellValue::String(x) => CellValue::String(x.clone()),
             CellValue::Array(values) => {
