@@ -88,6 +88,11 @@ impl PermanentHeap {
     pub fn allocate_empty(&mut self) -> Value {
         self.allocate(Cell::new(CellValue::None))
     }
+
+    pub fn allocate_with_prototype(&mut self, value: CellValue, proto: CellPointer) -> CellPointer {
+        let cell = Cell::with_prototype(value, proto);
+        self.allocate(cell).as_cell()
+    }
     pub fn allocate(&mut self, cell: Cell) -> Value {
         let pointer = self
             .space
@@ -138,6 +143,7 @@ pub trait HeapTrait {
             CellValue::File(_) => panic!("Cannot copy file"),
             CellValue::Number(x) => CellValue::Number(*x),
             CellValue::Bool(x) => CellValue::Bool(*x),
+            CellValue::InternedString(s) => CellValue::InternedString(s.clone()),
             CellValue::String(x) => CellValue::String(x.clone()),
             CellValue::Array(values) => {
                 let new_values = values
@@ -190,16 +196,17 @@ pub trait HeapTrait {
         Value::from(self.allocate(proc, GCType::Young, copy))
     }
     /// Collect garbage.
-    fn collect_garbage(&mut self, proc: &Arc<crate::runtime::process::Process>);
+    fn collect_garbage(&mut self, proc: &Arc<crate::runtime::process::Process>)
+        -> Result<(), bool>;
     /// Minor GC cycle.
     ///
     /// If incremental algorithm is used this should trigger incremental mark&sweep.
-    fn minor_collect(&mut self, proc: &Arc<crate::runtime::process::Process>) {
-        self.collect_garbage(proc);
+    fn minor_collect(&mut self, proc: &Arc<crate::runtime::process::Process>) -> Result<(), bool> {
+        self.collect_garbage(proc)
     }
     /// Major GC cycle.
-    fn major_collect(&mut self, proc: &Arc<crate::runtime::process::Process>) {
-        self.collect_garbage(proc);
+    fn major_collect(&mut self, proc: &Arc<crate::runtime::process::Process>) -> Result<(), bool> {
+        self.collect_garbage(proc)
     }
     /// Clear memory.
     fn clear(&mut self) {}

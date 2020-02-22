@@ -1,4 +1,5 @@
 use super::cell::*;
+use super::interner::*;
 use super::scheduler;
 use super::value::*;
 use crate::heap::PermanentHeap;
@@ -22,6 +23,28 @@ pub struct State {
     pub byte_array_prototype: Value,
     pub static_variables: ahash::AHashMap<String, Value>,
     pub config: super::config::Config,
+    pub string_pool: Mutex<StringPool>,
+}
+
+macro_rules! intern_string {
+    ($state:expr, $lookup:expr, $store:expr) => {{
+        let mut pool = $state.string_pool.lock();
+
+        if let Some(value) = pool.get($lookup) {
+            return value;
+        }
+
+        let ptr = {
+            let mut alloc = $state.perm_heap.lock();
+            let value = CellValue::InternedString($store);
+
+            alloc.allocate_with_prototype(value, $state.string_prototype.as_cell())
+        };
+
+        pool.add(ptr);
+
+        ptr
+    }};
 }
 
 #[inline]
@@ -92,6 +115,7 @@ impl State {
             generator_prototype,
             static_variables: ahash::AHashMap::new(),
             config,
+            string_pool: Mutex::new(StringPool::new()),
         })
     }
 
@@ -108,7 +132,7 @@ impl State {
         argc: i32,
     ) -> CellPointer {
         let function = Function {
-            name: Arc::new(name.to_owned()),
+            name: Value::from(self.intern_string(name.to_owned())),
             upvalues: vec![],
             code: Arc::new(vec![]),
             native: Some(native_fn),
@@ -116,6 +140,7 @@ impl State {
             module: Arc::new(super::module::Module {
                 globals: vec![],
                 name: Arc::new("<native>".to_owned()),
+                main_fn: Value::empty(),
             }),
         };
 
@@ -132,11 +157,11 @@ impl State {
     pub fn allocate_native_fn_with_name(
         &self,
         native_fn: super::cell::NativeFn,
-        name: Arc<String>,
+        name: &str,
         argc: i32,
     ) -> CellPointer {
         let function = Function {
-            name,
+            name: Value::from(self.intern_string(name.to_owned())),
             upvalues: vec![],
             code: Arc::new(vec![]),
             native: Some(native_fn),
@@ -144,6 +169,7 @@ impl State {
             module: Arc::new(super::module::Module {
                 globals: vec![],
                 name: Arc::new("<native>".to_owned()),
+                main_fn: Value::empty(),
             }),
         };
 
@@ -156,6 +182,31 @@ impl State {
             ))
             .as_cell();
         cell
+    }
+
+    /// Interns a borrowed String.
+    ///
+    /// If a string was not yet interned it's allocated in the permanent space.
+    pub fn intern(&self, string: &String) -> CellPointer {
+        intern_string!(self, string, Arc::new(string.clone()))
+    }
+
+    /// Interns an owned String.
+    pub fn intern_string(&self, string: String) -> CellPointer {
+        let to_intern = string;
+
+        intern_string!(self, &to_intern, Arc::new(to_intern))
+    }
+
+    /// Interns a pointer pointing to a string.
+    ///
+    /// If the pointer is already interned it's simply returned.
+    pub fn intern_pointer(&self, pointer: CellPointer) -> CellPointer {
+        if pointer.is_interned_str() {
+            pointer
+        } else {
+            self.intern(&pointer.to_string())
+        }
     }
 }
 

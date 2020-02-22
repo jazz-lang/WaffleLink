@@ -41,7 +41,7 @@ pub enum Return {
 pub type NativeFn =
     extern "C" fn(&RcState, &Arc<Process>, Value, &[Value]) -> Result<Return, Value>;
 pub struct Function {
-    pub name: Arc<String>,
+    pub name: Value,
     pub upvalues: Vec<Value>,
     pub argc: i32,
     pub native: Option<NativeFn>,
@@ -59,8 +59,10 @@ pub enum CellValue {
     Number(f64),
     Bool(bool),
     String(Arc<String>),
+    InternedString(Arc<String>),
     Array(Box<Vec<Value>>),
     ByteArray(Box<Vec<u8>>),
+
     Function(Arc<Function>),
     Module(Arc<Module>),
     Process(Arc<Process>),
@@ -489,7 +491,14 @@ impl CellPointer {
 
     pub fn is_string(&self) -> bool {
         match self.get().value {
-            CellValue::String(_) => true,
+            CellValue::String(_) | CellValue::InternedString(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_interned_str(&self) -> bool {
+        match self.get().value {
+            CellValue::InternedString(_) => true,
             _ => false,
         }
     }
@@ -523,18 +532,12 @@ impl CellPointer {
 
                 fmt_buf
             }
+            CellValue::InternedString(ref s) => (**s).clone(),
             CellValue::Duration(d) => format!("Duration({})", d.as_millis()),
             CellValue::Process(_) => String::from("Process"),
             CellValue::File(_) => String::from("File"),
             CellValue::ByteArray(ref array) => format!("ByteArray({:?})", array),
-            CellValue::Function(ref f) => format!(
-                "function {}(...) {{...}}",
-                if f.name.len() != 0 {
-                    (*f.name).clone()
-                } else {
-                    "<anonymous>".to_owned()
-                }
-            ),
+            CellValue::Function(ref f) => format!("function {}(...) {{...}}", f.name.to_string()),
             CellValue::Number(n) => n.to_string(),
             CellValue::Module(_) => String::from("Module"),
             CellValue::None => {

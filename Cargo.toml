@@ -25,7 +25,8 @@ simple_logger = "1.5"
 const-if = "0.1.3"
 log = "0.4"
 structopt = "0.3"
-num_cpus = "*"
+num_cpus = "1.12"
+byteorder = "1.3"
 [target.'cfg(target_family = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
 kernel32-sys = "0.2"

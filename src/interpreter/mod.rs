@@ -56,8 +56,14 @@ macro_rules! enter_context {
 
 macro_rules! safepoint_and_reduce {
     ($rt: expr,$process: expr,$reductions: expr) => {
-        if $rt.gc_safepoint($process) {
+        /*if $rt.gc_safepoint($process) {
             return Ok(Value::from(VTag::Null));
+        }*/
+        match $rt.gc_safepoint($process) {
+            Ok(()) => (),
+            Err(_) => {
+                return Ok(Value::from(VTag::Null));
+            }
         }
 
         if $reductions > 0 {
@@ -91,13 +97,25 @@ impl Runtime {
                 }
             };
         }
-        let return_value: Result<Value, Value> = loop {
+        let (return_value, top_context): (Result<Value, Value>, bool) = loop {
             let ins = {
                 let block = unsafe { context.get().code.get_unchecked(bindex) };
                 unsafe { block.instructions.get_unchecked(index) }
             };
             index += 1;
             match *ins {
+                Instruction::LoadStack(dest, ss0) => {
+                    let value = context
+                        .stack
+                        .get(ss0 as usize)
+                        .map(|x| *x)
+                        .unwrap_or(Value::from(VTag::Undefined));
+                    context.set_register(dest, value);
+                }
+                Instruction::StoreStack(dest, ss0) => {
+                    let value = context.get_register(dest);
+                    context.stack[ss0 as usize] = value;
+                }
                 Instruction::Return(value) => {
                     let value = if let Some(value) = value {
                         context.get_register(value)
@@ -105,12 +123,14 @@ impl Runtime {
                         Value::from(VTag::Null)
                     };
                     self.clear_catch_tables(&context, process);
+                    let top_level;
                     if context.terminate_upon_return {
-                        break Ok(value);
+                        top_level = context.parent.is_none();
+                        break (Ok(value), top_level);
                     }
 
                     if process.pop_context() {
-                        break Ok(value);
+                        break (Ok(value), true);
                     }
                     reset_context!(process, context, index, bindex);
                     safepoint_and_reduce!(self, process, reductions);
@@ -122,6 +142,10 @@ impl Runtime {
                 Instruction::LoadInt(r, i) => context.set_register(r, Value::new_int(i as _)),
                 Instruction::LoadNumber(r, f) => {
                     context.set_register(r, Value::new_double(f64::from_bits(f)))
+                }
+                Instruction::Move(to, from) => {
+                    let v0 = context.get_register(from);
+                    context.set_register(to, v0);
                 }
                 Instruction::LoadTrue(r) => context.set_register(r, Value::from(VTag::True)),
                 Instruction::LoadFalse(r) => context.set_register(r, Value::from(VTag::False)),
@@ -209,6 +233,10 @@ impl Runtime {
                                 process
                                     .local_data_mut()
                                     .heap
+                                    .field_write_barrier(object.as_cell(), value);
+                                process
+                                    .local_data_mut()
+                                    .heap
                                     .write_barrier(object.as_cell());
                                 array[idx] = value;
                                 continue;
@@ -248,7 +276,16 @@ impl Runtime {
                     let function = context.get_register(function);
                     if function.is_cell() {
                         match function.as_cell().get_mut().value {
-                            CellValue::Function(ref mut f) => f.upvalues = upvalues,
+                            CellValue::Function(ref mut f) => {
+                                let fun = function.as_cell();
+                                for upvalue in upvalues.iter() {
+                                    process
+                                        .local_data_mut()
+                                        .heap
+                                        .field_write_barrier(fun, *upvalue);
+                                }
+                                f.upvalues = upvalues;
+                            }
                             _ => {
                                 panic!(
                                     "MakeEnv: Function expected, found '{}'",
@@ -333,11 +370,11 @@ impl Runtime {
                         match result {
                             Return::Value(value) => context.set_register(dest, value),
                             Return::SuspendProcess => {
-                                break Ok(Value::from(VTag::Null));
+                                return Ok(Value::from(VTag::Null));
                             }
                             Return::YieldProcess => {
                                 self.state.scheduler.schedule(process.clone());
-                                break Ok(Value::from(VTag::Null));
+                                return Ok(Value::from(VTag::Null));
                             }
                         }
                     } else {
@@ -426,11 +463,11 @@ impl Runtime {
                         match result {
                             Return::Value(value) => context.set_register(dest, value),
                             Return::SuspendProcess => {
-                                break Ok(Value::from(VTag::Null));
+                                return Ok(Value::from(VTag::Null));
                             }
                             Return::YieldProcess => {
                                 self.state.scheduler.schedule(process.clone());
-                                break Ok(Value::from(VTag::Null));
+                                return Ok(Value::from(VTag::Null));
                             }
                         }
                     } else {
@@ -447,12 +484,14 @@ impl Runtime {
                         enter_context!(process, context, index, bindex);
                     }
                 }
-                Instruction::Gc => {
-                    process.local_data_mut().heap.collect_garbage(process);
-                }
-                Instruction::GcSafepoint => {
-                    self.gc_safepoint(process);
-                }
+                Instruction::Gc => match process.local_data_mut().heap.collect_garbage(process) {
+                    Ok(_) => (),
+                    Err(_) => return Ok(Value::from(VTag::Null)),
+                },
+                Instruction::GcSafepoint => match self.gc_safepoint(process) {
+                    Ok(_) => (),
+                    Err(_) => return Ok(Value::from(VTag::Null)),
+                },
                 Instruction::New(dest, function, argc) => {
                     let function = context.get_register(function);
                     if !function.is_cell() {
@@ -696,32 +735,84 @@ impl Runtime {
                             _ => Value::new_double(std::f64::NAN),
                         };
                         context.set_register(dest, result)
+                    } else if lhs.is_cell() {
+                        let result = match op {
+                            BinOp::Equal => Value::from(lhs == rhs),
+                            BinOp::NotEqual => Value::from(lhs != rhs),
+                            BinOp::Add => Process::allocate_string(
+                                process,
+                                &self.state,
+                                &format!("{}{}", lhs, rhs),
+                            ),
+                            _ => Value::new_double(std::f64::NAN), // TODO: Do we really need to use NaN if operation is not supported on current type?
+                        };
+                        context.set_register(dest, result);
+                    } else {
+                        let result = match op {
+                            BinOp::Equal => Value::from(lhs == rhs),
+                            BinOp::NotEqual => Value::from(lhs != rhs),
+                            BinOp::Add => Process::allocate_string(
+                                process,
+                                &self.state,
+                                &format!("{}{}", lhs, rhs),
+                            ),
+                            _ => Value::new_double(std::f64::NAN),
+                        };
+                        context.set_register(dest, result);
                     }
+                }
+                Instruction::Unary(op, dest, lhs) => {
+                    let lhs = context.get_register(lhs);
+                    let result = match op {
+                        UnaryOp::Neg => {
+                            if lhs.is_number() {
+                                Value::new_double(-lhs.to_number())
+                            } else if lhs.is_bool() {
+                                Value::new_double(-(lhs.to_boolean() as i32 as f64))
+                            } else {
+                                Value::new_double(std::f64::NAN)
+                            }
+                        }
+                        UnaryOp::Not => {
+                            if lhs.is_bool() {
+                                Value::from(!lhs.to_boolean())
+                            } else if lhs.is_number() {
+                                Value::from(!(lhs.to_number() == 0.0 || lhs.to_number().is_nan()))
+                            } else if lhs.is_cell() {
+                                Value::from(false)
+                            } else if lhs.is_null_or_undefined() {
+                                Value::from(!false)
+                            } else {
+                                Value::from(false)
+                            }
+                        }
+                    };
+                    context.set_register(dest, result);
                 }
 
                 _ => unimplemented!(),
             }
         };
         let ret = return_value?;
-        if process.is_pinned() {
-            worker.leave_exclusive_mode();
-        }
+        if top_context {
+            if process.is_pinned() {
+                worker.leave_exclusive_mode();
+            }
+            process.terminate(&self.state);
 
-        process.terminate(&self.state);
-
-        if process.is_main() {
-            self.terminate();
+            if process.is_main() {
+                self.terminate();
+            }
         }
 
         Ok(ret)
     }
-    /// Returns true if a process should be suspended for garbage collection.
-    pub fn gc_safepoint(&self, process: &Arc<Process>) -> bool {
+    /// Returns true if a process is garbage collected.
+    pub fn gc_safepoint(&self, process: &Arc<Process>) -> Result<(), bool> {
         if !process.local_data().heap.should_collect() {
-            return false;
+            return Ok(());
         }
-        process.local_data_mut().heap.collect_garbage(process);
-        true
+        process.local_data_mut().heap.collect_garbage(process)
     }
 
     pub fn schedule_main_process(&self, proc: Arc<Process>) {

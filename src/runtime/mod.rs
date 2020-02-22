@@ -1,6 +1,7 @@
 pub mod cell;
 pub mod channel;
 pub mod config;
+pub mod interner;
 pub mod module;
 pub mod process;
 pub mod process_functions;

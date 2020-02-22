@@ -135,7 +135,7 @@ impl Value {
     }
     #[inline(always)]
     pub fn is_number(&self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 }
+        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 && !self.is_cell() }
     }
     #[inline(always)]
     pub fn is_double(&self) -> bool {

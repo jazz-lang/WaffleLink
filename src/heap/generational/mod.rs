@@ -526,7 +526,10 @@ impl HeapTrait for GenerationalHeap {
         self.needs_gc != GenerationalGCType::None
     }
 
-    fn collect_garbage(&mut self, proc: &Arc<crate::runtime::process::Process>) {
+    fn collect_garbage(
+        &mut self,
+        proc: &Arc<crate::runtime::process::Process>,
+    ) -> Result<(), bool> {
         self.trace_process(proc);
         self.garbage_collect_(
             proc,
@@ -534,6 +537,7 @@ impl HeapTrait for GenerationalHeap {
                 || self.needs_gc == GenerationalGCType::None
                 || self.needs_gc == GenerationalGCType::Intermediate,
         );
+        Ok(())
     }
 
     fn trace_process(&mut self, proc: &Arc<crate::runtime::process::Process>) {

@@ -8,12 +8,12 @@ use waffle::heap::cms::atomic_list::AtomicList;
 use waffle::runtime::*;
 use waffle::util::arc::Arc;
 fn main() {
-    simple_logger::init().unwrap();
+    //simple_logger::init().unwrap();
     let mut m = Arc::new(Module::new("Main"));
     let code = basicblock::BasicBlock::new(vec![Instruction::Gc, Instruction::Return(None)], 0);
     let func = Function {
         upvalues: vec![],
-        name: Arc::new("main".to_owned()),
+        name: Value::from(RUNTIME.state.intern_string("main".to_owned())),
         module: m.clone(),
         code: Arc::new(vec![code]),
         native: None,

@@ -36,6 +36,7 @@ impl Context {
             module: Arc::new(Module {
                 globals: vec![],
                 name: Arc::new("<>".to_owned()),
+                main_fn: Value::empty(),
             }),
             parent: None,
             index: 0,
@@ -73,32 +74,17 @@ impl Context {
         while let Some(context) = current {
             context.registers.iter().for_each(|x| {
                 if x.is_cell() {
-                    unsafe {
-                        if x.u.as_int64 as u64 == 0xfffe00000000002a {
-                            panic!();
-                        }
-                    }
                     unsafe { cb(&x.u.ptr) }
                 }
             });
 
             context.stack.iter().for_each(|x| {
                 if x.is_cell() {
-                    unsafe {
-                        if x.u.as_int64 as u64 == 0xfffe00000000002a {
-                            panic!();
-                        }
-                    }
                     unsafe { cb(&x.u.ptr) }
                 }
             });
             context.module.globals.iter().for_each(|x| {
                 if x.is_cell() {
-                    unsafe {
-                        if x.u.as_int64 as u64 == 0xfffe00000000002a {
-                            panic!();
-                        }
-                    }
                     unsafe { cb(&x.u.ptr) }
                 }
             });

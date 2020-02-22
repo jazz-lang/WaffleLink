@@ -4,6 +4,7 @@ use std::vec::Vec;
 pub struct Module {
     pub name: Arc<String>,
     pub globals: Vec<Value>,
+    pub main_fn: Value,
 }
 
 impl Module {
@@ -11,6 +12,7 @@ impl Module {
         Self {
             name: Arc::new(name.to_owned()),
             globals: vec![],
+            main_fn: Value::empty(),
         }
     }
     pub fn get_global_at(&self, id: usize) -> Value {

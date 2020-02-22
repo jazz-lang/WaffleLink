@@ -446,25 +446,28 @@ impl HeapTrait for IncrementalCollector {
         self.threshold < self.live
     }
     /// Perform a minor incremental GC cycle.
-    fn minor_collect(&mut self, proc: &Arc<Process>) {
+    fn minor_collect(&mut self, proc: &Arc<Process>) -> Result<(), bool> {
         if self.process.is_none() {
             self.process = Some(proc.clone());
         }
         self.minor();
+        Ok(())
     }
     /// Perform a full GC cycle.
-    fn major_collect(&mut self, proc: &Arc<Process>) {
+    fn major_collect(&mut self, proc: &Arc<Process>) -> Result<(), bool> {
         if self.process.is_none() {
             self.process = Some(proc.clone());
         }
         self.major();
+        Ok(())
     }
 
-    fn collect_garbage(&mut self, proc: &Arc<Process>) {
+    fn collect_garbage(&mut self, proc: &Arc<Process>) -> Result<(), bool> {
         if self.process.is_none() {
             self.process = Some(proc.clone());
         }
         self.major();
+        Ok(())
     }
     /// Field write barrier.
     ///   Paint obj(Black) -> value(White) to obj(Black) -> value(Gray).
