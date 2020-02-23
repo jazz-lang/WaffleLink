@@ -790,6 +790,24 @@ impl Runtime {
                     };
                     context.set_register(dest, result);
                 }
+                Instruction::LoadCurrentModule(to) => {
+                    let module = Value::from(Process::allocate(
+                        process,
+                        Cell::with_prototype(
+                            CellValue::Module(context.module.clone()),
+                            self.state.module_prototype.as_cell(),
+                        ),
+                    ));
+                    context.set_register(to,module);
+                }
+                Instruction::LoadThis(to) => {
+                    let this = context.this;
+                    context.set_register(to,this);
+                }
+                Instruction::SetThis(x) => {
+                    let new_this = context.get_register(x);
+                    context.this = new_this;
+                }
 
                 _ => unimplemented!(),
             }

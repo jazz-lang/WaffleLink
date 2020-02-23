@@ -9,6 +9,7 @@ use ra::*;
 /// B(_) - Block
 /// N(_) - Number
 pub enum Instruction {
+
     LoadNull(u16),
     LoadUndefined(u16),
     LoadInt(u16, i32),
@@ -60,6 +61,7 @@ pub enum Instruction {
     LoadConst(u16, u32),
     LoadThis(u16),
     SetThis(u16),
+    LoadCurrentModule(u16),
 }
 
 macro_rules! vreg {
@@ -181,6 +183,15 @@ impl Instruction {
             | Instruction::ConditionalBranch(r0, _, _) => {
                 uce.insert(vreg!(*r0));
             }
+            Instruction::LoadThis(r0) => {
+                def.insert(vreg!(*r0));
+            }
+            Instruction::SetThis(r0) => {
+                uce.insert(vreg!(*r0));
+            }
+            Instruction::LoadCurrentModule(r0) => {
+                def.insert(vreg!(*r0));
+            }
             _ => {}
         }
 
@@ -237,9 +248,6 @@ impl Instruction {
             Instruction::Binary(_, r0, r1, r2) => {
                 map!(def r0 use r1 use r2);
             }
-            Instruction::LoadNull(r) => {
-                map!(def r);
-            }
 
             Instruction::LoadNumber(r0, _) => {
                 map!(def r0);
@@ -283,6 +291,8 @@ impl Instruction {
             | Instruction::ConditionalBranch(r0, _, _) => {
                 map!(use r0);
             }
+
+            Instruction::LoadCurrentModule(r0) => map!(def r0),
 
             _ => {}
         }
@@ -373,4 +383,5 @@ pub mod InstructionByte {
     pub const LOAD_CONST: u8 = 0x34;
     pub const LOAD_THIS: u8 = 0x35;
     pub const SET_THIS: u8 = 0x36;
+    pub const LOAD_CURRENT_MODULE: u8 = 0x37;
 }

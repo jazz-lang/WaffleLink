@@ -308,6 +308,7 @@ impl<'a> BytecodeReader<'a> {
                                 InstructionByte::SET_THIS => {
                                     Instruction::SetThis(self.read_u8() as _)
                                 }
+                                InstructionByte::LOAD_CURRENT_MODULE => Instruction::LoadCurrentModule(self.read_u8() as _),
                                 _ => unreachable!("Unknown opcode {:x}", op),
                             };
                             block.instructions.push(ins);
@@ -329,7 +330,6 @@ impl<'a> BytecodeReader<'a> {
                     }
                     m.globals.push(func);
                 }
-
                 _ => unreachable!(),
             }
         }

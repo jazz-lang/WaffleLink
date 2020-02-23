@@ -58,7 +58,7 @@ impl StringPool {
 
     /// Adds a new string to the string pool.
     ///
-    /// This method will panic if the given ObjectPointer does not reside in the
+    /// This method will panic if the given CellPointer does not reside in the
     /// permanent space.
     pub fn add(&mut self, value: CellPointer) {
         if !value.is_permanent() {
