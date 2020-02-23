@@ -27,6 +27,7 @@ log = "0.4"
 structopt = "0.3"
 num_cpus = "1.12"
 byteorder = "1.3"
+regalloc = "0.0.10"
 [target.'cfg(target_family = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
 kernel32-sys = "0.2"
