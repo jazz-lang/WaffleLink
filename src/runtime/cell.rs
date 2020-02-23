@@ -40,6 +40,12 @@ pub enum Return {
 
 pub type NativeFn =
     extern "C" fn(&RcState, &Arc<Process>, Value, &[Value]) -> Result<Return, Value>;
+
+#[derive(Default, Clone)]
+pub struct FunctionMetadata {
+    pub stack_size: usize,
+}
+
 pub struct Function {
     pub name: Value,
     pub upvalues: Vec<Value>,
@@ -47,6 +53,7 @@ pub struct Function {
     pub native: Option<NativeFn>,
     pub module: Arc<Module>,
     pub code: Arc<Vec<BasicBlock>>,
+    pub md: FunctionMetadata,
 }
 
 pub struct Generator {

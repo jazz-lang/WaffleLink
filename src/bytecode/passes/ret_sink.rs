@@ -6,14 +6,15 @@
 /// NOTE: This pass should run after register allocation.
 pub struct RetSink;
 use super::*;
+use crate::runtime::cell::Function;
 use crate::util::arc::Arc;
 
 impl BytecodePass for RetSink {
-    fn execute(&mut self, code: &mut Arc<Vec<BasicBlock>>) {
-        let return_sink = { BasicBlock::new(vec![Instruction::Return(Some(0))], code.len()) };
-        code.push(return_sink);
-        let target = code.len() - 1;
-        for block in code.iter_mut() {
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        let return_sink = { BasicBlock::new(vec![Instruction::Return(Some(0))], f.code.len()) };
+        f.code.push(return_sink);
+        let target = f.code.len() - 1;
+        for block in f.code.iter_mut() {
             let mut new_instructions = vec![];
             for ins in block.instructions.iter() {
                 match *ins {

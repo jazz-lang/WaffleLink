@@ -169,6 +169,7 @@ pub trait HeapTrait {
                     upvalues,
                     native,
                     code,
+                    md: function.md.clone(),
                 }))
             }
             CellValue::ByteArray(array) => CellValue::ByteArray(array.clone()),

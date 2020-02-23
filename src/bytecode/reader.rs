@@ -298,6 +298,16 @@ impl<'a> BytecodeReader<'a> {
                                     self.read_u8() as _,
                                     self.read_u8() as _,
                                 ),
+                                InstructionByte::LOAD_CONST => Instruction::LoadConst(
+                                    self.read_u8() as _,
+                                    self.read_u16() as _,
+                                ),
+                                InstructionByte::LOAD_THIS => {
+                                    Instruction::LoadThis(self.read_u8() as _)
+                                }
+                                InstructionByte::SET_THIS => {
+                                    Instruction::SetThis(self.read_u8() as _)
+                                }
                                 _ => unreachable!("Unknown opcode {:x}", op),
                             };
                             block.instructions.push(ins);
@@ -312,6 +322,7 @@ impl<'a> BytecodeReader<'a> {
                         native: None,
                         code,
                         module: m.clone(),
+                        md: Default::default(),
                     });
                     if is_main {
                         m.main_fn = func;

@@ -142,6 +142,7 @@ impl State {
                 name: Arc::new("<native>".to_owned()),
                 main_fn: Value::empty(),
             }),
+            md: Default::default(),
         };
 
         let cell = self
@@ -171,6 +172,7 @@ impl State {
                 name: Arc::new("<native>".to_owned()),
                 main_fn: Value::empty(),
             }),
+            md: Default::default(),
         };
 
         let cell = self

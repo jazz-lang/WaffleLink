@@ -100,7 +100,7 @@ impl SimplifyCFGPass {
 }
 
 impl BytecodePass for SimplifyCFGPass {
-    fn execute(&mut self, code: &mut Arc<Vec<BasicBlock>>) {
-        self.simplify(code);
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        self.simplify(&mut f.code);
     }
 }

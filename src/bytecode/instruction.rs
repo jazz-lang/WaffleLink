@@ -1,3 +1,5 @@
+extern crate regalloc as ra;
+use ra::*;
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
 #[repr(u16)]
 /// JLight VM instruction.
@@ -25,13 +27,13 @@ pub enum Instruction {
     StoreStaticByValue(u16, u16),
     StoreStack(u16, u32),
     LoadStack(u16, u32),
-    /// Goto B(B) if R(A) is true, otherwise goto to B(C)
+    /// Branch B(B) if R(A) is true, otherwise Branch to B(C)
     ConditionalBranch(u16, u16, u16),
-    /// Goto B(B)
+    /// Branch B(B)
     Branch(u16),
-    /// Goto B(B) if R(A) is true
+    /// Branch B(B) if R(A) is true
     BranchIfTrue(u16, u16),
-    /// Goto B if R(a) is false
+    /// Branch B if R(a) is false
     BranchIfFalse(u16, u16),
     CatchBlock(
         u16, /* register to store thrown value in */
@@ -55,6 +57,236 @@ pub enum Instruction {
     Binary(BinOp, u16, u16, u16),
     Unary(UnaryOp, u16, u16),
     Move(u16, u16),
+    LoadConst(u16, u32),
+    LoadThis(u16),
+    SetThis(u16),
+}
+
+macro_rules! vreg {
+    ($v: expr) => {
+        if $v > 32 {
+            Reg::new_virtual(RegClass::I64, $v as u32)
+        } else {
+            Reg::new_real(RegClass::I64, 1, $v as _)
+        }
+    };
+}
+
+impl Instruction {
+    pub fn get_targets(&self) -> Vec<BlockIx> {
+        match &self {
+            Instruction::Branch(x)
+            | Instruction::BranchIfFalse(_, x)
+            | Instruction::BranchIfTrue(_, x) => vec![BlockIx::new(*x as u32)],
+            Instruction::ConditionalBranch(_, x, y) => {
+                vec![BlockIx::new(*x as u32), BlockIx::new(*y as u32)]
+            }
+            _ => vec![],
+        }
+    }
+
+    pub fn get_reg_usage(&self) -> (Set<Reg>, Set<Reg>, Set<Reg>) {
+        let mut def = Set::<Reg>::empty();
+        let mut m0d = Set::<Reg>::empty();
+        let mut uce = Set::<Reg>::empty();
+        macro_rules! vreg {
+            ($v: expr) => {
+                if $v > 32 {
+                    Reg::new_virtual(RegClass::I64, $v as u32)
+                } else {
+                    Reg::new_real(RegClass::I64, 1, $v as _)
+                }
+            };
+        }
+        match self {
+            Instruction::Move(to, from) => {
+                def.insert(vreg!(*to));
+                uce.insert(vreg!(*from));
+            }
+            Instruction::LoadById(x, y, _) | Instruction::LoadByIndex(x, y, _) => {
+                def.insert(vreg!(*x));
+                uce.insert(vreg!(*y));
+            }
+            Instruction::LoadByValue(x, y, z) => {
+                def.insert(vreg!(*x));
+                uce.insert(vreg!(*y));
+                uce.insert(vreg!(*z));
+            }
+            Instruction::StoreById(x, y, _) | Instruction::StoreByIndex(x, y, _) => {
+                m0d.insert(vreg!(*x));
+                uce.insert(vreg!(*y));
+            }
+            Instruction::StoreByValue(x, y, z) => {
+                m0d.insert(vreg!(*x));
+                uce.insert(vreg!(*y));
+                uce.insert(vreg!(*z));
+            }
+            Instruction::LoadNumber(r, _) => {
+                def.insert(vreg!(*r));
+            }
+            Instruction::LoadInt(r, _) => {
+                def.insert(vreg!(*r));
+            }
+            Instruction::LoadConst(r, _) => {
+                def.insert(vreg!(*r));
+            }
+            Instruction::LoadUndefined(r) => def.insert(vreg!(*r)),
+            Instruction::LoadNull(r) => def.insert(vreg!(*r)),
+            Instruction::CatchBlock(r, _) => def.insert(vreg!(*r)),
+            Instruction::Throw(r) => uce.insert(vreg!(*r)),
+            Instruction::VirtCall(r0, r1, r2, _) => {
+                def.insert(vreg!(*r0));
+                uce.insert(vreg!(*r1));
+                uce.insert(vreg!(*r2));
+            }
+            Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
+                def.insert(vreg!(*r0));
+                uce.insert(vreg!(*r1));
+            }
+            Instruction::New(r0, r1, _) => {
+                def.insert(vreg!(*r0));
+                uce.insert(vreg!(*r1));
+            }
+            Instruction::Return(Some(r)) => {
+                uce.insert(vreg!(*r));
+            }
+            Instruction::Return(None) => (),
+            Instruction::MakeEnv(r0, _) => {
+                m0d.insert(vreg!(*r0));
+            }
+            Instruction::Push(r0) => {
+                uce.insert(vreg!(*r0));
+            }
+            Instruction::Pop(r0) => {
+                def.insert(vreg!(*r0));
+            }
+
+            Instruction::StoreStack(r, _) => {
+                uce.insert(vreg!(*r));
+            }
+            Instruction::LoadStack(r, _) => {
+                def.insert(vreg!(*r));
+            }
+            Instruction::Binary(_, r0, r1, r2) => {
+                def.insert(vreg!(*r0));
+                uce.insert(vreg!(*r1));
+                uce.insert(vreg!(*r2));
+            }
+            Instruction::Unary(_, r0, r1) => {
+                def.insert(vreg!(*r0));
+                uce.insert(vreg!(*r1));
+            }
+            Instruction::BranchIfFalse(r0, _)
+            | Instruction::BranchIfTrue(r0, _)
+            | Instruction::ConditionalBranch(r0, _, _) => {
+                uce.insert(vreg!(*r0));
+            }
+            _ => {}
+        }
+
+        (def, m0d, uce)
+    }
+
+    pub fn map_regs_d_u(
+        &mut self,
+        map_defs: &Map<VirtualReg, RealReg>,
+        map_uses: &Map<VirtualReg, RealReg>,
+    ) {
+        macro_rules! map {
+            (use $r: ident $($rest:tt)*) => {
+                {
+                    *$r = map_uses
+                        .get(&vreg!(*$r).to_virtual_reg())
+                        .unwrap()
+                        .get_index() as u16;
+                    map!($($rest)*);
+                }
+            };
+            (def $r: ident $($rest:tt)*) => {
+                {
+                    *$r = map_defs
+                        .get(&vreg!(*$r).to_virtual_reg())
+                        .unwrap()
+                        .get_index() as u16;
+                    map!($($rest)*);
+                }
+            };
+            () => {};
+            ($($t: tt)*) => {
+                map!($($t)*);
+            }
+        }
+        match self {
+            Instruction::LoadStaticById(r0, _) => map!(def r0),
+            Instruction::LoadStaticByValue(r0, r1) => map!(def r0 use r1),
+            Instruction::StoreStaticById(r0, _) => map!(use r0),
+            Instruction::StoreStaticByValue(r0, _) => map!(use r0),
+            Instruction::LoadById(r0, r1, _) => map!(def r0 use r1),
+            Instruction::StoreById(r0, r1, _) => map!(use r0 use r1),
+            Instruction::StoreByValue(r0, r1, r2) => map!(use r0 use r1 use r2),
+            Instruction::LoadByValue(r0, r1, r2) => map!(def r0 use r1 use r2),
+            Instruction::LoadByIndex(r0, r1, _) => map!(def r0 use r1),
+            Instruction::StoreByIndex(r0, r1, _) => map!(use r0 use r1),
+            Instruction::Throw(r) => map!(use r),
+            Instruction::CatchBlock(r, _) => map!(def r),
+            Instruction::SetThis(r) => map!(use r),
+            Instruction::LoadThis(r) => map!(def r),
+            Instruction::New(r0, r1, _) => map!(def r0 use r1),
+            Instruction::LoadUndefined(r) | Instruction::LoadNull(r) => map!(def r),
+            Instruction::LoadTrue(r0) | Instruction::LoadFalse(r0) => map!(def r0),
+            Instruction::Binary(_, r0, r1, r2) => {
+                map!(def r0 use r1 use r2);
+            }
+            Instruction::LoadNull(r) => {
+                map!(def r);
+            }
+
+            Instruction::LoadNumber(r0, _) => {
+                map!(def r0);
+            }
+            Instruction::LoadInt(r0, _) => {
+                map!(def r0);
+            }
+            Instruction::LoadConst(r0, _) => {
+                map!(def r0);
+            }
+            Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
+                map!(def r0 use r1);
+            }
+            Instruction::VirtCall(r0, r1, r2, _) => map!(def r0 use r1 use r2),
+            Instruction::Return(r0) => {
+                if let Some(r0) = r0 {
+                    map!(use r0);
+                }
+            }
+            Instruction::MakeEnv(r0, _) => {
+                map!(use r0);
+            }
+            Instruction::Push(r0) => {
+                map!(use r0);
+            }
+            Instruction::Pop(r0) => {
+                map!(def r0);
+            }
+            Instruction::Move(r0, r1) => {
+                map!(def r0 use r1);
+            }
+            Instruction::StoreStack(r0, _) => {
+                map!(use r0);
+            }
+            Instruction::LoadStack(r0, _) => {
+                map!(def r0);
+            }
+            Instruction::Unary(_, r0, r1) => map!(def r0 use r1),
+            Instruction::BranchIfFalse(r0, _)
+            | Instruction::BranchIfTrue(r0, _)
+            | Instruction::ConditionalBranch(r0, _, _) => {
+                map!(use r0);
+            }
+
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -138,4 +370,7 @@ pub mod InstructionByte {
     pub const NOT: u8 = 0x31;
     pub const NEG: u8 = 0x32;
     pub const MOVE: u8 = 0x33;
+    pub const LOAD_CONST: u8 = 0x34;
+    pub const LOAD_THIS: u8 = 0x35;
+    pub const SET_THIS: u8 = 0x36;
 }
