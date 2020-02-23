@@ -103,6 +103,7 @@ fn main() {
         code: Arc::new(code),
         native: None,
         argc: 0,
+        md: Default::default(),
     };
     let value = RUNTIME.state.allocate_fn(func);
     let proc = Process::from_function(value, &config::Config::default()).unwrap();

@@ -2,12 +2,12 @@ extern crate regalloc as ra;
 
 pub const REAL_REGS_END: usize = 32;
 
+use crate::bytecode::basicblock::BasicBlock;
 use ra::Function as RFunction;
 use ra::{
     BlockIx, InstIx, InstRegUses, Map, MyRange, RealReg, RealRegUniverse, Reg, RegClass,
     RegClassInfo, Set, SpillSlot, TypedIxVec, VirtualReg, Writable, NUM_REG_CLASSES,
 };
-
 #[derive(Debug, Copy)]
 pub struct Block {
     pub label: usize,
@@ -50,6 +50,14 @@ impl RegisterAllocationPass {
         }
     }
 
+    pub fn block(&mut self, idx: usize, mut insns: TypedIxVec<InstIx, Instruction>) {
+        let start = self.instructions.len();
+        let len = insns.len() as u32;
+        self.instructions.append(&mut insns);
+        let b = Block::new(idx, InstIx::new(start), len);
+        self.blocks.push(b);
+    }
+
     pub fn spill(&self, x: SpillSlot) -> usize {
         let pos = x.get_usize();
         let real_pos = pos + *self.stack.get();
@@ -72,6 +80,20 @@ impl RegisterAllocationPass {
             } - block.start.get();
             i += 1;
         }
+    }
+
+    pub fn to_basic_blocks(&self) -> Vec<BasicBlock> {
+        let instructions = self.instructions.iter().collect::<Vec<_>>();
+        let mut basic_blocks = vec![];
+        for (i, block) in self.blocks.iter().enumerate() {
+            let insns = &instructions
+                [block.start.get() as usize..block.start.get() as usize + block.len as usize];
+            basic_blocks.push(BasicBlock {
+                instructions: insns.iter().map(|x| (**x).clone()).collect(),
+                index: i,
+            });
+        }
+        basic_blocks
     }
 }
 
@@ -164,8 +186,8 @@ impl RFunction for RegisterAllocationPass {
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, _: VirtualReg) -> Instruction {
-        //self.spill(to_slot);
-        Instruction::Push(from_reg.get_index() as _)
+        let real_addr = self.spill(to_slot);
+        Instruction::StoreStack(from_reg.to_reg().get_index() as _, real_addr as _)
     }
 
     fn gen_reload(&self, to: Writable<RealReg>, slot: SpillSlot, _: VirtualReg) -> Instruction {
@@ -215,4 +237,18 @@ fn make_universe() -> RealRegUniverse {
     univ.check_is_sane();
 
     univ
+}
+use crate::runtime::cell::*;
+use crate::util::arc::Arc;
+impl super::BytecodePass for RegisterAllocationPass {
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        for (i, block) in f.code.iter().enumerate() {
+            self.block(i, TypedIxVec::from_vec(block.instructions.clone()));
+        }
+        let algo = ra::RegAllocAlgorithm::LinearScan;
+        let result = ra::allocate_registers(self, algo, &make_universe()).unwrap();
+        f.code.clear();
+        self.update_from_alloc(result);
+        *f.code = self.to_basic_blocks();
+    }
 }
