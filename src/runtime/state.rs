@@ -21,30 +21,9 @@ pub struct State {
     pub module_prototype: Value,
     pub boolean_prototype: Value,
     pub byte_array_prototype: Value,
-    pub static_variables: ahash::AHashMap<String, Value>,
+    pub static_variables: Mutex<ahash::AHashMap<String, Value>>,
     pub config: super::config::Config,
-    pub string_pool: Mutex<StringPool>,
-}
-
-macro_rules! intern_string {
-    ($state:expr, $lookup:expr, $store:expr) => {{
-        let mut pool = $state.string_pool.lock();
-
-        if let Some(value) = pool.get($lookup) {
-            return value;
-        }
-
-        let ptr = {
-            let mut alloc = $state.perm_heap.lock();
-            let value = CellValue::InternedString($store);
-
-            alloc.allocate_with_prototype(value, $state.string_prototype.as_cell())
-        };
-
-        pool.add(ptr);
-
-        ptr
-    }};
+    pub string_map: Mutex<ahash::AHashMap<String, CellPointer>>,
 }
 
 #[inline]
@@ -113,9 +92,9 @@ impl State {
             module_prototype,
             function_prototype,
             generator_prototype,
-            static_variables: ahash::AHashMap::new(),
+            static_variables: Mutex::new(ahash::AHashMap::new()),
             config,
-            string_pool: Mutex::new(StringPool::new()),
+            string_map: Mutex::new(ahash::AHashMap::new()),
         })
     }
 
@@ -194,14 +173,23 @@ impl State {
     ///
     /// If a string was not yet interned it's allocated in the permanent space.
     pub fn intern(&self, string: &String) -> CellPointer {
-        intern_string!(self, string, Arc::new(string.clone()))
+        let mut s = self.string_map.lock();
+        if let Some(value) = s.get(string) {
+            return *value;
+        } else {
+            let name = super::interner::intern(string);
+            let ptr = self.allocate(Cell::with_prototype(
+                CellValue::InternedString(name),
+                self.string_prototype.as_cell(),
+            ));
+            s.insert(string.clone(), ptr.as_cell());
+            ptr.as_cell()
+        }
     }
 
     /// Interns an owned String.
     pub fn intern_string(&self, string: String) -> CellPointer {
-        let to_intern = string;
-
-        intern_string!(self, &to_intern, Arc::new(to_intern))
+        self.intern(&string)
     }
 
     /// Interns a pointer pointing to a string.

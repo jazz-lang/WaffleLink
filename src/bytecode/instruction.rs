@@ -1,6 +1,6 @@
 extern crate regalloc as ra;
 use ra::*;
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
 #[repr(u16)]
 /// JLight VM instruction.
 ///
@@ -9,7 +9,6 @@ use ra::*;
 /// B(_) - Block
 /// N(_) - Number
 pub enum Instruction {
-
     LoadNull(u16),
     LoadUndefined(u16),
     LoadInt(u16, i32),
@@ -320,7 +319,7 @@ pub enum BinOp {
     Xor,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum UnaryOp {
     Not,
     Neg,

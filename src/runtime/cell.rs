@@ -68,7 +68,7 @@ pub enum CellValue {
     /// Not all numbers allocated in heap, only ones that doesn't fit into NaN-boxed value.
     Number(f64),
     String(Arc<String>),
-    InternedString(Arc<String>),
+    InternedString(crate::runtime::interner::Name),
     Array(Box<Vec<Value>>),
     ByteArray(Box<Vec<u8>>),
     Function(Arc<Function>),
@@ -532,7 +532,7 @@ impl CellPointer {
 
                 fmt_buf
             }
-            CellValue::InternedString(ref s) => (**s).clone(),
+            CellValue::InternedString(ref s) => crate::runtime::interner::str(*s).to_string(),
             CellValue::Duration(d) => format!("Duration({})", d.as_millis()),
             CellValue::Process(_) => String::from("Process"),
             CellValue::File(_) => String::from("File"),

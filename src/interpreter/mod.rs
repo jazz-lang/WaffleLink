@@ -100,11 +100,11 @@ impl Runtime {
         }
         let (return_value, top_context): (Result<Value, Value>, bool) = loop {
             let ins = {
-                let block = unsafe { context.get().code.get_unchecked(bindex) };
-                unsafe { block.instructions.get_unchecked(index) }
+                let block = &context.code[bindex];
+                block.instructions[index]
             };
             index += 1;
-            match *ins {
+            match ins {
                 Instruction::LoadStack(dest, ss0) => {
                     let value = context
                         .stack
@@ -118,6 +118,7 @@ impl Runtime {
                     context.stack[ss0 as usize] = value;
                 }
                 Instruction::Return(value) => {
+                    println!("REEETURN!");
                     let value = if let Some(value) = value {
                         context.get_register(value)
                     } else {
@@ -798,18 +799,18 @@ impl Runtime {
                             self.state.module_prototype.as_cell(),
                         ),
                     ));
-                    context.set_register(to,module);
+                    context.set_register(to, module);
                 }
                 Instruction::LoadThis(to) => {
                     let this = context.this;
-                    context.set_register(to,this);
+                    context.set_register(to, this);
                 }
                 Instruction::SetThis(x) => {
                     let new_this = context.get_register(x);
                     context.this = new_this;
                 }
 
-                _ => unimplemented!(),
+                x => panic!("{:?}", x),
             }
         };
         let ret = return_value?;
