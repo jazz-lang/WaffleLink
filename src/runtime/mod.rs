@@ -2,13 +2,13 @@ pub mod cell;
 pub mod channel;
 pub mod config;
 pub mod interner;
+pub mod io_functions;
 pub mod module;
 pub mod process;
 pub mod process_functions;
 pub mod scheduler;
 pub mod state;
 pub mod value;
-
 use state::*;
 
 lazy_static::lazy_static!(
@@ -21,9 +21,16 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
-        Self {
+        let rt = Self {
             state: State::new(config::Config::default()),
-        }
+        };
+        rt.initialize_builtins();
+        rt
+    }
+
+    pub fn initialize_builtins(&self) {
+        process_functions::initialize_process_prototype(&self.state);
+        io_functions::initialize_io(&self.state);
     }
 
     pub fn start_pools(&self) {

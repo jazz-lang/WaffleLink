@@ -222,4 +222,7 @@ pub trait HeapTrait {
 
     fn trace_process(&mut self, proc: &Arc<crate::runtime::process::Process>);
     fn set_proc(&mut self, _proc: Arc<crate::runtime::process::Process>) {}
+    fn disable(&mut self);
+    fn enable(&mut self);
+    fn is_enabled(&self) -> bool;
 }

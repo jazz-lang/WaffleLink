@@ -2,8 +2,6 @@
 /// internally we want a single exit point for a function. In this pass, we
 /// create a return sink (a block), and rewrite all the Return instruction into
 /// a Branch with return values.
-///
-/// NOTE: This pass should run after register allocation.
 pub struct RetSink;
 use super::*;
 use crate::runtime::cell::Function;

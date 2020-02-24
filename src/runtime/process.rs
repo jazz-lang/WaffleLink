@@ -365,7 +365,21 @@ impl Process {
 
     pub fn do_gc(this: &Arc<Process>) {
         let local_data = this.local_data_mut();
-        local_data.heap.collect_garbage(this);
+        let _ = local_data.heap.collect_garbage(this);
+    }
+
+    pub fn gc_enable(&self) {
+        let local_data = self.local_data_mut();
+        local_data.heap.enable();
+    }
+
+    pub fn gc_disable(&self) {
+        let local_data = self.local_data_mut();
+        local_data.heap.disable();
+    }
+
+    pub fn gc_is_enabled(&self) -> bool {
+        self.local_data().heap.is_enabled()
     }
 
     pub fn allocate_string(this: &Arc<Process>, state: &RcState, string: &str) -> Value {

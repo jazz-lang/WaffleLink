@@ -38,7 +38,7 @@ macro_rules! waffle_asm {
                 i += 1;
                 let mut code = vec![];
                 waffle_asm!(@ins code => $($rest)*);
-                let mut bb = waffle::bytecode::basicblock::BasicBlock {
+                let bb = waffle::bytecode::basicblock::BasicBlock {
                     instructions: code,
                     index: i
                 };
@@ -62,55 +62,59 @@ macro_rules! waffle_asm {
 
     (@ins $bcode: expr => load_int $r0: expr, $i: expr; $($rest: tt)*) => {
         $bcode.push(Instruction::LoadInt($r0 as u16,$i as i32));
-        waffle_asm!(@ins $bcode => $($rest: tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => add $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Binary(BinOp::Add,$r0,$r1,$r2));
-        waffle_asm!(@ins $bcode => $($rest: tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => sub $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Binary(BinOp::Sub,$r0,$r1,$r2));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
     };
     (@ins $bcode: expr => mul $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Binary(BinOp::Mul,$r0,$r1,$r2));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
     };
     (@ins $bcode: expr => div $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Binary(BinOp::Div,$r0,$r1,$r2));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
     };
     (@ins $bcode: expr => cmp $cmp_op: ident $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Binary(BinOp::$cmp_op,$r0,$r1,$r2));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
     };
     (@ins $bcode: expr => call $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Call($r0,$r1,$r2));
-        waffle_asm!(@ins $bcode => $($rest: tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => tail_call $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::TailCall($r0,$r1,$r2));
-        waffle_asm!(@ins $bcode => $($rest: tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => virtcall $r0: expr,$r1: expr,$r2: expr,$r3: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::VirtCall($r0,$r1,$r2,$r3));
-        waffle_asm!(@ins $bcode => $($rest: tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => new $r0: expr,$r1: expr,$r2: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::New($r0,$r1,$r2));
-        waffle_asm!(@ins $bcode => $($rest:tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr => load_by_id $r0: expr,$r1: expr,$id: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::LoadById($r0,$r1,$id));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
+    };
+    (@ins $bcode: expr => load_static_by_id $r0: expr,$id: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::LoadStaticById($r0,$id));
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr =>  move $r0: expr,$r1: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Move($r0,$r1));
-        waffle_asm!(@ins $bcode =>  $($rest: tt)*);
+        waffle_asm!(@ins $bcode =>  $($rest)*);
     };
     (@ins $bcode: expr => retv $r0: expr;$($rest: tt)*) => {
         $bcode.push(Instruction::Return(Some($r0)));
-        waffle_asm!(@ins $bcode => $($rest:tt)*);
+        waffle_asm!(@ins $bcode => $($rest)*);
     };
     (@ins $bcode: expr =>) => {
 
@@ -118,7 +122,7 @@ macro_rules! waffle_asm {
 }
 
 fn main() {
-    //simple_logger::init().unwrap();
+    simple_logger::init().unwrap();
     let x = std::time::Instant::now();
     /*let mut m = Arc::new(Module::new("Main"));
     let code = vec![
@@ -151,19 +155,25 @@ fn main() {
         md: Default::default(),
     };
     let value = RUNTIME.state.allocate_fn(func);*/
-        let result = waffle_asm! {
-            const "Hello!";
+    let result = waffle_asm! {
+        const "Hello!";
+        const "io";
+        const "writeln";
 
-            code_start:
-                func main: 0 => {
-                    0 => {
-                        load_int 0,0;
-                        retv 0;
-                    }
+        code_start:
+            func main: 0 => {
+                0 => {
+                    load_static_by_id 0,1;
+                    retv 0;
                 }
-        };
-    let (mut m,functions) = result;
-    let proc = Process::from_function(functions.get("main").map(|x| *x).unwrap(), &config::Config::default()).unwrap();
+            }
+    };
+    let (mut m, functions) = result;
+    let proc = Process::from_function(
+        functions.get("main").map(|x| *x).unwrap(),
+        &config::Config::default(),
+    )
+    .unwrap();
     RUNTIME.schedule_main_process(proc.clone());
     RUNTIME.start_pools();
 

@@ -54,6 +54,7 @@ pub struct GenerationalHeap {
     intermediate_set: remember_set::RemembrSet,
     tmp_space: Space,
     old2intermediate_set: remember_set::RemembrSet,
+    disabled: bool,
 }
 
 impl GenerationalHeap {
@@ -69,6 +70,7 @@ impl GenerationalHeap {
             tmp_space: Space::empty(),
             rootset: Vec::new(),
             old2intermediate_set: remember_set::RemembrSet::new(),
+            disabled: false,
         }
     }
 
@@ -496,10 +498,11 @@ use super::HeapTrait;
 
 impl HeapTrait for GenerationalHeap {
     fn allocate(&mut self, proc: &Arc<Process>, _: super::GCType, cell: Cell) -> CellPointer {
-        if self.should_collect()
+        if (self.should_collect()
             || !self
                 .nursery_space
-                .may_allocate_in_current(std::mem::size_of::<Cell>())
+                .may_allocate_in_current(std::mem::size_of::<Cell>()))
+            && !self.disabled
         {
             self.scavenge();
             if self.needs_gc == GenerationalGCType::Intermediate {
@@ -530,13 +533,15 @@ impl HeapTrait for GenerationalHeap {
         &mut self,
         proc: &Arc<crate::runtime::process::Process>,
     ) -> Result<(), bool> {
-        self.trace_process(proc);
-        self.garbage_collect_(
-            proc,
-            self.needs_gc == GenerationalGCType::Young
-                || self.needs_gc == GenerationalGCType::None
-                || self.needs_gc == GenerationalGCType::Intermediate,
-        );
+        if !self.disabled {
+            self.trace_process(proc);
+            self.garbage_collect_(
+                proc,
+                self.needs_gc == GenerationalGCType::Young
+                    || self.needs_gc == GenerationalGCType::None
+                    || self.needs_gc == GenerationalGCType::Intermediate,
+            );
+        }
         Ok(())
     }
 
@@ -553,5 +558,16 @@ impl HeapTrait for GenerationalHeap {
 
     fn field_write_barrier(&mut self, parent: CellPointer, child: Value) {
         Self::field_write_barrier_(self, parent, child)
+    }
+
+    fn disable(&mut self) {
+        self.disabled = true;
+    }
+
+    fn enable(&mut self) {
+        self.disabled = false;
+    }
+    fn is_enabled(&self) -> bool {
+        !self.disabled
     }
 }

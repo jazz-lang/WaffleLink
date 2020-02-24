@@ -119,6 +119,10 @@ impl State {
         })
     }
 
+    pub fn allocate(&self, cell: Cell) -> Value {
+        Value::from(self.perm_heap.lock().allocate(cell))
+    }
+
     pub fn allocate_fn(&self, fun: Function) -> Value {
         Value::from(self.perm_heap.lock().allocate(Cell::with_prototype(
             CellValue::Function(Arc::new(fun)),

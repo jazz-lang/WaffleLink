@@ -73,6 +73,7 @@ pub struct IncrementalCollector {
     interval_ratio: usize,
     major_old_threshold: usize,
     process: Option<Arc<Process>>,
+    disabled: bool,
 }
 
 impl IncrementalCollector {
@@ -375,6 +376,7 @@ impl IncrementalCollector {
             major_old_threshold: 0,
             process: None,
             atomic_grey: LinkedList::new(),
+            disabled: false,
         }
     }
 }
@@ -399,7 +401,7 @@ impl HeapTrait for IncrementalCollector {
         if let None = self.process {
             self.process = Some(proc.clone());
         }
-        if self.threshold < self.live {
+        if self.threshold < self.live && !self.disabled {
             self.minor();
         }
 
@@ -409,7 +411,7 @@ impl HeapTrait for IncrementalCollector {
             .allocator
             .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
-        if ptr.is_null() {
+        if ptr.is_null() && !self.disabled {
             self.minor();
             ptr = self
                 .allocator
@@ -430,6 +432,14 @@ impl HeapTrait for IncrementalCollector {
                         .to_mut_ptr::<Cell>();
                 }
             }
+        } else if ptr.is_null() && self.disabled {
+            self.allocator
+                .space
+                .add_page(self.allocator.space.page_size);
+            ptr = self
+                .allocator
+                .allocate(std::mem::size_of::<Cell>(), &mut false)
+                .to_mut_ptr::<Cell>();
         }
         unsafe {
             ptr.write(cell);
@@ -515,5 +525,16 @@ impl HeapTrait for IncrementalCollector {
 
     fn set_proc(&mut self, proc: Arc<crate::runtime::process::Process>) {
         self.process = Some(proc);
+    }
+
+    fn disable(&mut self) {
+        self.disabled = true;
+    }
+    fn enable(&mut self) {
+        self.disabled = false;
+    }
+
+    fn is_enabled(&self) -> bool {
+        !self.disabled
     }
 }
