@@ -16,7 +16,7 @@
 */
 
 pub mod context;
-
+pub mod tracing_interpreter;
 use crate::bytecode::instruction::*;
 use crate::heap::*;
 use crate::runtime::*;
@@ -955,7 +955,7 @@ pub fn runtime_panic(process: &Arc<Process>, message: &Value) {
     let mut buffer = String::new();
     for ctx in process.local_data().context.contexts() {
         frames.push(format!(
-            "\"{}\" in {}",
+            "in module \"{}\": {}",
             ctx.module.name,
             ctx.function.function_value().unwrap().name
         ));

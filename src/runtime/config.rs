@@ -53,6 +53,18 @@ pub struct Config {
         default_value = "generational mark-sweep"
     )]
     pub gc: crate::heap::GCVariant,
+    #[structopt(
+        long = "jit-fn-min-hotness",
+        help = "Minimal number of calls before JITing function",
+        default_value = "10"
+    )]
+    pub min_hotness: usize,
+    #[structopt(
+        long = "jit-loop-min-hotness",
+        help = "Minimal number of loop cycles before JITing loop",
+        default_value = "100"
+    )]
+    pub loop_min_hotness: usize,
 }
 
 impl Default for Config {

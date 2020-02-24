@@ -18,6 +18,7 @@
 #[macro_use]
 extern crate intrusive_collections;
 
+pub mod baseline;
 pub mod bytecode;
 pub mod heap;
 pub mod interpreter;
