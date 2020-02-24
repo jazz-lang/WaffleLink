@@ -1,3 +1,8 @@
+/*
+ *   Copyright (c) 2020
+ *   All rights reserved.
+ */
+
 pub mod cell;
 pub mod channel;
 pub mod config;
@@ -34,7 +39,6 @@ impl Runtime {
     }
 
     pub fn start_pools(&self) {
-        //println!("IO!");
         self.state.scheduler.blocking_pool.start();
         let pguard = self.state.scheduler.primary_pool.start_main();
         let state = self.state.clone();

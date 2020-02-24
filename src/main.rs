@@ -1,3 +1,20 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use cell::*;
 use instruction::*;
 use module::*;
@@ -116,6 +133,14 @@ macro_rules! waffle_asm {
         $bcode.push(Instruction::Return(Some($r0)));
         waffle_asm!(@ins $bcode => $($rest)*);
     };
+    (@ins $bcode: expr => load_const $r0: expr, $id: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::LoadConst($r0,$id));
+        waffle_asm!(@ins $bcode => $($rest)*);
+    };
+    (@ins $bcode: expr => push $r0: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::Push($r0));
+        waffle_asm!(@ins $bcode => $($rest)*);
+    };
     (@ins $bcode: expr =>) => {
 
     }
@@ -161,9 +186,13 @@ fn main() {
         c "writeln";
 
         code_start:
-            func main: 0 => {
-                0 => {
-                    load_static_by_id 0,1;
+            func main: 0 /* argc*/ => {
+                0 /* entry block */=> {
+                    load_static_by_id 0,1; /* load static io object */
+                    load_by_id 1,0,2; /* load 'writeln' from 'io' object */
+                    load_const 0,0; /* load 'Hello!' string */
+                    push 0; /* push 'Hello!' in %r0 to the stack */
+                    call 0,1,1; /* invoke 'writeln' */
                     retv 0;
                 }
             }

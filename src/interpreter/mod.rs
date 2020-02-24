@@ -1,3 +1,20 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 pub mod context;
 
 use crate::bytecode::instruction::*;
@@ -118,7 +135,6 @@ impl Runtime {
                     context.stack[ss0 as usize] = value;
                 }
                 Instruction::Return(value) => {
-                    println!("REEETURN!");
                     let value = if let Some(value) = value {
                         context.get_register(value)
                     } else {
@@ -148,6 +164,10 @@ impl Runtime {
                 Instruction::Move(to, from) => {
                     let v0 = context.get_register(from);
                     context.set_register(to, v0);
+                }
+                Instruction::LoadConst(r0, c) => {
+                    let global: Value = context.module.get_global_at(c as _);
+                    context.set_register(r0, global);
                 }
                 Instruction::LoadTrue(r) => context.set_register(r, Value::from(VTag::True)),
                 Instruction::LoadFalse(r) => context.set_register(r, Value::from(VTag::False)),
@@ -207,6 +227,28 @@ impl Runtime {
                             bindex
                         );
                     }
+                }
+                Instruction::LoadStaticById(r0, id) => {
+                    let global = context.module.get_global_at(id as _);
+                    if global.is_null_or_undefined() {
+                        panic!("Null or undefined id");
+                    }
+                    let id = global.to_string();
+                    let statics = self.state.static_variables.lock();
+                    let value = statics.get(&id);
+                    if let None = value {
+                        throw_error_message!(
+                            self,
+                            process,
+                            &format!("Static variable '{}' not found", id),
+                            context,
+                            index,
+                            bindex
+                        );
+                    } else if let Some(var) = value {
+                        context.set_register(r0, *var);
+                    }
+                    drop(statics);
                 }
                 Instruction::StoreById(object, value, id) => {
                     let global = context.module.get_global_at(id as _);
