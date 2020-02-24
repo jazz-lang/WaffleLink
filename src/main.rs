@@ -12,7 +12,7 @@ use waffle::util::arc::Arc;
 macro_rules! waffle_asm {
     (
         $(
-            const $value: expr;
+            c $value: expr;
         )*
         code_start:
         $(
@@ -122,7 +122,7 @@ macro_rules! waffle_asm {
 }
 
 fn main() {
-    simple_logger::init().unwrap();
+    //simple_logger::init().unwrap();
     let x = std::time::Instant::now();
     /*let mut m = Arc::new(Module::new("Main"));
     let code = vec![
@@ -156,9 +156,9 @@ fn main() {
     };
     let value = RUNTIME.state.allocate_fn(func);*/
     let result = waffle_asm! {
-        const "Hello!";
-        const "io";
-        const "writeln";
+        c "Hello!";
+        c "io";
+        c "writeln";
 
         code_start:
             func main: 0 => {

@@ -34,6 +34,7 @@ impl Runtime {
     }
 
     pub fn start_pools(&self) {
+        //println!("IO!");
         self.state.scheduler.blocking_pool.start();
         let pguard = self.state.scheduler.primary_pool.start_main();
         let state = self.state.clone();
