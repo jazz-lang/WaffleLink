@@ -73,7 +73,12 @@ macro_rules! waffle_asm {
 
             let value = RUNTIME.state.allocate_fn(func);
             fn_map.insert(stringify!($func_name),value);
+            module.globals.push(value);
         )*
+
+        for (i,global) in module.globals.iter().enumerate() {
+            println!("Global {}: {}",i,global.to_string());
+        }
         (module,fn_map)
     }};
 
@@ -141,6 +146,18 @@ macro_rules! waffle_asm {
         $bcode.push(Instruction::Push($r0));
         waffle_asm!(@ins $bcode => $($rest)*);
     };
+    (@ins $bcode: expr => pop $r0: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::Pop($r0));
+        waffle_asm!(@ins $bcode => $($rest)*);
+    };
+    (@ins $bcode: expr => conditional_branch $r0: expr,$x: expr,$y: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::ConditionalBranch($r0,$x,$y));
+        waffle_asm!(@ins $bcode => $($rest)*);
+    };
+    (@ins $bcode: expr => branch $t: expr;$($rest:tt)*) => {
+        $bcode.push(Instruction::Branch($t));
+        waffle_asm!(@ins $bcode => $($rest)*);
+    };
     (@ins $bcode: expr =>) => {
 
     }
@@ -181,17 +198,41 @@ fn main() {
     };
     let value = RUNTIME.state.allocate_fn(func);*/
     let result = waffle_asm! {
-        c "Hello!";
         c "io";
         c "writeln";
 
         code_start:
+            func fac: 1 => {
+                0 => {
+                    pop 2;
+                    load_int 1,2;
+                    cmp Less 0,2,1;
+                    conditional_branch 0,1,2;
+                }
+                1 => {
+                    load_int 2,1;
+                    retv 2;
+                }
+                2 => {
+                    load_int 0,1;
+                    sub 0,2,0;
+                    push 0;
+                    load_const 0,2;
+                    tail_call 0,0,1;
+                    mul 0,0,2;
+                    retv 0;
+                }
+            }
+
             func main: 0 /* argc*/ => {
                 0 /* entry block */=> {
-                    load_static_by_id 0,1; /* load static io object */
-                    load_by_id 1,0,2; /* load 'writeln' from 'io' object */
-                    load_const 0,0; /* load 'Hello!' string */
-                    push 0; /* push 'Hello!' in %r0 to the stack */
+                    load_const 0,2;
+                    load_int 1,6;
+                    push 1;
+                    call 0,0,1; /* invoke `fac` function */
+                    push 0;
+                    load_static_by_id 0,0; /* load static io object */
+                    load_by_id 1,0,1; /* load 'writeln' from 'io' object */
                     call 0,1,1; /* invoke 'writeln' */
                     retv 0;
                 }

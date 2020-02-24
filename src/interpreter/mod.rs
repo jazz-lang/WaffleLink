@@ -141,14 +141,21 @@ impl Runtime {
                         Value::from(VTag::Null)
                     };
                     self.clear_catch_tables(&context, process);
-                    let top_level;
-                    if context.terminate_upon_return {
-                        top_level = context.parent.is_none();
-                        break (Ok(value), top_level);
-                    }
+                    if !context.in_tail {
+                        let top_level;
+                        if context.terminate_upon_return && !context.in_tail {
+                            top_level = context.parent.is_none();
+                            break (Ok(value), top_level);
+                        }
+                        if let Some(dest) = context.return_register {
+                            if let Some(parent) = context.parent {
+                                parent.get().set_register(dest, value);
+                            }
+                        }
 
-                    if process.pop_context() {
-                        break (Ok(value), true);
+                        if process.pop_context() {
+                            break (Ok(value), true);
+                        }
                     }
                     reset_context!(process, context, index, bindex);
                     safepoint_and_reduce!(self, process, reductions);
@@ -167,6 +174,9 @@ impl Runtime {
                 }
                 Instruction::LoadConst(r0, c) => {
                     let global: Value = context.module.get_global_at(c as _);
+                    if global.is_null_or_undefined() {
+                        panic!("Null or undefined global");
+                    }
                     context.set_register(r0, global);
                 }
                 Instruction::LoadTrue(r) => context.set_register(r, Value::from(VTag::True)),
@@ -364,7 +374,11 @@ impl Runtime {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Cannot invoke '{}' value.", function.to_string()),
+                            &format!(
+                                "Cannot invoke '{}' value. (op {:?})",
+                                function.to_string(),
+                                ins
+                            ),
                             context,
                             index,
                             bindex
@@ -434,20 +448,33 @@ impl Runtime {
                             process.push_context(new_context);
                             enter_context!(process, context, index, bindex);
                         } else {
-                            assert!(
+                            /*assert!(
                                 !process.pop_context(),
                                 "Tail calls cannot be done in global context"
-                            );
-                            let mut new_context = Context::new();
+                            );*/
+                            //process.push_context_ptr(context);
+                            /*let mut prev_ctx = Context::new();
+                            prev_ctx.bindex = bindex;
+                            prev_ctx.index = index;
+                            prev_ctx.registers = context.registers;
+                            prev_ctx.return_register = context.return_register;
+                            prev_ctx.this = context.this;
+                            prev_ctx.code = context.code.clone();
+                            prev_ctx*/
+                            let mut new_context = context;
                             new_context.return_register = Some(dest);
                             new_context.stack = args;
                             new_context.function = cell;
                             new_context.module = function.module.clone();
-                            new_context.n = context.n + 1;
+                            //new_context.n = context.n + 1;
                             new_context.code = function.code.clone();
+                            new_context.index = 0;
+                            new_context.in_tail = true;
+                            new_context.bindex = 0;
                             new_context.terminate_upon_return = false;
-                            process.push_context(new_context);
-                            enter_context!(process, context, index, bindex);
+                            //process.push_context(new_context);
+                            reset_context!(process, context, index, bindex);
+                            //enter_context!(process, context, index, bindex);
                         }
                     }
                 }

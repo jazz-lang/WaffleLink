@@ -38,6 +38,7 @@ pub struct Context {
     pub terminate_upon_return: bool,
     pub return_register: Option<u16>,
     pub n: usize,
+    pub in_tail: bool,
 }
 
 impl Context {
@@ -65,6 +66,7 @@ impl Context {
             function: CellPointer {
                 raw: crate::util::tagged::TaggedPointer::null(),
             },
+            in_tail: false,
             n: 0,
         }
     }

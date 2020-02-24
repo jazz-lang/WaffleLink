@@ -1,19 +1,19 @@
 /*
- *   Copyright (c) 2020 Adel Prokurov
- *   All rights reserved.
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
 
- *   Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
 
- *   http://www.apache.org/licenses/LICENSE-2.0
+*   http://www.apache.org/licenses/LICENSE-2.0
 
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- */
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
 
 use super::cell::*;
 use super::channel::Channel;
@@ -153,12 +153,13 @@ impl Process {
             CellValue::Function(ref function) => {
                 let context = Context {
                     bindex: 0,
+                    in_tail: false,
                     index: 0,
                     code: function.code.clone(),
                     function: value,
                     parent: None,
                     module: function.module.clone(),
-                    registers: [Value::from(VTag::Undefined); 48],
+                    registers: [Value::from(VTag::Undefined); 32],
                     stack: vec![],
                     this: Value::from(VTag::Undefined),
                     return_register: None,
@@ -206,7 +207,8 @@ impl Process {
                 return true;
             }
             unsafe {
-                std::ptr::drop_in_place(old.raw);
+                //std::ptr::drop_in_place(old.raw);
+                let _ = Box::from_raw(old.raw);
             }
             local_data.context = parent;
 
@@ -214,6 +216,26 @@ impl Process {
         } else {
             true
         }
+    }
+    pub fn pop_context_not_drop(&self) -> bool {
+        let local_data = self.local_data_mut();
+        if let Some(parent) = local_data.context.parent.take() {
+            let old = local_data.context;
+            if old.raw.is_null() {
+                return true;
+            }
+            local_data.context = parent;
+
+            false
+        } else {
+            true
+        }
+    }
+    pub fn push_context_ptr(&self, mut context: Ptr<Context>) {
+        let local_data = self.local_data_mut();
+        let target = &mut local_data.context;
+        std::mem::swap(target, &mut context);
+        target.parent = Some(context);
     }
 
     pub fn push_context(&self, context: Context) {
