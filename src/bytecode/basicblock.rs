@@ -17,6 +17,7 @@
 
 use super::instruction::*;
 use std::vec::Vec;
+#[derive(Clone)]
 pub struct BasicBlock {
     pub index: usize,
 
