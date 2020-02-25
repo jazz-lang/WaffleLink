@@ -119,6 +119,9 @@ impl Instruction {
             };
         }
         match self {
+            Instruction::LoadStaticById(r, _) => {
+                def.insert(vreg!(*r));
+            }
             Instruction::Move(to, from) => {
                 def.insert(vreg!(*to));
                 uce.insert(vreg!(*from));
