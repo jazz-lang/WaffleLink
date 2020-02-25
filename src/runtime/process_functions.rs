@@ -1,19 +1,19 @@
 /*
- *   Copyright (c) 2020 Adel Prokurov
- *   All rights reserved.
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
 
- *   Licensed under the Apache License, Version 2.0 (the "License");
- *   you may not use this file except in compliance with the License.
- *   You may obtain a copy of the License at
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
 
- *   http://www.apache.org/licenses/LICENSE-2.0
+*   http://www.apache.org/licenses/LICENSE-2.0
 
- *   Unless required by applicable law or agreed to in writing, software
- *   distributed under the License is distributed on an "AS IS" BASIS,
- *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *   See the License for the specific language governing permissions and
- *   limitations under the License.
- */
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
 
 use super::cell::*;
 use super::process::*;
@@ -197,6 +197,10 @@ pub fn initialize_process_prototype(state: &RcState) {
     let name = Arc::new("has_messages".to_owned());
     let has_messages = state.allocate_native_fn_with_name(has_messages, "has_messages", 0);
     proc_prototype.add_attribute_without_barrier(&name, Value::from(has_messages));
+    state
+        .static_variables
+        .lock()
+        .insert("Process".to_owned(), state.process_prototype);
 }
 
 /// Attempts to reschedule the given process after it was sent a message.
