@@ -36,7 +36,7 @@ impl FreeListAllocator {
         if self.space.may_allocate_in_current(size) {
             log::trace!("memory for allocation found in current page");
             // if it possible to allocate in current page we should do it
-            return self.space.allocate(size, &mut false);
+            return self.space.fast_allocate(size, &mut false);
         }
         log::trace!("no memory in current page, trying to use freelist");
         // We cannot allocate in current page, let's try to find free slot.

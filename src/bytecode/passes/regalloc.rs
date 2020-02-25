@@ -262,7 +262,7 @@ impl super::BytecodePass for RegisterAllocationPass {
         for (i, block) in f.iter().enumerate() {
             self.block(i, TypedIxVec::from_vec(block.instructions.clone()));
         }
-        let algo = ra::RegAllocAlgorithm::Backtracking;
+        let algo = ra::RegAllocAlgorithm::LinearScan;
         let result = ra::allocate_registers(self, algo, &make_universe()).unwrap();
         f.clear();
         self.update_from_alloc(result);

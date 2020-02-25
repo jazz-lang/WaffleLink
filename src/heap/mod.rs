@@ -148,6 +148,7 @@ pub trait HeapTrait {
         if !object.is_cell() {
             return object;
         }
+        //self.disable();
 
         let to_copy = object.as_cell();
         if to_copy.is_permanent() {
@@ -210,7 +211,9 @@ pub trait HeapTrait {
             copy.set_attributes_map(map_copy);
         }
 
-        Value::from(self.allocate(proc, GCType::Young, copy))
+        let result = Value::from(self.allocate(proc, GCType::Young, copy));
+        //self.enable();
+        result
     }
     /// Collect garbage.
     fn collect_garbage(&mut self, proc: &Arc<crate::runtime::process::Process>)

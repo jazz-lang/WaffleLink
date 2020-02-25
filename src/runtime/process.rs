@@ -145,7 +145,11 @@ impl Process {
         config: &super::config::Config,
     ) -> Result<Arc<Self>, String> {
         if value.is_cell() == false {
-            return Err("Expected function to Process.spawn".to_owned());
+            return Err(format!(
+                "Expected function to Process.spawn,found '{}'",
+                value.to_string()
+            )
+            .to_owned());
         };
 
         let value = value.as_cell();
@@ -169,7 +173,13 @@ impl Process {
 
                 Ok(Self::with_rc(context, config))
             }
-            _ => return Err("Expected function to Process.spawn".to_owned()),
+            _ => {
+                return Err(format!(
+                    "Expected function to Process.spawn,found '{}'",
+                    value.to_string()
+                )
+                .to_owned())
+            }
         }
     }
 
@@ -346,8 +356,9 @@ impl Process {
         if this.is_terminated() {
             return;
         }
-
+        local_data.heap.disable();
         channel.send(local_data.heap.copy_object(this, message_to_copy));
+        local_data.heap.enable();
     }
 
     pub fn send_message_from_self(&self, message: Value) {

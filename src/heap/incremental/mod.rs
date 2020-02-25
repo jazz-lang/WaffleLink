@@ -429,24 +429,35 @@ impl HeapTrait for IncrementalCollector {
             .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
         if ptr.is_null() && !self.disabled {
+            log::trace!("Allocation failed,minor GC");
             self.minor();
             ptr = self
                 .allocator
                 .allocate(std::mem::size_of::<Cell>(), &mut false)
                 .to_mut_ptr::<Cell>();
             if ptr.is_null() {
+                log::trace!("Allocation failed,adding memory page");
+                self.allocator
+                    .space
+                    .add_page(self.allocator.space.page_size);
                 ptr = self
                     .allocator
+                    .space
                     .allocate(std::mem::size_of::<Cell>(), &mut false)
                     .to_mut_ptr::<Cell>();
                 if ptr.is_null() {
+                    log::trace!("Allocation failed again,adding memory page");
                     self.allocator
                         .space
                         .add_page(self.allocator.space.page_size);
                     ptr = self
                         .allocator
+                        .space
                         .allocate(std::mem::size_of::<Cell>(), &mut false)
                         .to_mut_ptr::<Cell>();
+                    if ptr.is_null() {
+                        panic!();
+                    }
                 }
             }
         } else if ptr.is_null() && self.disabled {
@@ -458,6 +469,7 @@ impl HeapTrait for IncrementalCollector {
                 .allocate(std::mem::size_of::<Cell>(), &mut false)
                 .to_mut_ptr::<Cell>();
         }
+        assert!(!ptr.is_null());
         unsafe {
             ptr.write(cell);
         }
