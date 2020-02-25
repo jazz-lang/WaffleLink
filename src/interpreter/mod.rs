@@ -428,6 +428,11 @@ impl Runtime {
                         match result {
                             Return::Value(value) => context.set_register(dest, value),
                             Return::SuspendProcess => {
+                                context.index = index - 1;
+                                context.bindex = bindex;
+                                for arg in args.iter().rev() {
+                                    context.stack.push(*arg);
+                                }
                                 return Ok(Value::from(VTag::Null));
                             }
                             Return::YieldProcess => {
@@ -534,6 +539,11 @@ impl Runtime {
                         match result {
                             Return::Value(value) => context.set_register(dest, value),
                             Return::SuspendProcess => {
+                                context.index = index - 1;
+                                context.bindex = bindex;
+                                for arg in args.iter().rev() {
+                                    context.stack.push(*arg);
+                                }
                                 return Ok(Value::from(VTag::Null));
                             }
                             Return::YieldProcess => {
@@ -554,6 +564,17 @@ impl Runtime {
                         process.push_context(new_context);
                         enter_context!(process, context, index, bindex);
                     }
+                }
+                Instruction::LoadUpvalue(r, slot) => {
+                    let value = context
+                        .function
+                        .function_value()
+                        .unwrap()
+                        .upvalues
+                        .get(slot as usize)
+                        .map(|x| *x)
+                        .unwrap();
+                    context.set_register(r, value);
                 }
                 Instruction::Gc => match process.local_data_mut().heap.collect_garbage(process) {
                     Ok(_) => (),
@@ -668,6 +689,11 @@ impl Runtime {
                         match result {
                             Return::Value(value) => context.set_register(dest, value),
                             Return::SuspendProcess => {
+                                context.index = index - 1;
+                                context.bindex = bindex;
+                                for arg in args.iter().rev() {
+                                    context.stack.push(*arg);
+                                }
                                 return Ok(Value::from(VTag::Null));
                             }
                             Return::YieldProcess => {

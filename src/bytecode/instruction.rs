@@ -126,6 +126,12 @@ impl Instruction {
                 def.insert(vreg!(*to));
                 uce.insert(vreg!(*from));
             }
+            Instruction::LoadUpvalue(r, _) => {
+                def.insert(vreg!(*r));
+            }
+            Instruction::StoreUpvalue(r, _) => {
+                uce.insert(vreg!(*r));
+            }
             Instruction::LoadById(x, y, _) | Instruction::LoadByIndex(x, y, _) => {
                 def.insert(vreg!(*x));
                 uce.insert(vreg!(*y));
@@ -195,6 +201,7 @@ impl Instruction {
                 uce.insert(vreg!(*r1));
                 uce.insert(vreg!(*r2));
             }
+            Instruction::LoadTrue(r) | Instruction::LoadFalse(r) => def.insert(vreg!(*r)),
             Instruction::Unary(_, r0, r1) => {
                 def.insert(vreg!(*r0));
                 uce.insert(vreg!(*r1));
@@ -287,6 +294,12 @@ impl Instruction {
                 if let Some(r0) = r0 {
                     map!(use r0);
                 }
+            }
+            Instruction::LoadUpvalue(r, _) => {
+                map!(def r);
+            }
+            Instruction::StoreUpvalue(r, _) => {
+                map!(use r);
             }
             Instruction::MakeEnv(r0, _) => {
                 map!(use r0);

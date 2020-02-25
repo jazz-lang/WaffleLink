@@ -49,8 +49,9 @@ pub extern "C" fn send(
     let process = if this == state.process_prototype {
         process.clone()
     } else {
-        this.process_value()
-            .map_err(|err: String| Process::allocate_string(process, state, &err))?
+        this.process_value().map_err(|err: String| {
+            Process::allocate_string(process, state, &format!("in send: {}", err))
+        })?
     };
     let receiver = arguments[0]
         .process_value()
@@ -93,6 +94,59 @@ pub extern "C" fn receive(
     }
 }
 
+pub extern "C" fn receive_or_wait(
+    state: &RcState,
+    process: &Arc<Process>,
+    this: Value,
+    arguments: &[Value],
+) -> Result<Return, Value> {
+    let process = if this == state.process_prototype {
+        process.clone()
+    } else {
+        this.process_value()
+            .map_err(|err: String| Process::allocate_string(process, state, &err))?
+    };
+    if let Some(msg) = process.receive_message() {
+        process.no_longer_waiting_for_message();
+        return Ok(Return::Value(msg));
+    }
+    process.waiting_for_message();
+    if let Some(time) = arguments.get(0) {
+        if time.is_number() {
+            let time = time.to_number();
+            if time == std::f64::INFINITY || time == std::f64::NEG_INFINITY || time.is_nan() {
+                return Err(Process::allocate_string(
+                    &process,
+                    state,
+                    "Trying to sleep for +-inf or NAN time",
+                ));
+            }
+            state
+                .timeout_worker
+                .suspend(process.clone(), std::time::Duration::from_millis(time as _));
+        } else if time.is_cell() {
+            match time.as_cell().get().value {
+                CellValue::Duration(ref d) => {
+                    state.timeout_worker.suspend(process.clone(), d.clone())
+                }
+                _ => {
+                    return Err(Process::allocate_string(
+                        &process,
+                        state,
+                        "Expected duration in `wait_for_message`",
+                    ))
+                }
+            }
+        }
+    } else {
+        process.suspend_without_timeout();
+    }
+
+    if process.has_messages() {
+        attempt_to_reschedule_process(state, &process);
+    }
+    Ok(Return::SuspendProcess)
+}
 pub extern "C" fn wait_for_message(
     state: &RcState,
     process: &Arc<Process>,
@@ -140,6 +194,7 @@ pub extern "C" fn wait_for_message(
     if process.has_messages() {
         attempt_to_reschedule_process(state, &process);
     }
+    println!("Suspend...");
     Ok(Return::SuspendProcess)
 }
 
@@ -197,6 +252,9 @@ pub fn initialize_process_prototype(state: &RcState) {
     let name = Arc::new("has_messages".to_owned());
     let has_messages = state.allocate_native_fn_with_name(has_messages, "has_messages", 0);
     proc_prototype.add_attribute_without_barrier(&name, Value::from(has_messages));
+    let name = Arc::new("recv".to_owned());
+    let recv = state.allocate_native_fn_with_name(receive_or_wait, "recv", -1);
+    proc_prototype.add_attribute_without_barrier(&name, Value::from(recv));
     state
         .static_variables
         .lock()
