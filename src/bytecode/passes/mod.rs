@@ -23,7 +23,7 @@ pub mod peephole;
 pub mod regalloc;
 pub mod ret_sink;
 pub mod simplify;
-use crate::runtime::cell::Function;
+
 pub trait BytecodePass {
-    fn execute(&mut self, f: &mut Arc<Function>);
+    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>);
 }

@@ -258,14 +258,14 @@ fn make_universe() -> RealRegUniverse {
 use crate::runtime::cell::*;
 use crate::util::arc::Arc;
 impl super::BytecodePass for RegisterAllocationPass {
-    fn execute(&mut self, f: &mut Arc<Function>) {
-        for (i, block) in f.code.iter().enumerate() {
+    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
+        for (i, block) in f.iter().enumerate() {
             self.block(i, TypedIxVec::from_vec(block.instructions.clone()));
         }
         let algo = ra::RegAllocAlgorithm::LinearScan;
         let result = ra::allocate_registers(self, algo, &make_universe()).unwrap();
-        f.code.clear();
+        f.clear();
         self.update_from_alloc(result);
-        *f.code = self.to_basic_blocks();
+        **f = self.to_basic_blocks();
     }
 }
