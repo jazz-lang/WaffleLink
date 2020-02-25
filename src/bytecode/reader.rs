@@ -328,6 +328,12 @@ impl<'a> BytecodeReader<'a> {
                                 InstructionByte::LOAD_CURRENT_MODULE => {
                                     Instruction::LoadCurrentModule(self.read_u8() as _)
                                 }
+                                InstructionByte::LOAD_UPVALUE => {
+                                    Instruction::LoadUpvalue(self.read_u8() as _, self.read_u16())
+                                }
+                                InstructionByte::STORE_UPVALUE => {
+                                    Instruction::StoreUpvalue(self.read_u8() as _, self.read_u16())
+                                }
                                 _ => unreachable!("Unknown opcode {:x}", op),
                             };
                             block.instructions.push(ins);

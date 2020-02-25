@@ -280,6 +280,16 @@ impl BytecodeWriter {
                 self.write(LOAD_CURRENT_MODULE);
                 self.write(r as u8);
             }
+            Instruction::StoreUpvalue(r, s) => {
+                self.write(STORE_UPVALUE);
+                self.write(r as u8);
+                self.write(s);
+            }
+            Instruction::LoadUpvalue(r, s) => {
+                self.write(LOAD_UPVALUE);
+                self.write(r as u8);
+                self.write(s);
+            }
             _ => unimplemented!(),
         }
     }

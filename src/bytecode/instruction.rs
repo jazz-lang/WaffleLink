@@ -31,6 +31,8 @@ pub enum Instruction {
     LoadInt(u16, i32),
     LoadNumber(u16, u64),
     LoadTrue(u16),
+    LoadUpvalue(u16, u16),
+    StoreUpvalue(u16, u16),
     LoadFalse(u16),
     LoadById(u16, u16, u32),
     StoreById(u16, u16, u32),
@@ -400,4 +402,6 @@ pub mod InstructionByte {
     pub const LOAD_THIS: u8 = 0x35;
     pub const SET_THIS: u8 = 0x36;
     pub const LOAD_CURRENT_MODULE: u8 = 0x37;
+    pub const LOAD_UPVALUE: u8 = 0x38;
+    pub const STORE_UPVALUE: u8 = 0x39;
 }
