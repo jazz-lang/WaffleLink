@@ -24,7 +24,7 @@ use waffle::bytecode::*;
 use waffle::heap::cms::atomic_list::AtomicList;
 use waffle::runtime::*;
 use waffle::util::arc::Arc;
-
+/*
 #[allow(unused_macros)]
 macro_rules! waffle_asm {
     (
@@ -223,4 +223,25 @@ fn main() {
         e.as_micros(),
         e.as_millis()
     )
+}
+*/
+
+use reader::*;
+use std::fs::OpenOptions;
+use std::io::Read;
+use waffle::runtime::config::Config;
+fn main() {
+    simple_logger::init().unwrap();
+    let c = Config::default();
+
+    let contents = std::fs::read(&c.main_name).expect("ERROR!");
+    let mut reader = BytecodeReader {
+        bytes: &contents,
+        pc: 0,
+    };
+
+    let module = reader.read_module();
+    let proc = Process::from_function(module.main_fn, &c).unwrap();
+    RUNTIME.schedule_main_process(proc.clone());
+    RUNTIME.start_pools();
 }

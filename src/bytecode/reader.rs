@@ -27,7 +27,8 @@ use runtime::RUNTIME;
 use std::io::Cursor;
 
 pub struct BytecodeReader<'a> {
-    pub bytes: Cursor<&'a [u8]>,
+    pub bytes: &'a [u8],
+    pub pc: usize,
 }
 
 pub const TAG_STRING: u8 = 0;
@@ -36,16 +37,21 @@ pub const TAG_FUN: u8 = 3;
 
 impl<'a> BytecodeReader<'a> {
     pub fn read_u8(&mut self) -> u8 {
-        self.bytes.read_u8().unwrap()
+        let b = self.bytes[self.pc];
+        self.pc += 1;
+        b
     }
     pub fn read_u16(&mut self) -> u16 {
-        self.bytes.read_u16::<LittleEndian>().unwrap()
+        //self.bytes.read_u16::<LittleEndian>().unwrap()
+        unsafe { std::mem::transmute([self.read_u8(), self.read_u8()]) }
     }
     pub fn read_u32(&mut self) -> u32 {
-        self.bytes.read_u32::<LittleEndian>().unwrap()
+        //self.bytes.read_u32::<LittleEndian>().unwrap()
+        unsafe { std::mem::transmute([self.read_u16(), self.read_u16()]) }
     }
     pub fn read_u64(&mut self) -> u64 {
-        self.bytes.read_u64::<LittleEndian>().unwrap()
+        //self.bytes.read_u64::<LittleEndian>().unwrap()
+        unsafe { std::mem::transmute([self.read_u32(), self.read_u32()]) }
     }
 
     pub fn read_module(&mut self) -> Arc<Module> {
@@ -73,12 +79,13 @@ impl<'a> BytecodeReader<'a> {
                     m.globals.push(Value::from(string));
                 }
                 TAG_FLOAT => {
+                    panic!();
                     let bits = self.read_u64();
                     let float = f64::from_bits(bits);
                     m.globals.push(Value::new_double(float));
                 }
                 TAG_FUN => {
-                    let code_size = self.read_u32();
+                    let code_size = self.read_u16();
                     let is_main = self.read_u8() != 0;
                     let argc = self.read_u16() as i16 as i32;
                     let name = self.read_u32() as usize;
@@ -89,6 +96,10 @@ impl<'a> BytecodeReader<'a> {
                         let mut block = BasicBlock::new(vec![], i as _);
                         for _ in 0..block_size {
                             let op = self.read_u8();
+                            assert!(
+                                op >= InstructionByte::LOAD_NULL
+                                    && op <= InstructionByte::STORE_UPVALUE
+                            );
                             let ins = match op {
                                 InstructionByte::LOAD_NULL => {
                                     Instruction::LoadNull(self.read_u8() as _)
@@ -195,6 +206,12 @@ impl<'a> BytecodeReader<'a> {
                                     self.read_u16() as _,
                                 ),
                                 InstructionByte::TAIL_CALL => Instruction::TailCall(
+                                    self.read_u8() as _,
+                                    self.read_u8() as _,
+                                    self.read_u16() as _,
+                                ),
+                                InstructionByte::VIRT_CALL => Instruction::VirtCall(
+                                    self.read_u8() as _,
                                     self.read_u8() as _,
                                     self.read_u8() as _,
                                     self.read_u16() as _,
@@ -350,6 +367,14 @@ impl<'a> BytecodeReader<'a> {
                         module: m.clone(),
                         md: Default::default(),
                     });
+                    func.add_attribute_without_barrier(
+                        &rt.state,
+                        Arc::new("prototype".to_owned()),
+                        rt.state.allocate(Cell::with_prototype(
+                            CellValue::None,
+                            rt.state.object_prototype.as_cell(),
+                        )),
+                    );
                     if is_main {
                         m.main_fn = func;
                     }
@@ -357,6 +382,9 @@ impl<'a> BytecodeReader<'a> {
                 }
                 _ => unreachable!(),
             }
+        }
+        for (i, global) in m.globals.iter().enumerate() {
+            log::debug!("Read global {}: {}", i, global.to_string());
         }
         m
     }

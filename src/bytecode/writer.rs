@@ -47,11 +47,17 @@ impl BytecodeWriter {
         use hashlink::LinkedHashMap;
         let mut strings = LinkedHashMap::new();
         let mut i = 0;
+        //let mut new_global = vec![];
         for global in m.globals.iter() {
             if global.is_cell() {
                 if global.as_cell().is_string() {
                     strings.insert(global.as_cell().to_string(), i);
                     i += 1;
+                } else {
+                    /*if let Ok(func) = global.as_cell().function_value() {
+                        strings.insert(func.name.to_string(), i);
+                        i += 1;
+                    }*/
                 }
             }
         }
@@ -65,8 +71,38 @@ impl BytecodeWriter {
             }
         }
 
-        for global in m.globals.iter() {}
-        unimplemented!()
+        for (i, global) in m.globals.iter().enumerate() {
+            log::trace!("Global {}: {}", i, global.to_string());
+            if global.is_cell() {
+                if global.as_cell().is_string() {
+                    self.write(TAG_STRING);
+                    self.write(strings.get(&global.to_string()).copied().unwrap() as u32);
+                } else {
+                    self.write(TAG_FUN);
+                    let cell = global.as_cell();
+                    let function_value = cell.function_value().unwrap();
+                    self.write(function_value.code.len() as u16);
+                    self.write(if function_value.name.to_string() == "main" {
+                        1u8
+                    } else {
+                        0u8
+                    });
+                    self.write(function_value.argc as i16 as u16);
+                    self.write(
+                        strings
+                            .get(&function_value.name.to_string())
+                            .copied()
+                            .unwrap() as u32,
+                    );
+                    for bb in function_value.code.iter() {
+                        self.write(bb.instructions.len() as u32);
+                        for ins in bb.instructions.iter() {
+                            self.write_instruction(*ins);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn write_instruction(&mut self, ins: Instruction) {
@@ -266,7 +302,7 @@ impl BytecodeWriter {
             Instruction::LoadConst(r, c) => {
                 self.write(LOAD_CONST);
                 self.write(r as u8);
-                self.write(c);
+                self.write(c as u16);
             }
             Instruction::LoadThis(r) => {
                 self.write(LOAD_THIS);

@@ -27,8 +27,7 @@ use crate::util::arc::Arc;
 impl BytecodePass for RetSink {
     fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
         let return_sink = { BasicBlock::new(vec![Instruction::Return(Some(0))], f.len()) };
-        f.push(return_sink);
-        let target = f.len() - 1;
+        let target = f.len();
         for block in f.iter_mut() {
             let mut new_instructions = vec![];
             for ins in block.instructions.iter() {
@@ -46,5 +45,6 @@ impl BytecodePass for RetSink {
             }
             block.instructions = new_instructions;
         }
+        f.push(return_sink);
     }
 }

@@ -21,7 +21,7 @@ use structopt::StructOpt;
 #[structopt(name = "waffle")]
 pub struct Config {
     #[structopt(name = "FILE", parse(from_os_str))]
-    pub main_name: Option<std::path::PathBuf>,
+    pub main_name: std::path::PathBuf,
     #[structopt(
         long = "perm-size",
         help = "Permanent heap size (default 1024 * 8 * 2)",
