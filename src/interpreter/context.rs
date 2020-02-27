@@ -53,7 +53,7 @@ impl Context {
             stack: Vec::with_capacity(32),
             module: Arc::new(Module {
                 globals: vec![],
-                name: Arc::new("<>".to_owned()),
+                name: Value::empty(),
                 main_fn: Value::empty(),
             }),
             parent: None,

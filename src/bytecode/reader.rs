@@ -27,8 +27,7 @@ use runtime::RUNTIME;
 use std::io::Cursor;
 
 pub struct BytecodeReader<'a> {
-    pub bytes: &'a [u8],
-    pub pc: usize,
+    pub bytes: Cursor<&'a [u8]>,
 }
 
 pub const TAG_STRING: u8 = 0;
@@ -37,21 +36,21 @@ pub const TAG_FUN: u8 = 3;
 
 impl<'a> BytecodeReader<'a> {
     pub fn read_u8(&mut self) -> u8 {
-        let b = self.bytes[self.pc];
-        self.pc += 1;
+        let b = self.bytes.read_u8().unwrap();
+        //self.pc += 1;
         b
     }
     pub fn read_u16(&mut self) -> u16 {
-        //self.bytes.read_u16::<LittleEndian>().unwrap()
-        unsafe { std::mem::transmute([self.read_u8(), self.read_u8()]) }
+        self.bytes.read_u16::<LittleEndian>().unwrap()
+        //unsafe { std::mem::transmute([self.read_u8(), self.read_u8()]) }
     }
     pub fn read_u32(&mut self) -> u32 {
-        //self.bytes.read_u32::<LittleEndian>().unwrap()
-        unsafe { std::mem::transmute([self.read_u16(), self.read_u16()]) }
+        self.bytes.read_u32::<LittleEndian>().unwrap()
+        //unsafe { std::mem::transmute([self.read_u16(), self.read_u16()]) }
     }
     pub fn read_u64(&mut self) -> u64 {
-        //self.bytes.read_u64::<LittleEndian>().unwrap()
-        unsafe { std::mem::transmute([self.read_u32(), self.read_u32()]) }
+        self.bytes.read_u64::<LittleEndian>().unwrap()
+        //unsafe { std::mem::transmute([self.read_u32(), self.read_u32()]) }
     }
 
     pub fn read_module(&mut self) -> Arc<Module> {
@@ -62,7 +61,9 @@ impl<'a> BytecodeReader<'a> {
         let count_globals = self.read_u32();
 
         for _ in 0..count_strings {
+            log::debug!("Reading string");
             let len = self.read_u32();
+            log::debug!("String length is {} byte(s)", len);
             let mut bytes = vec![];
             for _ in 0..len {
                 bytes.push(self.read_u8());

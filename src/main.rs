@@ -236,8 +236,7 @@ fn main() {
 
     let contents = std::fs::read(&c.main_name).expect("ERROR!");
     let mut reader = BytecodeReader {
-        bytes: &contents,
-        pc: 0,
+        bytes: std::io::Cursor::new(&contents),
     };
 
     let module = reader.read_module();

@@ -15,11 +15,18 @@
 *   limitations under the License.
 */
 
+use crate::util::arc::Arc;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Clone)]
 #[structopt(name = "waffle")]
 pub struct Config {
+    #[structopt(
+        name = "directories",
+        help = "The directories to search in for extra bytecode files to run.",
+        parse(from_os_str)
+    )]
+    pub directories: Vec<std::path::PathBuf>,
     #[structopt(name = "FILE", parse(from_os_str))]
     pub main_name: std::path::PathBuf,
     #[structopt(
