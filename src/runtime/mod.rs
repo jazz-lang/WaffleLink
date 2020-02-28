@@ -15,7 +15,10 @@ pub mod process_functions;
 pub mod scheduler;
 pub mod state;
 pub mod value;
+pub mod core_functions;
+use module::*;
 use state::*;
+use parking_lot::Mutex;
 
 lazy_static::lazy_static!(
     pub static ref RUNTIME: Runtime = Runtime::new();
@@ -23,12 +26,15 @@ lazy_static::lazy_static!(
 
 pub struct Runtime {
     pub state: RcState,
+    pub registry: Mutex<ModuleRegistry>
 }
 
 impl Runtime {
     pub fn new() -> Self {
+        let state = State::new(config::Config::default());
         let rt = Self {
-            state: State::new(config::Config::default()),
+            state: state.clone(),
+            registry: Mutex::new(ModuleRegistry::new(state))
         };
         rt.initialize_builtins();
         rt

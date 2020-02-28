@@ -18,6 +18,7 @@
 use super::cell::*;
 use super::state::*;
 use super::value::*;
+use super::process::*;
 use crate::bytecode::reader::*;
 use crate::util::arc::Arc;
 use parking_lot::Mutex;
@@ -94,7 +95,7 @@ impl ModuleRegistry {
         Ok(input_path.to_str().unwrap().to_owned())
     }
 
-    pub fn parse_module(&mut self, name: &str, path: &str) -> Result<Value, String> {
+    pub fn parse_module(&mut self, _name: &str, path: &str) -> Result<Value, String> {
         match File::open(path) {
             Ok(mut file) => {
                 let mut contents = vec![];
@@ -102,7 +103,10 @@ impl ModuleRegistry {
                 let mut reader = BytecodeReader {
                     bytes: std::io::Cursor::new(&contents),
                 };
+                let p = std::path::Path::new(path);
+                let name = p.file_name().unwrap().to_str().unwrap();
                 let mut module = reader.read_module();
+
                 module.name = Value::from(self.state.intern_string(name.to_owned()));
                 let module_cell = self.state.allocate(Cell::with_prototype(
                     CellValue::Module(module),
@@ -114,13 +118,13 @@ impl ModuleRegistry {
         }
     }
 
-    pub fn load(&mut self, name: &str, path: &str) -> Result<(Value, bool), String> {
-        if !self.parsed.contains_key(name) {
+    pub fn load(&mut self, _name: &str, path: &str) -> Result<(Value, bool), String> {
+        if !self.parsed.contains_key(path) {
             let full_path = self.find_path(path)?;
-            self.parse_module(name, &full_path)
+            self.parse_module(_name, &full_path)
                 .map(|module| (module, true))
         } else {
-            Ok((self.parsed[name], false))
+            Ok((self.parsed[path], false))
         }
     }
 }

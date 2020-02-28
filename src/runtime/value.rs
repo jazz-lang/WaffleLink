@@ -464,3 +464,6 @@ impl From<bool> for Value {
         }
     }
 }
+
+unsafe impl Send for Value {}
+unsafe impl Sync for Value {}

@@ -26,4 +26,5 @@ Array.clear = function clear() {
 
 Array.retain = function retain(f) {
     io.writeln("TODO")
+    throw 0
 }
