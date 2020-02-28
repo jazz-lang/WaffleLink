@@ -3,6 +3,7 @@
  *   All rights reserved.
  */
 
+pub mod array_functions;
 pub mod cell;
 pub mod channel;
 pub mod config;
@@ -36,6 +37,7 @@ impl Runtime {
     pub fn initialize_builtins(&self) {
         process_functions::initialize_process_prototype(&self.state);
         io_functions::initialize_io(&self.state);
+        array_functions::initialize_array_builtins(&self.state);
     }
 
     pub fn start_pools(&self) {

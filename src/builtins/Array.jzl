@@ -1,0 +1,29 @@
+Array.map = function map(f) {
+    var new_array = new Array()
+    this.for_each(function iteri(elem) {
+        new_array.push(f(elem))
+    })
+    return new_array
+}
+
+Array.for_each = function for_each(f) {
+    var i = 0
+    while i < this.length() {
+        f(this[i])
+        i = i + 1
+    }
+}
+Array.truncate = function truncate(count) {
+    while this.length() != count {
+        this.pop()
+    }
+}
+Array.clear = function clear() {
+    while this.length() != 0 {
+        this.pop()
+    }
+}
+
+Array.retain = function retain(f) {
+    io.writeln("TODO")
+}

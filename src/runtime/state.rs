@@ -78,6 +78,13 @@ impl State {
         module_prototype.set_prototype(object_prototype);
         boolean_prototype.set_prototype(object_prototype);
         byte_array_prototype.set_prototype(object_prototype);
+        let mut map = ahash::AHashMap::new();
+        /*{
+            map.insert("Array".to_owned(), array_prototype);
+            map.insert("Process".to_owned(), process_prototype);
+            map.insert("Function".to_owned(), function_prototype);
+            map.insert("Module".to_owned(), module_prototype);
+        }*/
         let primary = if let Some(prim) = config.primary {
             prim
         } else {
@@ -109,7 +116,7 @@ impl State {
             module_prototype,
             function_prototype,
             generator_prototype,
-            static_variables: Mutex::new(ahash::AHashMap::new()),
+            static_variables: Mutex::new(map),
             config,
             string_map: Mutex::new(ahash::AHashMap::new()),
         })

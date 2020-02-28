@@ -14,6 +14,7 @@
 *   See the License for the specific language governing permissions and
 *   limitations under the License.
 */
+
 extern crate waffle;
 use cell::*;
 use instruction::*;
@@ -25,14 +26,11 @@ use waffle::heap::cms::atomic_list::AtomicList;
 use waffle::runtime::*;
 use waffle::util::arc::Arc;
 /*
-
-
 fn main() {
     let x = std::time::Instant::now();
     let result = waffle_asm! {
         c "io";
         c "writeln";
-
         code_start:
             func fac: 1 => {
                 0 => {
@@ -55,7 +53,6 @@ fn main() {
                     retv 0;
                 }
             }
-
             func main: 0 /* argc*/ => {
                 0 /* entry block */=> {
                     load_const 0,2;
@@ -78,7 +75,6 @@ fn main() {
     .unwrap();
     RUNTIME.schedule_main_process(proc.clone());
     RUNTIME.start_pools();
-
     m.globals.clear();
     let e = x.elapsed();
     println!(

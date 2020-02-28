@@ -216,7 +216,7 @@ impl Runtime {
                                     }
                                 }
 
-                                context.set_register(dest, value);
+                                context.set_register(dest, array[x]);
                                 continue;
                             }
                         }
@@ -249,7 +249,11 @@ impl Runtime {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Static variable '{}' not found", id),
+                            &format!(
+                                "Static variable '{}' not found, available: {:?}",
+                                id,
+                                statics.iter().map(|(key, _)| key).collect::<Vec<_>>()
+                            ),
                             context,
                             index,
                             bindex

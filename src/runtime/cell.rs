@@ -380,6 +380,12 @@ impl CellPointer {
             _ => None,
         }
     }
+    pub fn array_value_mut(&self) -> Option<&mut Box<Vec<Value>>> {
+        match &mut self.get_mut().value {
+            CellValue::Array(a) => Some(a),
+            _ => None,
+        }
+    }
 
     pub fn get(&self) -> &Cell {
         self.raw.as_ref().unwrap()
