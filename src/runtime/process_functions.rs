@@ -26,7 +26,7 @@ pub extern "C" fn spawn(
     process: &Arc<Process>,
     _this: Value,
     arguments: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let new_proc = Process::from_function(arguments[0], &state.config)
         .map_err(|err| Process::allocate_string(process, state, &err))?;
     state.scheduler.schedule(new_proc.clone());
@@ -37,7 +37,7 @@ pub extern "C" fn spawn(
             state.process_prototype.as_cell(),
         ),
     );
-    Ok(Return::Value(new_proc_ptr))
+    Ok(ReturnValue::Value(new_proc_ptr))
 }
 
 pub extern "C" fn send(
@@ -45,7 +45,7 @@ pub extern "C" fn send(
     process: &Arc<Process>,
     this: Value,
     arguments: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let process = if this == state.process_prototype {
         process.clone()
     } else {
@@ -67,7 +67,7 @@ pub extern "C" fn send(
         Process::send_message_from_external_process(&receiver, arguments[1]);
         attempt_to_reschedule_process(state, &receiver);
     }
-    Ok(Return::Value(Value::from(VTag::Undefined)))
+    Ok(ReturnValue::Value(Value::from(VTag::Undefined)))
 }
 
 pub extern "C" fn receive(
@@ -75,7 +75,7 @@ pub extern "C" fn receive(
     process: &Arc<Process>,
     this: Value,
     _arguments: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let process = if this == state.process_prototype {
         process.clone()
     } else {
@@ -85,12 +85,12 @@ pub extern "C" fn receive(
     let proc = process;
     if let Some(msg) = proc.receive_message() {
         proc.no_longer_waiting_for_message();
-        return Ok(Return::Value(msg));
+        return Ok(ReturnValue::Value(msg));
     } else if proc.is_waiting_for_message() {
         proc.no_longer_waiting_for_message();
-        Ok(Return::Value(Value::from(VTag::Null)))
+        Ok(ReturnValue::Value(Value::from(VTag::Null)))
     } else {
-        Ok(Return::Value(Value::from(VTag::Null)))
+        Ok(ReturnValue::Value(Value::from(VTag::Null)))
     }
 }
 
@@ -99,7 +99,7 @@ pub extern "C" fn receive_or_wait(
     process: &Arc<Process>,
     this: Value,
     arguments: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let process = if this == state.process_prototype {
         process.clone()
     } else {
@@ -108,7 +108,7 @@ pub extern "C" fn receive_or_wait(
     };
     if let Some(msg) = process.receive_message() {
         process.no_longer_waiting_for_message();
-        return Ok(Return::Value(msg));
+        return Ok(ReturnValue::Value(msg));
     }
     process.waiting_for_message();
     if let Some(time) = arguments.get(0) {
@@ -145,14 +145,14 @@ pub extern "C" fn receive_or_wait(
     if process.has_messages() {
         attempt_to_reschedule_process(state, &process);
     }
-    Ok(Return::SuspendProcess)
+    Ok(ReturnValue::SuspendProcess)
 }
 pub extern "C" fn wait_for_message(
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
     arguments: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let process = if this == state.process_prototype {
         process.clone()
     } else {
@@ -195,7 +195,7 @@ pub extern "C" fn wait_for_message(
         attempt_to_reschedule_process(state, &process);
     }
     println!("Suspend...");
-    Ok(Return::SuspendProcess)
+    Ok(ReturnValue::SuspendProcess)
 }
 
 pub extern "C" fn has_messages(
@@ -203,14 +203,14 @@ pub extern "C" fn has_messages(
     process: &Arc<Process>,
     this: Value,
     _: &[Value],
-) -> Result<Return, Value> {
+) -> Result<ReturnValue, Value> {
     let process = if this == state.process_prototype {
         process.clone()
     } else {
         this.process_value()
             .map_err(|err: String| Process::allocate_string(process, state, &err))?
     };
-    Ok(Return::Value(Value::from(if process.has_messages() {
+    Ok(ReturnValue::Value(Value::from(if process.has_messages() {
         VTag::True
     } else {
         VTag::False
@@ -222,8 +222,8 @@ pub extern "C" fn current(
     process: &Arc<Process>,
     _: Value,
     _: &[Value],
-) -> Result<Return, Value> {
-    Ok(Return::Value(Value::from(Process::allocate(
+) -> Result<ReturnValue, Value> {
+    Ok(ReturnValue::Value(Value::from(Process::allocate(
         process,
         Cell::with_prototype(
             CellValue::Process(process.clone()),

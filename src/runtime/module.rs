@@ -76,7 +76,7 @@ impl ModuleRegistry {
         if input_path.is_relative() {
             let mut found = false;
 
-            for directory in self.state.config.directories.iter() {
+            /*for directory in self.state.config.directories.iter() {
                 let full_path = directory.join(path);
 
                 if full_path.exists() {
@@ -85,7 +85,7 @@ impl ModuleRegistry {
 
                     break;
                 }
-            }
+            }*/
 
             if !found {
                 return Err(format!("Module '{}' doesn't exist", path.to_string()));

@@ -71,6 +71,7 @@ pub mod VTag {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Value {
     pub u: EncodedValueDescriptor,
 }

@@ -15,15 +15,5 @@
 *   limitations under the License.
 */
 
-#[macro_use]
-extern crate intrusive_collections;
-
-pub mod bytecode;
-pub mod heap;
-pub mod interpreter;
-pub mod jit;
-pub mod runtime;
-pub mod types;
-pub mod util;
-
-pub use runtime::cell::ReturnValue;
+pub mod baseline;
+pub mod bindings;

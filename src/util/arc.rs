@@ -33,6 +33,7 @@ pub struct Inner<T> {
 }
 
 /// A thread-safe reference counted pointer.
+#[repr(C)]
 pub struct Arc<T> {
     inner: NonNull<Inner<T>>,
 }

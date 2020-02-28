@@ -49,16 +49,19 @@ pub const CELL_GREY: u8 = 0;
 pub const CELL_BLACK: u8 = 1 << 2;
 pub const CELL_WHITES: u8 = CELL_WHITE_A | CELL_WHITE_B;
 
-pub enum Return {
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub enum ReturnValue {
     Value(Value),
     YieldProcess,
     SuspendProcess,
 }
 
 pub type NativeFn =
-    extern "C" fn(&RcState, &Arc<Process>, Value, &[Value]) -> Result<Return, Value>;
+    extern "C" fn(&RcState, &Arc<Process>, Value, &[Value]) -> Result<ReturnValue, Value>;
 
 #[derive(Default, Clone)]
+#[repr(C)]
 pub struct FunctionMetadata {
     pub stack_size: usize,
     pub can_jit: bool,
@@ -80,6 +83,7 @@ pub struct Generator {
     pub context: Ptr<Context>,
 }
 
+#[repr(C)]
 pub enum CellValue {
     None,
     /// Heap allocated number.
@@ -97,6 +101,7 @@ pub enum CellValue {
     File(File),
 }
 
+#[repr(C)]
 pub struct Cell {
     pub value: CellValue,
     pub prototype: Option<CellPointer>,
@@ -280,6 +285,7 @@ impl Cell {
         None
     }
 }
+#[repr(C)]
 pub struct CellPointer {
     pub raw: TaggedPointer<Cell>,
 }
@@ -535,7 +541,12 @@ impl CellPointer {
             _ => false,
         }
     }
-
+    pub fn to_array(&self) -> Option<&Vec<Value>> {
+        match self.get().value {
+            CellValue::Array(ref a) => Some(a),
+            _ => None,
+        }
+    }
     pub fn to_string(&self) -> String {
         match self.get().value {
             CellValue::String(ref s) => (**s).clone(),

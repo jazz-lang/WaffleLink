@@ -398,7 +398,7 @@ impl Runtime {
                             );
                         }
                     };
-                    if argc as i32 != function.argc && function.argc != -1 {
+                    /*if argc as i32 != function.argc && function.argc != -1 {
                         throw_error_message!(
                             self,
                             process,
@@ -410,7 +410,7 @@ impl Runtime {
                             index,
                             bindex
                         );
-                    }
+                    }*/
                     let mut args = vec![];
 
                     for _ in 0..argc {
@@ -425,8 +425,8 @@ impl Runtime {
                         }
                         let result = result.unwrap();
                         match result {
-                            Return::Value(value) => context.set_register(dest, value),
-                            Return::SuspendProcess => {
+                            ReturnValue::Value(value) => context.set_register(dest, value),
+                            ReturnValue::SuspendProcess => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -434,7 +434,7 @@ impl Runtime {
                                 }
                                 return Ok(Value::from(VTag::Null));
                             }
-                            Return::YieldProcess => {
+                            ReturnValue::YieldProcess => {
                                 self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
@@ -536,8 +536,8 @@ impl Runtime {
                         }
                         let result = result.unwrap();
                         match result {
-                            Return::Value(value) => context.set_register(dest, value),
-                            Return::SuspendProcess => {
+                            ReturnValue::Value(value) => context.set_register(dest, value),
+                            ReturnValue::SuspendProcess => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -545,7 +545,7 @@ impl Runtime {
                                 }
                                 return Ok(Value::from(VTag::Null));
                             }
-                            Return::YieldProcess => {
+                            ReturnValue::YieldProcess => {
                                 self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
@@ -686,8 +686,8 @@ impl Runtime {
                         }
                         let result = result.unwrap();
                         match result {
-                            Return::Value(value) => context.set_register(dest, value),
-                            Return::SuspendProcess => {
+                            ReturnValue::Value(value) => context.set_register(dest, value),
+                            ReturnValue::SuspendProcess => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -695,7 +695,7 @@ impl Runtime {
                                 }
                                 return Ok(Value::from(VTag::Null));
                             }
-                            Return::YieldProcess => {
+                            ReturnValue::YieldProcess => {
                                 self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
@@ -772,15 +772,52 @@ impl Runtime {
                     } else if lhs.is_cell() && rhs.is_cell() {
                         let lhs = lhs.as_cell();
                         let rhs = rhs.as_cell();
-                        if lhs.is_string() {
-                            context.set_register(
-                                dest,
-                                Process::allocate_string(
-                                    process,
-                                    &self.state,
-                                    &format!("{}{}", lhs, rhs),
+                        if lhs.is_string() && rhs.is_string() {
+                            match op {
+                                BinOp::Add => {
+                                    context.set_register(
+                                        dest,
+                                        Process::allocate_string(
+                                            process,
+                                            &self.state,
+                                            &format!("{}{}", lhs, rhs),
+                                        ),
+                                    );
+                                }
+                                BinOp::Equal => context.set_register(
+                                    dest,
+                                    Value::from(lhs.to_string() == rhs.to_string()),
                                 ),
-                            );
+                                BinOp::NotEqual => context.set_register(
+                                    dest,
+                                    Value::from(lhs.to_string() != rhs.to_string()),
+                                ),
+                                BinOp::Greater => context.set_register(
+                                    dest,
+                                    Value::from(lhs.to_string().len() > rhs.to_string().len()),
+                                ),
+                                BinOp::Less => context.set_register(
+                                    dest,
+                                    Value::from(lhs.to_string().len() < rhs.to_string().len()),
+                                ),
+                                _ => unimplemented!(),
+                            }
+                            continue;
+                        }
+                        if lhs.is_string() {
+                            match op {
+                                BinOp::Add => {
+                                    context.set_register(
+                                        dest,
+                                        Process::allocate_string(
+                                            process,
+                                            &self.state,
+                                            &format!("{}{}", lhs, rhs),
+                                        ),
+                                    );
+                                }
+                                _ => context.set_register(dest, Value::from(false)),
+                            }
                             continue;
                         } else if lhs.is_array() {
                             match op {
@@ -921,7 +958,7 @@ impl Runtime {
 
         Ok(ret)
     }
-    /// Returns true if a process is garbage collected.
+    /// ReturnValues true if a process is garbage collected.
     pub fn gc_safepoint(&self, process: &Arc<Process>) -> Result<(), bool> {
         if !process.local_data().heap.should_collect() {
             return Ok(());

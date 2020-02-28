@@ -42,3 +42,5 @@ opt-level = 3
 lto = true
 panic = "unwind"
 
+[lib]
+crate-type = ["dylib","rlib"]
