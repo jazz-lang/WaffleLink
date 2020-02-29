@@ -109,7 +109,7 @@ impl BaselineJIT {
         self.buffer.clear();
         self.write(&format!(
             "Value baseline_{}(void* worker,void* proc,Stack stack) {{",
-            f.name.to_string()
+            f.name
         ));
         for i in 0..32 {
             self.write(&format!("register Value r{};\n", i));

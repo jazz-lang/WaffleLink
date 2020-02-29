@@ -3,6 +3,7 @@
  *   All rights reserved.
  */
 
+
 pub mod array_functions;
 pub mod cell;
 pub mod channel;
@@ -10,6 +11,7 @@ pub mod config;
 pub mod core_functions;
 pub mod interner;
 pub mod io_functions;
+pub mod exception;
 pub mod module;
 pub mod module_functions;
 pub mod object_functions;

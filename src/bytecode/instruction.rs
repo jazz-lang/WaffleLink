@@ -17,7 +17,7 @@
 
 extern crate regalloc as ra;
 use ra::*;
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Hash)]
 #[repr(u16)]
 /// JLight VM instruction.
 ///
@@ -333,7 +333,7 @@ impl Instruction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum BinOp {
     Add,
     Sub,
@@ -354,7 +354,7 @@ pub enum BinOp {
     Xor,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UnaryOp {
     Not,
     Neg,

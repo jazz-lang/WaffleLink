@@ -145,11 +145,7 @@ impl Process {
         config: &super::config::Config,
     ) -> Result<Arc<Self>, String> {
         if value.is_cell() == false {
-            return Err(format!(
-                "Expected function to Process.spawn,found '{}'",
-                value.to_string()
-            )
-            .to_owned());
+            return Err(format!("Expected function to Process.spawn",).to_owned());
         };
 
         let value = value.as_cell();
@@ -175,8 +171,7 @@ impl Process {
             }
             _ => {
                 return Err(format!(
-                    "Expected function to Process.spawn,found '{}'",
-                    value.to_string()
+                    "Expected function to Process.spawn"
                 )
                 .to_owned())
             }

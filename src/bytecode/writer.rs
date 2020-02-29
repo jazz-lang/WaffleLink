@@ -51,7 +51,10 @@ impl BytecodeWriter {
         for global in m.globals.iter() {
             if global.is_cell() {
                 if global.as_cell().is_string() {
-                    strings.insert(global.as_cell().to_string(), i);
+                    strings.insert(
+                        global.to_string(),
+                        i,
+                    );
                     i += 1;
                 } else {
                     /*if let Ok(func) = global.as_cell().function_value() {

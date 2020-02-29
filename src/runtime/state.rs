@@ -225,7 +225,10 @@ impl State {
         if pointer.is_interned_str() {
             pointer
         } else {
-            self.intern(&pointer.to_string())
+            self.intern(match pointer.get().value {
+                CellValue::String(ref s) => s,
+                _ => unreachable!()
+            })
         }
     }
 }
