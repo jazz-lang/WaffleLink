@@ -136,7 +136,13 @@ pub unsafe extern "C" fn value_call(
         args.push(stack_pop(stack));
     }
     if let Some(native_fn) = function.native {
-        let result = native_fn(&RUNTIME.state, proc, Value::from(VTag::Undefined), &args);
+        let result = native_fn(
+            &mut *worker,
+            &RUNTIME.state,
+            proc,
+            Value::from(VTag::Undefined),
+            &args,
+        );
         if let Err(err) = result {
             panic!("{}", err.to_string());
             //throw!(self, process, err, context, index, bindex);

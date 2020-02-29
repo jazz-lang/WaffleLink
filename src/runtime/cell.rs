@@ -17,6 +17,7 @@
 
 use super::module::Module;
 use super::process::Process;
+use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
 use super::value::*;
 use super::*;
@@ -57,8 +58,13 @@ pub enum ReturnValue {
     SuspendProcess,
 }
 
-pub type NativeFn =
-    extern "C" fn(&RcState, &Arc<Process>, Value, &[Value]) -> Result<ReturnValue, Value>;
+pub type NativeFn = extern "C" fn(
+    &mut ProcessWorker,
+    &RcState,
+    &Arc<Process>,
+    Value,
+    &[Value],
+) -> Result<ReturnValue, Value>;
 
 #[derive(Default, Clone)]
 #[repr(C)]
@@ -550,6 +556,20 @@ impl CellPointer {
     pub fn to_array(&self) -> Option<&Vec<Value>> {
         match self.get().value {
             CellValue::Array(ref a) => Some(a),
+            _ => None,
+        }
+    }
+
+    pub fn module_value(&self) -> Option<&Arc<Module>> {
+        match self.get().value {
+            CellValue::Module(ref m) => Some(m),
+            _ => None,
+        }
+    }
+
+    pub fn module_value_mut(&self) -> Option<&mut Arc<Module>> {
+        match self.get_mut().value {
+            CellValue::Module(ref mut m) => Some(m),
             _ => None,
         }
     }

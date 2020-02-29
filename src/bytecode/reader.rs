@@ -55,6 +55,10 @@ impl<'a> BytecodeReader<'a> {
 
     pub fn read_module(&mut self) -> Arc<Module> {
         let mut m = Arc::new(Module::new("<>"));
+        m.exports = Value::from(RUNTIME.state.allocate(Cell::with_prototype(
+            CellValue::None,
+            RUNTIME.state.object_prototype.as_cell(),
+        )));
 
         let mut strings = Vec::new();
         let count_strings = self.read_u32();

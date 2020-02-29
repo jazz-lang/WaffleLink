@@ -16,9 +16,9 @@
 */
 
 use super::cell::*;
+use super::process::*;
 use super::state::*;
 use super::value::*;
-use super::process::*;
 use crate::bytecode::reader::*;
 use crate::util::arc::Arc;
 use parking_lot::Mutex;
@@ -31,6 +31,7 @@ pub struct Module {
     pub name: Value,
     pub globals: Vec<Value>,
     pub main_fn: Value,
+    pub exports: Value,
 }
 
 impl Module {
@@ -39,6 +40,7 @@ impl Module {
             name: Value::from(super::RUNTIME.state.intern_string(name.to_owned())),
             globals: vec![],
             main_fn: Value::empty(),
+            exports: Value::empty(),
         }
     }
     pub fn get_global_at(&self, id: usize) -> Value {
@@ -77,7 +79,7 @@ impl ModuleRegistry {
         if input_path.is_relative() {
             let mut found = false;
 
-            /*for directory in self.state.config.directories.iter() {
+            for directory in self.state.config.directories.iter() {
                 let full_path = directory.join(path);
 
                 if full_path.exists() {
@@ -86,7 +88,7 @@ impl ModuleRegistry {
 
                     break;
                 }
-            }*/
+            }
 
             if !found {
                 return Err(format!("Module '{}' doesn't exist", path.to_string()));

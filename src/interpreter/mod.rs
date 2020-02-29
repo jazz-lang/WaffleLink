@@ -140,21 +140,19 @@ impl Runtime {
                         Value::from(VTag::Null)
                     };
                     self.clear_catch_tables(&context, process);
-                    if !context.in_tail {
-                        let top_level;
-                        if context.terminate_upon_return && !context.in_tail {
-                            top_level = context.parent.is_none();
-                            break (Ok(value), top_level);
-                        }
-                        if let Some(dest) = context.return_register {
-                            if let Some(parent) = context.parent {
-                                parent.get().set_register(dest, value);
-                            }
-                        }
 
-                        if process.pop_context() {
-                            break (Ok(value), true);
+                    if context.terminate_upon_return && !context.parent.is_none() {
+                        process.pop_context();
+                        return Ok(value);
+                    }
+                    if let Some(dest) = context.return_register {
+                        if let Some(parent) = context.parent {
+                            parent.get().set_register(dest, value);
                         }
+                    }
+
+                    if process.pop_context() {
+                        break (Ok(value), true);
                     }
                     reset_context!(process, context, index, bindex);
                     safepoint_and_reduce!(self, process, reductions);
@@ -422,8 +420,13 @@ impl Runtime {
                     }
 
                     if let Some(native_fn) = function.native {
-                        let result =
-                            native_fn(&self.state, process, Value::from(VTag::Undefined), &args);
+                        let result = native_fn(
+                            worker,
+                            &self.state,
+                            process,
+                            Value::from(VTag::Undefined),
+                            &args,
+                        );
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
@@ -534,7 +537,7 @@ impl Runtime {
                     let this = context.get_register(this);
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(&self.state, process, this, &args);
+                        let result = native_fn(worker, &self.state, process, this, &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
@@ -684,7 +687,7 @@ impl Runtime {
                     );
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(&self.state, process, this, &args);
+                        let result = native_fn(worker, &self.state, process, this, &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }

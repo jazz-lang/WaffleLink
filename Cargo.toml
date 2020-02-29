@@ -15,7 +15,7 @@ cfg-if = "0.1"
 parking_lot = "0.10"
 libc = "0.2.67"
 intrusive-collections = "0.8"
-libmimalloc-sys = { version = "*", default-features = false }
+#libmimalloc-sys = { version = "*", default-features = false }
 smallvec = "1.2"
 crossbeam-channel = "0.4"
 crossbeam = "0.7"

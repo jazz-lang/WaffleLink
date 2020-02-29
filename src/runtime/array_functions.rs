@@ -17,11 +17,12 @@
 
 use super::cell::*;
 use super::process::*;
+use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
 use super::value::*;
 use crate::util::arc::Arc;
-
 pub extern "C" fn array_new(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -43,6 +44,7 @@ pub extern "C" fn array_new(
 }
 
 pub extern "C" fn array_pop(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -73,6 +75,7 @@ pub extern "C" fn array_pop(
 }
 
 pub extern "C" fn array_push(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -104,6 +107,7 @@ pub extern "C" fn array_push(
 }
 
 pub extern "C" fn array_length(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,

@@ -55,6 +55,7 @@ impl Context {
                 globals: vec![],
                 name: Value::empty(),
                 main_fn: Value::empty(),
+                exports: Value::empty(),
             }),
             parent: None,
             index: 0,

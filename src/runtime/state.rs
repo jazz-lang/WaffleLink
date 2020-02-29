@@ -148,6 +148,7 @@ impl State {
                 globals: vec![],
                 name: Value::from(self.intern_string("<native>".to_owned())),
                 main_fn: Value::empty(),
+                exports: Value::empty(),
             }),
             md: Default::default(),
         };
@@ -178,6 +179,7 @@ impl State {
                 globals: vec![],
                 name: Value::from(self.intern_string("<native>".to_owned())),
                 main_fn: Value::empty(),
+                exports: Value::empty(),
             }),
             md: Default::default(),
         };

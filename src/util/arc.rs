@@ -71,10 +71,7 @@ impl<T> Arc<T> {
             value,
             references: AtomicUsize::new(1),
         };
-        let ptr = super::mem::alloc::<Inner<T>>();
-        unsafe {
-            ptr.write(inner);
-        }
+        let ptr = Box::into_raw(Box::new(inner));
         Arc {
             inner: unsafe { NonNull::new_unchecked(ptr) },
         }
@@ -123,8 +120,8 @@ impl<T> Drop for Arc<T> {
     fn drop(&mut self) {
         unsafe {
             if self.inner().references.fetch_sub(1, Ordering::AcqRel) == 1 {
-                core::ptr::drop_in_place(self.inner.as_ptr());
-                super::mem::free(self.inner.as_ptr());
+                //core::ptr::drop_in_place(self.inner.as_ptr());
+                let _ = Box::from_raw(self.inner.as_ptr());
             }
         }
     }

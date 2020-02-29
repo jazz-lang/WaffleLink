@@ -17,11 +17,12 @@
 
 use super::cell::*;
 use super::process::*;
+use super::scheduler::process_worker::*;
 use super::state::*;
 use super::value::*;
 use crate::util::arc::Arc;
-
 pub extern "C" fn spawn(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     _this: Value,
@@ -41,6 +42,7 @@ pub extern "C" fn spawn(
 }
 
 pub extern "C" fn send(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -71,6 +73,7 @@ pub extern "C" fn send(
 }
 
 pub extern "C" fn receive(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -95,6 +98,7 @@ pub extern "C" fn receive(
 }
 
 pub extern "C" fn receive_or_wait(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -148,6 +152,7 @@ pub extern "C" fn receive_or_wait(
     Ok(ReturnValue::SuspendProcess)
 }
 pub extern "C" fn wait_for_message(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -199,6 +204,7 @@ pub extern "C" fn wait_for_message(
 }
 
 pub extern "C" fn has_messages(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
@@ -218,6 +224,7 @@ pub extern "C" fn has_messages(
 }
 
 pub extern "C" fn current(
+    _: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     _: Value,

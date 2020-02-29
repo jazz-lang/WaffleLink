@@ -1,0 +1,3 @@
+Module.load = function load(arg0) {
+    return require(arg0)
+}
