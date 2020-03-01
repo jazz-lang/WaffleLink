@@ -33,9 +33,13 @@ pub extern "C" fn to_string(
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
-    _: &[Value]
-) -> Result<ReturnValue,Value> {
-    Ok(ReturnValue::Value(Value::from(Process::allocate_string(process,state,&this.to_string()))))
+    _: &[Value],
+) -> Result<ReturnValue, Value> {
+    Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+        process,
+        state,
+        &this.to_string(),
+    ))))
 }
 
 pub fn initialize_object(state: &RcState) {
@@ -47,7 +51,7 @@ pub fn initialize_object(state: &RcState) {
     );
     object.add_attribute_without_barrier(
         &Arc::new("toString".to_owned()),
-        Value::from(state.allocate_native_fn(to_string,"toString",0))
+        Value::from(state.allocate_native_fn(to_string, "toString", 0)),
     );
 
     lock.insert("Object".to_owned(), Value::from(object));

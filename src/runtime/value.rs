@@ -60,7 +60,8 @@ pub enum VTag {
     Cell,
     EncodeAsDouble,
 }*/
-#[cfg(feature = "use-value64")]
+
+#[cfg(feature="use-value64")]
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod VTag {
@@ -72,12 +73,34 @@ pub mod VTag {
     pub const Null: i32 = Value::VALUE_NULL;
 }
 
+#[cfg(feature="use-slow-value")]
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(C)]
+pub enum VTag {
+    Null,
+    Undefined,
+    True,
+    False,
+    Cell
+}
+#[cfg(feature="use-value64")]
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Value {
     pub u: EncodedValueDescriptor,
 }
-
+#[cfg(feature="use-slow-value")]
+#[derive(Copy,Clone,PartialEq)]
+pub enum Value {
+    Int32(i32),
+    Double(f64),
+    Cell(CellPointer),
+    True,
+    False,
+    Null,
+    Undefined,
+    Empty
+}
 pub const NOT_INT52: usize = 1 << 52;
 impl Value {
     cfg_if::cfg_if! {
@@ -97,104 +120,195 @@ impl Value {
             pub const NOT_CELL_MASK: i64 = Self::NUMBER_TAG | Self::OTHER_TAG as i64;
             pub const VALUE_EMPTY: i32 = 0x0;
             pub const VALUE_DELETED: i32 = 0x4;
-        }
-    }
-    #[inline(always)]
-    pub fn empty() -> Self {
-        Self {
-            u: EncodedValueDescriptor {
-                as_int64: Self::VALUE_EMPTY as _,
-            },
-        }
-    }
-    #[inline(always)]
-    pub fn new_double(x: f64) -> Self {
-        Self {
-            u: EncodedValueDescriptor {
-                as_int64: Self::reinterpret_double_to_int64(x) + Self::DOUBLE_ENCODE_OFFSET as i64,
-            },
-        }
-    }
-    #[inline(always)]
-    pub fn new_int(x: i32) -> Self {
-        Self {
-            u: EncodedValueDescriptor {
-                as_int64: Self::NUMBER_TAG | unsafe { std::mem::transmute::<i32, u32>(x) as i64 },
-            },
+                #[inline(always)]
+            pub fn empty() -> Self {
+                Self {
+                    u: EncodedValueDescriptor {
+                        as_int64: Self::VALUE_EMPTY as _,
+                    },
+                }
+            }
+            #[inline(always)]
+            pub fn new_double(x: f64) -> Self {
+                Self {
+                    u: EncodedValueDescriptor {
+                        as_int64: Self::reinterpret_double_to_int64(x) + Self::DOUBLE_ENCODE_OFFSET as i64,
+                    },
+                }
+            }
+            #[inline(always)]
+            pub fn new_int(x: i32) -> Self {
+                Self {
+                    u: EncodedValueDescriptor {
+                        as_int64: Self::NUMBER_TAG | unsafe { std::mem::transmute::<i32, u32>(x) as i64 },
+                    },
+                }
+            }
+
+            #[inline(always)]
+            pub fn is_empty(&self) -> bool {
+                unsafe { self.u.as_int64 == Self::VALUE_EMPTY as _ }
+            }
+            #[inline(always)]
+            pub fn is_undefined(&self) -> bool {
+                *self == Self::from(VTag::Undefined)
+            }
+            #[inline(always)]
+            pub fn is_null(&self) -> bool {
+                *self == Self::from(VTag::Null)
+            }
+            #[inline(always)]
+            pub fn is_true(&self) -> bool {
+                *self == Self::from(VTag::True)
+            }
+            #[inline(always)]
+            pub fn is_false(&self) -> bool {
+                *self == Self::from(VTag::False)
+            }
+            #[inline(always)]
+            pub fn as_bool(&self) -> bool {
+                return *self == Self::from(VTag::True);
+            }
+
+            #[inline(always)]
+            pub fn is_bool(&self) -> bool {
+                unsafe { (self.u.as_int64 & !1) == Self::VALUE_FALSE as _ }
+            }
+            #[inline(always)]
+            pub fn is_null_or_undefined(&self) -> bool {
+                unsafe { (self.u.as_int64 & !Self::UNDEFINED_TAG as i64) == Self::VALUE_NULL as _ }
+            }
+            #[inline(always)]
+            pub fn is_cell(&self) -> bool {
+                //let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
+                //x && !self.is_number() && !self.is_any_int()
+                let result = unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK as i64) };
+                result == 0 && !self.is_bool()
+            }
+            #[inline(always)]
+            pub fn is_number(&self) -> bool {
+                unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 }
+            }
+            #[inline(always)]
+            pub fn is_double(&self) -> bool {
+                !self.is_int32() && self.is_number()
+            }
+            #[inline(always)]
+            pub fn is_int32(&self) -> bool {
+                unsafe { (self.u.as_int64 & Self::NUMBER_TAG as i64) == Self::NUMBER_TAG as i64 }
+            }
+            #[inline(always)]
+            pub fn reinterpret_double_to_int64(x: f64) -> i64 {
+                return x.to_bits() as i64;
+            }
+            #[inline(always)]
+            pub fn reinterpret_int64_to_double(x: i64) -> f64 {
+                f64::from_bits(x as u64)
+            }
+
+            #[inline(always)]
+            pub fn as_cell(&self) -> CellPointer {
+                assert!(self.is_cell());
+                unsafe { self.u.ptr }
+            }
+            #[inline(always)]
+            pub fn as_double(&self) -> f64 {
+                assert!(self.is_double());
+                Self::reinterpret_int64_to_double(unsafe { self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET })
+            }
+            #[inline(always)]
+            pub fn as_int32(&self) -> i32 {
+                unsafe { self.u.as_int64 as i32 }
+            }
+
+        } else if #[cfg(feature="use-slow-value")] {
+
+            pub fn is_int32(&self) -> bool {
+                match self {
+                    Value::Int32(_) => true,
+                    _ => false
+                }
+            }
+
+            pub fn is_double(&self) -> bool {
+                match self {
+                    Value::Double(_) => true,
+                    _ => false
+                }
+            }
+
+            pub fn is_cell(&self) -> bool {
+                match self {
+                    Value::Cell(_) => true,
+                    _ => false
+                }
+            }
+
+            pub fn as_cell(&self) -> CellPointer {
+                assert!(self.is_cell());
+                match self {
+                    Value::Cell(c) => *c,
+                    _ => unreachable!()
+                }
+            }
+
+            pub fn as_double(&self) -> f64 {
+                match self {
+                    Value::Double(x) => *x,
+                    _ => unreachable!()
+                }
+            }
+
+            pub fn is_number(&self) -> bool {
+                match self {
+                    Value::Int32(_) | Value::Double(_) => true,
+                    _ => false
+                }
+            }
+
+            pub fn is_empty(&self) -> bool {
+                *self == Self::Empty
+            }
+
+            pub fn is_true(&self) -> bool {
+                *self == Self::True
+            }
+
+            pub fn is_false(&self) -> bool {
+                *self == Self::False
+            }
+
+            pub fn new_double(x: f64) -> Self {
+                Self::Double(x)
+            }
+
+            pub fn new_int(x: i32) -> Self {
+                Self::Int(x)
+            }
+
+            pub fn is_undefined(&self) -> bool {
+                *self == Self::Undefined
+            }
+
+            pub fn is_null(&self) -> bool {
+                *self == Self::Null
+            }
+
+            pub fn is_null_or_undefined(&self) -> bool {
+                self.is_null() | self.is_undefined()
+            }
+
+            pub fn is_bool(&self) -> bool {
+                self.is_true() | self.is_false()
+            }
+
+            pub fn empty() -> Self {
+                Self::Empty
+            }
+
         }
     }
 
-    #[inline(always)]
-    pub fn is_empty(&self) -> bool {
-        unsafe { self.u.as_int64 == Self::VALUE_EMPTY as _ }
-    }
-    #[inline(always)]
-    pub fn is_undefined(&self) -> bool {
-        *self == Self::from(VTag::Undefined)
-    }
-    #[inline(always)]
-    pub fn is_null(&self) -> bool {
-        *self == Self::from(VTag::Null)
-    }
-    #[inline(always)]
-    pub fn is_true(&self) -> bool {
-        *self == Self::from(VTag::True)
-    }
-    #[inline(always)]
-    pub fn is_false(&self) -> bool {
-        *self == Self::from(VTag::False)
-    }
-    #[inline(always)]
-    pub fn as_bool(&self) -> bool {
-        return *self == Self::from(VTag::True);
-    }
-
-    #[inline(always)]
-    pub fn is_bool(&self) -> bool {
-        unsafe { (self.u.as_int64 & !1) == Self::VALUE_FALSE as _ }
-    }
-    #[inline(always)]
-    pub fn is_null_or_undefined(&self) -> bool {
-        unsafe { (self.u.as_int64 & !Self::UNDEFINED_TAG as i64) == Self::VALUE_NULL as _ }
-    }
-    #[inline(always)]
-    pub fn is_cell(&self) -> bool {
-        //let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
-        //x && !self.is_number() && !self.is_any_int()
-        let result = unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK as i64) };
-        result == 0 && !self.is_bool()
-    }
-    #[inline(always)]
-    pub fn is_number(&self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 }
-    }
-    #[inline(always)]
-    pub fn is_double(&self) -> bool {
-        !self.is_int32() && self.is_number()
-    }
-    #[inline(always)]
-    pub fn is_int32(&self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NUMBER_TAG as i64) == Self::NUMBER_TAG as i64 }
-    }
-    #[inline(always)]
-    pub fn reinterpret_double_to_int64(x: f64) -> i64 {
-        return x.to_bits() as i64;
-    }
-    #[inline(always)]
-    pub fn reinterpret_int64_to_double(x: i64) -> f64 {
-        f64::from_bits(x as u64)
-    }
-
-    #[inline(always)]
-    pub fn as_cell(&self) -> CellPointer {
-        assert!(self.is_cell());
-        unsafe { self.u.ptr }
-    }
-    #[inline(always)]
-    pub fn as_double(&self) -> f64 {
-        assert!(self.is_double());
-        Self::reinterpret_int64_to_double(unsafe { self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET })
-    }
     pub fn is_int52(number: f64) -> bool {
         try_convert_to_i52(number) != NOT_INT52 as i64
     }
@@ -207,9 +321,6 @@ impl Value {
             return false;
         }
         return Self::is_int52(self.as_double());
-    }
-    pub fn as_int32(&self) -> i32 {
-        unsafe { self.u.as_int64 as i32 }
     }
 
     pub fn set_prototype(&self, value: Value) {
@@ -312,8 +423,7 @@ impl Value {
         if self.is_bool() {
             return self.is_true();
         }
-
-        !unsafe { self.u.ptr.is_false() }
+        return !self.as_cell().is_false();
     }
 
     pub fn to_number(&self) -> f64 {
@@ -429,6 +539,8 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
     as_int64
 }
 
+cfg_if::cfg_if! {
+if #[cfg(feature="use-value64")] {
 impl From<CellPointer> for Value {
     fn from(x: CellPointer) -> Self {
         Self {
@@ -465,6 +577,38 @@ impl From<bool> for Value {
             Self::from(VTag::False)
         }
     }
+}
+} else if #[cfg(feature="use-slow-value")] {
+
+impl From<VTag> for Value {
+    fn from(x: VTag) -> Self {
+        match x {
+            VTag::True => Self::True,
+            VTag::False => Self::False,
+            VTag::Undefined => Self::Undefined,
+            VTag::Null => Self::Null,
+            _ => unreachable!()
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(x: bool) -> Self {
+        if x {
+            Self::True
+        } else {
+            Self::False
+        }
+    }
+}
+
+impl From<CellPointer> for Value {
+    fn from(x: CellPointer) -> Self {
+        Self::Cell(x)
+    }
+}
+
+}
 }
 
 unsafe impl Send for Value {}
