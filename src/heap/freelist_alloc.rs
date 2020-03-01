@@ -17,7 +17,7 @@
 
 use super::freelist::*;
 use super::space::Space;
-use crate::util::mem::{Address};
+use crate::util::mem::Address;
 pub struct FreeListAllocator {
     pub space: Space,
     pub freelist: FreeList,

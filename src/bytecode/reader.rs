@@ -83,9 +83,7 @@ impl<'a> BytecodeReader<'a> {
                     let string = rt.state.intern_string(strings[idx].clone());
                     m.globals.push(Value::from(string));
                 }
-                TAG_FLOAT => {
-                    unimplemented!()
-                }
+                TAG_FLOAT => unimplemented!(),
                 TAG_FUN => {
                     let code_size = self.read_u16();
                     let is_main = self.read_u8() != 0;

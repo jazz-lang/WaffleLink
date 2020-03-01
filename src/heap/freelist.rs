@@ -90,10 +90,6 @@ impl SizeClass {
     fn idx(self) -> usize {
         self.0
     }
-
-    fn size(self) -> usize {
-        SIZES[self.0]
-    }
 }
 
 pub struct FreeList {

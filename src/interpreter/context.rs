@@ -20,7 +20,6 @@ use crate::runtime;
 use crate::util;
 use runtime::cell::*;
 use runtime::module::*;
-use runtime::process::*;
 use runtime::value::*;
 use std::vec::Vec;
 use util::arc::Arc;

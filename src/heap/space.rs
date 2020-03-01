@@ -16,7 +16,6 @@
 */
 
 use crate::util::mem::*;
-use crate::util::ptr::*;
 use std::collections::LinkedList;
 pub struct Space {
     pub top: Address,

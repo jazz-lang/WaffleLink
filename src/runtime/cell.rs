@@ -614,7 +614,6 @@ impl CellPointer {
                 }
             }
         }
-
     }
 }
 

@@ -169,12 +169,7 @@ impl Process {
 
                 Ok(Self::with_rc(context, config))
             }
-            _ => {
-                return Err(format!(
-                    "Expected function to Process.spawn"
-                )
-                .to_owned())
-            }
+            _ => return Err(format!("Expected function to Process.spawn").to_owned()),
         }
     }
 

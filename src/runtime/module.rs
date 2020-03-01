@@ -16,12 +16,9 @@
 */
 
 use super::cell::*;
-use super::process::*;
 use super::state::*;
 use super::value::*;
 use crate::bytecode::reader::*;
-use crate::util::arc::Arc;
-use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;

@@ -26,14 +26,6 @@ pub struct Chunk {
     values: [CellPointer; CHUNK_VALUES],
 }
 
-fn compare_and_swap<T: PartialEq + Copy>(x: &mut T, current: T, next: T) -> T {
-    if *x == current {
-        std::mem::replace(x, next)
-    } else {
-        *x
-    }
-}
-
 impl Chunk {
     pub fn boxed() -> (Box<Self>, *mut Chunk) {
         let chunk = Chunk {

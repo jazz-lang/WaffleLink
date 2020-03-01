@@ -226,7 +226,7 @@ impl State {
         } else {
             self.intern(match pointer.get().value {
                 CellValue::String(ref s) => s,
-                _ => unreachable!()
+                _ => unreachable!(),
             })
         }
     }

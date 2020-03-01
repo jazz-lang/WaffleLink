@@ -3,16 +3,15 @@
  *   All rights reserved.
  */
 
-
-
 pub mod array_functions;
 pub mod cell;
 pub mod channel;
 pub mod config;
 pub mod core_functions;
+pub mod exception;
 pub mod interner;
 pub mod io_functions;
-pub mod exception;
+pub mod math_object;
 pub mod module;
 pub mod module_functions;
 pub mod object_functions;
@@ -21,7 +20,6 @@ pub mod process_functions;
 pub mod scheduler;
 pub mod state;
 pub mod value;
-pub mod math_object;
 use module::*;
 use parking_lot::Mutex;
 use state::*;

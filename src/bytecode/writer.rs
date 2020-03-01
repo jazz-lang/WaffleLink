@@ -18,9 +18,9 @@
 use super::instruction::*;
 use super::reader::{TAG_FUN, TAG_STRING};
 use crate::runtime;
-use runtime::module::Module;
 use crate::util::arc::Arc;
 use byteorder::{LittleEndian, WriteBytesExt};
+use runtime::module::Module;
 use InstructionByte::*;
 pub struct BytecodeWriter {
     pub bytecode: Vec<u8>,
@@ -48,10 +48,7 @@ impl BytecodeWriter {
         for global in m.globals.iter() {
             if global.is_cell() {
                 if global.as_cell().is_string() {
-                    strings.insert(
-                        global.to_string(),
-                        i,
-                    );
+                    strings.insert(global.to_string(), i);
                     i += 1;
                 } else {
                     /*if let Ok(func) = global.as_cell().function_value() {
