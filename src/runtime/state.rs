@@ -16,7 +16,6 @@
 */
 
 use super::cell::*;
-use super::interner::*;
 use super::scheduler;
 use super::value::*;
 use crate::heap::PermanentHeap;
@@ -78,7 +77,7 @@ impl State {
         module_prototype.set_prototype(object_prototype);
         boolean_prototype.set_prototype(object_prototype);
         byte_array_prototype.set_prototype(object_prototype);
-        let mut map = ahash::AHashMap::new();
+        let map = ahash::AHashMap::new();
         /*{
             map.insert("Array".to_owned(), array_prototype);
             map.insert("Process".to_owned(), process_prototype);

@@ -60,7 +60,9 @@ pub enum VTag {
     Cell,
     EncodeAsDouble,
 }*/
-
+#[cfg(feature="use-value64")]
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
 pub mod VTag {
     use super::*;
 

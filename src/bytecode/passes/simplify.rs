@@ -18,7 +18,6 @@
 use super::*;
 use crate::bytecode;
 use crate::util::arc::Arc;
-use bytecode::basicblock::*;
 use std::collections::{BTreeSet, HashSet};
 pub struct SimplifyCFGPass;
 

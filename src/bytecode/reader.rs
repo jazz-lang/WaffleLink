@@ -84,10 +84,7 @@ impl<'a> BytecodeReader<'a> {
                     m.globals.push(Value::from(string));
                 }
                 TAG_FLOAT => {
-                    panic!();
-                    let bits = self.read_u64();
-                    let float = f64::from_bits(bits);
-                    m.globals.push(Value::new_double(float));
+                    unimplemented!()
                 }
                 TAG_FUN => {
                     let code_size = self.read_u16();

@@ -19,19 +19,19 @@ use crate::bytecode::*;
 use crate::runtime;
 use crate::util::arc::Arc;
 use basicblock::BasicBlock;
-use instruction::{BinOp, Instruction, UnaryOp};
+use instruction::{BinOp, Instruction};
 use runtime::cell::*;
 
 pub struct BaselineJIT {
     pub buffer: String,
-    vtmp: usize,
+    //vtmp: usize,
 }
 
 impl BaselineJIT {
     pub fn new() -> Self {
         Self {
             buffer: String::new(),
-            vtmp: 0,
+            //vtmp: 0,
         }
     }
     pub fn translate_instruction(&mut self, ins: Instruction) {

@@ -342,7 +342,7 @@ impl CellPointer {
     pub fn get_color(&self) -> u8 {
         self.get().color
     }
-
+    #[allow(unused)]
     fn is_color(&self, color: u8) -> bool {
         let c = self.get().color;
         if color == CELL_BLACK {

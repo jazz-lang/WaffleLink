@@ -16,14 +16,11 @@
 */
 
 use super::instruction::*;
-use super::reader::{TAG_FLOAT, TAG_FUN, TAG_STRING};
+use super::reader::{TAG_FUN, TAG_STRING};
 use crate::runtime;
+use runtime::module::Module;
 use crate::util::arc::Arc;
 use byteorder::{LittleEndian, WriteBytesExt};
-use runtime::cell::*;
-use runtime::module::*;
-use runtime::value::*;
-use runtime::*;
 use InstructionByte::*;
 pub struct BytecodeWriter {
     pub bytecode: Vec<u8>,

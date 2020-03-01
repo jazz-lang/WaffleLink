@@ -8,11 +8,11 @@ use crate::interpreter::context::*;
 use crate::util::arc::Arc;
 
 pub extern "C" fn load(
-    worker: &mut ProcessWorker,
-    state: &RcState,
-    process: &Arc<Process>,
+    _worker: &mut ProcessWorker,
+    _state: &RcState,
+    _process: &Arc<Process>,
     _: Value,
-    arguments: &[Value],
+    _arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
     unimplemented!()
 }

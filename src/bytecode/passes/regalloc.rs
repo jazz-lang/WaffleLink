@@ -217,7 +217,7 @@ impl RFunction for RegisterAllocationPass {
 
     fn maybe_direct_reload(
         &self,
-        insn: &Self::Inst,
+        _insn: &Self::Inst,
         _: VirtualReg,
         _: SpillSlot,
     ) -> Option<Self::Inst> {

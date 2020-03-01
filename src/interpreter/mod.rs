@@ -18,7 +18,6 @@
 pub mod context;
 pub mod tracing_interpreter;
 use crate::bytecode::instruction::*;
-use crate::heap::*;
 use crate::runtime::*;
 use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
@@ -100,6 +99,7 @@ impl Runtime {
         let mut context: Ptr<Context>;
         //assert!(process.context_ptr().raw.is_null() == false);
         reset_context!(process, context, index, bindex);
+        #[allow(unused_macros)]
         macro_rules! catch {
             ($value: expr) => {
                 match $value {
