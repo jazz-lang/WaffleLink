@@ -233,10 +233,10 @@ impl GenerationalHeap {
                     let shall_promote = object.get().generation >= 4;
                     let fwd = if shall_promote {
                         gc.old_space
-                            .allocate(std::mem::size_of::<Cell>(), &mut false)
+                            .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
                     } else {
                         gc.tmp_space
-                            .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
+                            .allocate(std::mem::size_of::<Cell>(), &mut false)
                     };
 
                     if needs_gc {

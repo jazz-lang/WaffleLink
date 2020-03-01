@@ -965,7 +965,7 @@ impl Runtime {
 
         Ok(ret)
     }
-    /// ReturnValues true if a process is garbage collected.
+    /// Returns true if a process is garbage collected.
     pub fn gc_safepoint(&self, process: &Arc<Process>) -> Result<(), bool> {
         if !process.local_data().heap.should_collect() {
             return Ok(());
