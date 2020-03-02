@@ -25,6 +25,8 @@ simple_logger = "1.6"
 const-if = "0.1.3"
 log = "0.4"
 structopt = "0.3"
+dirs = "*"
+regex = "*"
 num_cpus = "1.12"
 hashlink = "*"
 byteorder = "1.3"
@@ -35,6 +37,7 @@ kernel32-sys = "0.2"
 
 [features]
 use-value64 = []
+use-slow-value = []
 default = ["use-value64"]
 
 [profile.release]

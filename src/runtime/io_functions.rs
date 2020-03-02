@@ -35,12 +35,30 @@ pub extern "C" fn writeln(
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
 
+pub extern "C" fn write(
+    _: &mut ProcessWorker,
+    _: &RcState,
+    _: &Arc<Process>,
+    _: Value,
+    arguments: &[Value],
+) -> Result<ReturnValue, Value> {
+    for value in arguments.iter() {
+        print!("{}", value);
+    }
+    Ok(ReturnValue::Value(Value::from(VTag::Null)))
+}
+
 pub fn initialize_io(state: &RcState) {
     let io = Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
     let io = state.allocate(io);
-    state.static_variables.lock().insert("io".to_owned(), io);
-    let name = Arc::new("writeln".to_owned());
-    let writeln = state.allocate_native_fn_with_name(writeln, "writeln", -1);
+    state.static_variables.lock().insert("IO".to_owned(), io);
+    let name = Arc::new("WriteLine".to_owned());
+    let writeln = state.allocate_native_fn_with_name(writeln, "WriteLine", -1);
     io.as_cell()
         .add_attribute_without_barrier(&name, Value::from(writeln));
+
+    let name = Arc::new("Write".to_owned());
+    let write = state.allocate_native_fn_with_name(write, "Write", -1);
+    io.as_cell()
+        .add_attribute_without_barrier(&name, Value::from(write));
 }

@@ -61,7 +61,7 @@ pub enum VTag {
     EncodeAsDouble,
 }*/
 
-#[cfg(feature="use-value64")]
+#[cfg(feature = "use-value64")]
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod VTag {
@@ -73,7 +73,7 @@ pub mod VTag {
     pub const Null: i32 = Value::VALUE_NULL;
 }
 
-#[cfg(feature="use-slow-value")]
+#[cfg(feature = "use-slow-value")]
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
 pub enum VTag {
@@ -81,16 +81,16 @@ pub enum VTag {
     Undefined,
     True,
     False,
-    Cell
+    Cell,
 }
-#[cfg(feature="use-value64")]
+#[cfg(feature = "use-value64")]
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct Value {
     pub u: EncodedValueDescriptor,
 }
-#[cfg(feature="use-slow-value")]
-#[derive(Copy,Clone,PartialEq)]
+#[cfg(feature = "use-slow-value")]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Value {
     Int32(i32),
     Double(f64),
@@ -99,7 +99,7 @@ pub enum Value {
     False,
     Null,
     Undefined,
-    Empty
+    Empty,
 }
 pub const NOT_INT52: usize = 1 << 52;
 impl Value {

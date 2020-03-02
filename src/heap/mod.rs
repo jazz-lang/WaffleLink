@@ -156,6 +156,7 @@ pub trait HeapTrait {
         }
         let to_copy = to_copy.get();
         let value_copy = match &to_copy.value {
+            CellValue::Regex(ref r) => CellValue::Regex(r.clone()),
             CellValue::None => CellValue::None,
             CellValue::Duration(d) => CellValue::Duration(d.clone()),
             CellValue::File(_) => panic!("Cannot copy file"),

@@ -29,6 +29,7 @@ use crate::util::mem::Address;
 use crate::util::ptr::*;
 use crate::util::tagged::*;
 use bytecode::basicblock::BasicBlock;
+use regex::Regex;
 use std::fs::File;
 use std::string::String;
 use std::vec::Vec;
@@ -89,7 +90,6 @@ pub struct Generator {
     pub context: Ptr<Context>,
 }
 
-#[repr(C)]
 pub enum CellValue {
     None,
     /// Heap allocated number.
@@ -103,6 +103,7 @@ pub enum CellValue {
     Function(Arc<Function>),
     Module(Arc<Module>),
     Process(Arc<Process>),
+    Regex(Arc<Regex>),
     Duration(std::time::Duration),
     File(File),
 }
@@ -575,6 +576,7 @@ impl CellPointer {
     }
     pub fn to_string(&self) -> String {
         match self.get().value {
+            CellValue::Regex(ref s) => format!("{}", s),
             CellValue::String(ref s) => (**s).clone(),
             CellValue::Array(ref array) => {
                 use std::fmt::Write;

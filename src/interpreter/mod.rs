@@ -977,6 +977,9 @@ impl Runtime {
         proc.set_main();
         self.state.scheduler.schedule_on_main_thread(proc);
     }
+    pub fn schedule_main_queue(&self, proc: Arc<Process>) {
+        self.state.scheduler.schedule_on_main_thread(proc);
+    }
     pub fn schedule(&self, proc: Arc<Process>) {
         self.state.scheduler.schedule(proc);
     }

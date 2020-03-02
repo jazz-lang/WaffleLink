@@ -233,6 +233,19 @@ fn main() {
     simple_logger::init().unwrap();
     let c = Config::default();
 
+    /*{
+        let path = format!("{}/.waffle/builtins/loader.wfl",dirs::home_dir().unwrap().to_str().unwrap());
+        let loader_contents = std::fs::read(&path).unwrap();
+        let mut reader = BytecodeReader {
+            bytes: std::io::Cursor::new(&loader_contents),
+        };
+        let module = reader.read_module();
+        let mut proc = Process::from_function(module.main_fn,&c).unwrap();
+
+        RUNTIME.schedule_main_queue(proc);
+
+    }*/
+
     let contents = std::fs::read(&c.main_name).expect("ERROR!");
     let mut reader = BytecodeReader {
         bytes: std::io::Cursor::new(&contents),

@@ -113,7 +113,7 @@ impl ModuleRegistry {
                 ));
                 Ok(Value::from(module_cell))
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(format!("Cannot load module at '{}': {}",path,e.to_string())),
         }
     }
 

@@ -14,7 +14,9 @@ pub mod io_functions;
 pub mod math_object;
 pub mod module;
 pub mod module_functions;
+pub mod regex_functions;
 pub mod object_functions;
+pub mod env_functions;
 pub mod process;
 pub mod process_functions;
 pub mod scheduler;
@@ -51,6 +53,9 @@ impl Runtime {
         core_functions::initialize_core(&self.state);
         object_functions::initialize_object(&self.state);
         module_functions::initialize_module(&self.state);
+        exception::initialize_exception(&self.state);
+        regex_functions::initialize_regex(&self.state);
+        env_functions::initialize_env(&self.state);
     }
 
     pub fn start_pools(&self) {
