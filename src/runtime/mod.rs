@@ -6,25 +6,49 @@
 #[macro_export]
 macro_rules! native_fn {
     ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            _: Value,
+            args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             let $arg = args[0];
             $e
         }
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident,$arg2: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            _: Value,
+            args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             let $arg = args[0];
             let $arg2 = args[1];
             $e
         }
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident (...$args: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,$args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            _: Value,
+            $args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             $e
         }
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident,$arg2: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            this: Value,
+            args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             let $arg = args[0];
             let $arg2 = args[1];
             let $this = this;
@@ -32,7 +56,13 @@ macro_rules! native_fn {
         }
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            this: Value,
+            args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             let $arg = args[0];
             //let $arg2 = args[1];
             let $this = this;
@@ -40,12 +70,17 @@ macro_rules! native_fn {
         }
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident (...$args: ident) $e: expr ) => {
-        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,$args: &[Value]) -> Result<ReturnValue,Value> {
+        pub extern "C" fn $name(
+            $worker: &mut ProcessWorker,
+            $state: &RcState,
+            $proc: &Arc<Process>,
+            this: Value,
+            $args: &[Value],
+        ) -> Result<ReturnValue, Value> {
             let $this = this;
             $e
         }
     };
-
 }
 
 pub mod array_functions;
@@ -53,20 +88,20 @@ pub mod cell;
 pub mod channel;
 pub mod config;
 pub mod core_functions;
+pub mod env_functions;
 pub mod exception;
 pub mod interner;
 pub mod io_functions;
 pub mod math_object;
 pub mod module;
 pub mod module_functions;
-pub mod regex_functions;
 pub mod object_functions;
-pub mod env_functions;
 pub mod process;
-pub mod string_functions;
 pub mod process_functions;
+pub mod regex_functions;
 pub mod scheduler;
 pub mod state;
+pub mod string_functions;
 pub mod value;
 use module::*;
 use parking_lot::Mutex;

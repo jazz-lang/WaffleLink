@@ -64,13 +64,35 @@ pub extern "C" fn __start(
     state: &RcState,
     process: &Arc<Process>,
     _: Value,
-    _: &[Value]
-) -> Result<ReturnValue,Value> {
-
-    let home_dir = format!("{}/.waffle/builtins/",dirs::home_dir().unwrap().to_str().unwrap().to_owned());
-    require(worker,state,process,Value::empty(),&[Value::from(state.intern(&format!("{}/Array.wfl",home_dir)))])?;
-    require(worker,state,process,Value::empty(),&[Value::from(state.intern(&format!("{}/Math.wfl",home_dir)))])?;
-    require(worker,state,process,Value::empty(),&[Value::from(state.intern(&format!("{}/Core.wfl",home_dir)))])?;
+    _: &[Value],
+) -> Result<ReturnValue, Value> {
+    let home_dir = format!(
+        "{}/.waffle/builtins/",
+        dirs::home_dir().unwrap().to_str().unwrap().to_owned()
+    );
+    require(
+        worker,
+        state,
+        process,
+        Value::empty(),
+        &[Value::from(
+            state.intern(&format!("{}/Array.wfl", home_dir)),
+        )],
+    )?;
+    require(
+        worker,
+        state,
+        process,
+        Value::empty(),
+        &[Value::from(state.intern(&format!("{}/Math.wfl", home_dir)))],
+    )?;
+    require(
+        worker,
+        state,
+        process,
+        Value::empty(),
+        &[Value::from(state.intern(&format!("{}/Core.wfl", home_dir)))],
+    )?;
 
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
@@ -78,7 +100,7 @@ pub extern "C" fn __start(
 pub fn initialize_core(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let require = state.allocate_native_fn(require, "require", 1);
-    let start = state.allocate_native_fn(__start,"__start__",0);
+    let start = state.allocate_native_fn(__start, "__start__", 0);
     lock.insert("require".to_owned(), Value::from(require));
     lock.insert("__start__".to_owned(), Value::from(start));
 }

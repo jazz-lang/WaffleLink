@@ -10,19 +10,25 @@ pub extern "C" fn constructor(
     state: &RcState,
     process: &Arc<Process>,
     this: Value,
-    _: &[Value],
+    args: &[Value],
 ) -> Result<ReturnValue, Value> {
+    let prototype = match args.len() {
+        1 => {
+            if args[0].is_cell() {
+                args[0].as_cell()
+            } else {
+                state.object_prototype.as_cell()
+            }
+        }
+        _ => state.object_prototype.as_cell(),
+    };
     if !this.is_cell() {
-        let object = Process::allocate(
-            process,
-            Cell::with_prototype(CellValue::None, state.object_prototype.as_cell()),
-        );
+        let object = Process::allocate(process, Cell::with_prototype(CellValue::None, prototype));
 
         return Ok(ReturnValue::Value(Value::from(object)));
     } else {
         let cell = this.as_cell();
-        cell.get_mut()
-            .set_prototype(state.object_prototype.as_cell());
+        cell.get_mut().set_prototype(prototype);
         cell.get_mut().value = CellValue::None;
         return Ok(ReturnValue::Value(this));
     }

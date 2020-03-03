@@ -6,25 +6,24 @@ use super::value::*;
 use crate::util::arc::Arc;
 
 fn isdigit(c: char) -> bool {
-    ('0' as u32)<=(c as u32) && (c as u32)<=('9' as u32)
+    ('0' as u32) <= (c as u32) && (c as u32) <= ('9' as u32)
 }
 
 fn isalpha(c: char) -> bool {
     let c = c as u32;
-    ('A' as u32)<=c && c<=('Z' as u32) ||
-    ('a' as u32)<=c && c<=('z' as u32)
+    ('A' as u32) <= c && c <= ('Z' as u32) || ('a' as u32) <= c && c <= ('z' as u32)
 }
 
 fn isspace(c: char) -> bool {
-    c==' ' || c=='\t' || c=='\n'
+    c == ' ' || c == '\t' || c == '\n'
 }
 
 fn islower(c: char) -> bool {
-    ('a' as u32)<=(c as u32) && (c as u32)<=('z' as u32)
+    ('a' as u32) <= (c as u32) && (c as u32) <= ('z' as u32)
 }
 
 fn isupper(c: char) -> bool {
-    ('A' as u32)<=(c as u32) && (c as u32)<=('Z' as u32)
+    ('A' as u32) <= (c as u32) && (c as u32) <= ('Z' as u32)
 }
 
 native_fn!(
@@ -108,13 +107,37 @@ native_fn!(_worker,_state,_proc => string_length this(..._args) {
 pub fn initialize_string(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let cell = state.string_prototype.as_cell();
-    cell.add_attribute_without_barrier(&Arc::new("split".to_owned()),Value::from(state.allocate_native_fn(split,"split",-1)));
-    cell.add_attribute_without_barrier(&Arc::new("charAt".to_owned()),Value::from(state.allocate_native_fn(char_at,"charAt",1)));
-    cell.add_attribute_without_barrier(&Arc::new("constructor".to_owned()),Value::from(state.allocate_native_fn(ctor,"constructor",1)));
-    cell.add_attribute_without_barrier(&Arc::new("isDigit".to_owned()),Value::from(state.allocate_native_fn(string_is_digit,"isDigit",0)));
-    cell.add_attribute_without_barrier(&Arc::new("isSpace".to_owned()),Value::from(state.allocate_native_fn(string_is_space,"isSpace",0)));
-    cell.add_attribute_without_barrier(&Arc::new("isAlpha".to_owned()),Value::from(state.allocate_native_fn(string_is_alpha,"isAlpha",0)));
-    cell.add_attribute_without_barrier(&Arc::new("chars".to_owned()),Value::from(state.allocate_native_fn(string_chars,"chars",0)));
-    cell.add_attribute_without_barrier(&Arc::new("length".to_owned()),Value::from(state.allocate_native_fn(string_length,"length",0)));
-    lock.insert("String".to_owned(),Value::from(cell));
+    cell.add_attribute_without_barrier(
+        &Arc::new("split".to_owned()),
+        Value::from(state.allocate_native_fn(split, "split", -1)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("charAt".to_owned()),
+        Value::from(state.allocate_native_fn(char_at, "charAt", 1)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("constructor".to_owned()),
+        Value::from(state.allocate_native_fn(ctor, "constructor", 1)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("isDigit".to_owned()),
+        Value::from(state.allocate_native_fn(string_is_digit, "isDigit", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("isSpace".to_owned()),
+        Value::from(state.allocate_native_fn(string_is_space, "isSpace", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("isAlpha".to_owned()),
+        Value::from(state.allocate_native_fn(string_is_alpha, "isAlpha", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("chars".to_owned()),
+        Value::from(state.allocate_native_fn(string_chars, "chars", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("length".to_owned()),
+        Value::from(state.allocate_native_fn(string_length, "length", 0)),
+    );
+    lock.insert("String".to_owned(), Value::from(cell));
 }
