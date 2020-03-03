@@ -3,6 +3,51 @@
  *   All rights reserved.
  */
 
+#[macro_export]
+macro_rules! native_fn {
+    ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+            let $arg = args[0];
+            $e
+        }
+    };
+    ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident,$arg2: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+            let $arg = args[0];
+            let $arg2 = args[1];
+            $e
+        }
+    };
+    ($worker: ident,$state: ident,$proc: ident => $name: ident (...$args: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,_: Value,$args: &[Value]) -> Result<ReturnValue,Value> {
+            $e
+        }
+    };
+    ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident,$arg2: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+            let $arg = args[0];
+            let $arg2 = args[1];
+            let $this = this;
+            $e
+        }
+    };
+    ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,args: &[Value]) -> Result<ReturnValue,Value> {
+            let $arg = args[0];
+            //let $arg2 = args[1];
+            let $this = this;
+            $e
+        }
+    };
+    ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident (...$args: ident) $e: expr ) => {
+        pub extern "C" fn $name ($worker: &mut ProcessWorker,$state: &RcState,$proc: &Arc<Process>,this: Value,$args: &[Value]) -> Result<ReturnValue,Value> {
+            let $this = this;
+            $e
+        }
+    };
+
+}
+
 pub mod array_functions;
 pub mod cell;
 pub mod channel;
@@ -18,6 +63,7 @@ pub mod regex_functions;
 pub mod object_functions;
 pub mod env_functions;
 pub mod process;
+pub mod string_functions;
 pub mod process_functions;
 pub mod scheduler;
 pub mod state;
@@ -56,6 +102,8 @@ impl Runtime {
         exception::initialize_exception(&self.state);
         regex_functions::initialize_regex(&self.state);
         env_functions::initialize_env(&self.state);
+        math_object::initialize_math(&self.state);
+        string_functions::initialize_string(&self.state);
     }
 
     pub fn start_pools(&self) {

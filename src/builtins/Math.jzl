@@ -1,0 +1,17 @@
+Math.sin_cos = function sin_cos(x) {
+    return new Array(Math.sin(x),Math.cos(x))
+}
+
+Math.abs = function abs(x) {
+    if x < 0 {
+    	return x * -1
+    } else {
+    	return x
+    }
+}
+
+Math.PI = 3.14159265358979323846264338327950288
+Math.TAU = 6.28318530717958647692528676655900577
+Math.LOG10_E = 0.434294481903251827651128918916605082
+Math.LN_2 = 0.693147180559945309417232121458176568
+Math.LN_10 = 2.30258509299404568401799145468436421
