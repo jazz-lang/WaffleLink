@@ -485,6 +485,7 @@ impl Runtime {
                             new_context.terminate_upon_return = false;
                             //process.push_context(new_context);
                             reset_context!(process, context, index, bindex);
+                            safepoint_and_reduce!(self,process,reductions);
                             //enter_context!(process, context, index, bindex);
                         }
                     }
