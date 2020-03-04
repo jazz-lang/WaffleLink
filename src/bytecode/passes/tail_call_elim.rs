@@ -3,7 +3,6 @@ pub struct TailCallEliminationPass;
 use super::*;
 use crate::bytecode;
 use crate::util::arc::Arc;
-use std::collections::{BTreeSet, HashSet};
 
 impl BytecodePass for TailCallEliminationPass {
     fn execute(&mut self,f: &mut Arc<Vec<BasicBlock>>) {
