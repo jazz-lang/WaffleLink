@@ -7,7 +7,7 @@ use super::value::*;
 use crate::util::arc::Arc;
 use regex::Regex;
 pub extern "C" fn ctor(
-    w: &mut ProcessWorker,
+    _w: &mut ProcessWorker,
     state: &RcState,
     process: &Arc<Process>,
     this: Value,

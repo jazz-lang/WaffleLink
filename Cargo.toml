@@ -3,7 +3,7 @@ name = "waffle"
 version = "0.0.1"
 authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
 edition = "2018"
-
+build = "build.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -30,10 +30,12 @@ regex = "*"
 num_cpus = "1.12"
 hashlink = "*"
 byteorder = "1.3"
-regalloc = "0.0.10"
 [target.'cfg(target_family = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
 kernel32-sys = "0.2"
+
+[dev-dependencies]
+dirs = "2.0"
 
 [features]
 use-value64 = []

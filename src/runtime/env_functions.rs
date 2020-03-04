@@ -9,7 +9,7 @@ use crate::util::arc::Arc;
 pub extern "C" fn get_home(
     _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    _process: &Arc<Process>,
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {

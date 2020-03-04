@@ -35,7 +35,7 @@ macro_rules! reset_context {
         $bindex = $context.bindex;
     }};
 }
-
+#[allow(unused_macros)]
 macro_rules! remember_and_reset {
     ($process: expr, $context: ident, $index: ident,$bindex: ident) => {
         $context.index = $index - 1;
@@ -485,7 +485,7 @@ impl Runtime {
                             new_context.terminate_upon_return = false;
                             //process.push_context(new_context);
                             reset_context!(process, context, index, bindex);
-                            safepoint_and_reduce!(self,process,reductions);
+                            safepoint_and_reduce!(self, process, reductions);
                             //enter_context!(process, context, index, bindex);
                         }
                     }

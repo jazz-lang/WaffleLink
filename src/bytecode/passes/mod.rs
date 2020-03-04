@@ -22,10 +22,9 @@ use crate::util::arc::Arc;
 pub mod cse;
 pub mod load_after_store;
 pub mod peephole;
-pub mod tail_call_elim;
-pub mod regalloc;
 pub mod ret_sink;
 pub mod simplify;
+pub mod tail_call_elim;
 
 pub trait BytecodePass {
     fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>);

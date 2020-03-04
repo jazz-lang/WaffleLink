@@ -18,6 +18,7 @@
 use super::cell::*;
 use super::process::*;
 use super::state::*;
+use super::RUNTIME;
 use crate::util::arc::Arc;
 pub type EncodedValue = i64;
 
@@ -182,7 +183,7 @@ impl Value {
             pub fn is_cell(&self) -> bool {
                 //let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
                 //x && !self.is_number() && !self.is_any_int()
-                let result = unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK as i64) };
+                let result = unsafe { self.u.as_int64 & Self::NOT_CELL_MASK as i64 };
                 result == 0 && !self.is_bool()
             }
             #[inline(always)]
@@ -306,6 +307,8 @@ impl Value {
                 Self::Empty
             }
 
+
+
         }
     }
 
@@ -322,7 +325,31 @@ impl Value {
         }
         return Self::is_int52(self.as_double());
     }
+    pub fn prototype(&self) -> Value {
+        if self.is_bool() {
+            RUNTIME.state.boolean_prototype
+        } else if self.is_number() {
+            RUNTIME.state.number_prototype
+        } else if self.is_cell() {
+            self.as_cell()
+                .prototype(&RUNTIME.state)
+                .map(|cell| Value::from(cell))
+                .unwrap_or(Value::from(VTag::Null))
+        } else {
+            Value::from(VTag::Null)
+        }
+    }
 
+    pub fn is_kind_of(&self, value: Value) -> bool {
+        if !self.is_cell() {
+            return false;
+        }
+        if value.is_cell() {
+            self.as_cell().is_kind_of(&RUNTIME.state, value.as_cell())
+        } else {
+            return false;
+        }
+    }
     pub fn set_prototype(&self, value: Value) {
         if value.is_cell() && self.is_cell() {
             self.as_cell().get_mut().prototype = Some(value.as_cell());

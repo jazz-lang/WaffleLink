@@ -10,6 +10,17 @@ Math.abs = function abs(x) {
     }
 }
 
+Math.factorial = function factorial(n) {
+    function factorialCalc(x,y) {
+        if x < 2 {
+            return y
+        } else {
+            return factorialCalc(x - 1,x*y)
+        }
+    }
+    return factorialCalc(n,1)
+}
+
 Math.PI = 3.14159265358979323846264338327950288
 Math.TAU = 6.28318530717958647692528676655900577
 Math.LOG10_E = 0.434294481903251827651128918916605082

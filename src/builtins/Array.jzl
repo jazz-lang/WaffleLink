@@ -24,7 +24,25 @@ Array.clear = function clear() {
     }
 }
 
+Array.swap = function swap(a,b) {
+    var tmp = this[a]
+    this[a] = this[b]
+    this[b] = tmp
+}
+
 Array.retain = function retain(f) {
-    io.writeln("TODO")
-    throw 0
+    var i = 0
+    var del = 0 
+    var len = this.length()
+    while i < len {   
+        if !f(this[i]) {
+            del = del + 1
+        } else if del > 1 {
+            this.swap(i - del,i)
+        }
+        i = i + 1
+    }
+    if del > 0 {
+        this.truncate(len)
+    }
 }

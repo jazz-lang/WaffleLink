@@ -17,10 +17,10 @@
 
 use super::instruction::*;
 use std::vec::Vec;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BasicBlock {
     pub index: usize,
-
+    pub liveout: Vec<usize>,
     pub instructions: Vec<Instruction>,
 }
 
@@ -29,6 +29,7 @@ impl BasicBlock {
         Self {
             instructions: ins,
             index: idx,
+            liveout: vec![],
         }
     }
 
@@ -96,7 +97,7 @@ impl BasicBlock {
             | Instruction::BranchIfFalse(_, t)
             | Instruction::BranchIfTrue(_, t) => (Some(t), None),
             Instruction::Return(_) => (None, None),
-            _ => panic!("Terminator not found"),
+            _ => panic!("Terminator not found in {:#?}", self),
         }
     }
 }
@@ -105,5 +106,12 @@ use core::hash::{Hash, Hasher};
 impl Hash for BasicBlock {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.index.hash(state);
+    }
+}
+
+impl Eq for BasicBlock {}
+impl PartialEq for BasicBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index
     }
 }

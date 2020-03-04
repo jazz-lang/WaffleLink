@@ -104,11 +104,283 @@ impl Instruction {
             _ => vec![],
         }
     }
+    pub fn branch_targets(&self) -> Vec<usize> {
+        match &self {
+            Instruction::Branch(x)
+            | Instruction::BranchIfFalse(_, x)
+            | Instruction::BranchIfTrue(_, x) => vec![*x as _],
+            Instruction::ConditionalBranch(_, x, y) => vec![*x as _, *y as _],
+            _ => vec![],
+        }
+    }
+    pub fn get_defs(&self) -> Vec<usize> {
+        let mut def_set = std::collections::HashSet::new();
+        macro_rules! vreg {
+            ($e: expr) => {
+                $e
+            };
+        }
+        match self {
+            Instruction::LoadStaticById(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::Move(to, _from) => {
+                def_set.insert(vreg!(*to));
+                //(vreg!(*from));
+            }
+            Instruction::LoadUpvalue(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::StoreUpvalue(r, _) => {
+                //(vreg!(*r));
+            }
+            Instruction::LoadById(x, y, _) | Instruction::LoadByIndex(x, y, _) => {
+                def_set.insert(vreg!(*x));
+                //(vreg!(*y));
+            }
+            Instruction::LoadByValue(x, y, z) => {
+                def_set.insert(vreg!(*x));
+                //(vreg!(*y));
+                //(vreg!(*z));
+            }
+            Instruction::StoreById(x, y, _) | Instruction::StoreByIndex(x, y, _) => {
+                //modified_set.insert(vreg!(*x));
+                //(vreg!(*y));
+            }
+            Instruction::StoreByValue(x, y, z) => {
+                //modified_set.insert(vreg!(*x));
+                //(vreg!(*y));
+                //(vreg!(*z));
+            }
+            Instruction::LoadNumber(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::LoadInt(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::LoadConst(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::LoadUndefined(r) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::LoadNull(r) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::CatchBlock(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::Throw(r) => {}
+            Instruction::VirtCall(r0, r1, r2, _) => {
+                def_set.insert(vreg!(*r0));
+                //(vreg!(*r1));
+                //(vreg!(*r2));
+            }
+            Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
+                def_set.insert(vreg!(*r0));
+                //(vreg!(*r1));
+            }
+            Instruction::New(r0, r1, _) => {
+                def_set.insert(vreg!(*r0));
+                //(vreg!(*r1));
+            }
+            Instruction::Return(Some(r)) => {
+                //(vreg!(*r));
+            }
+            Instruction::Return(None) => (),
+            Instruction::MakeEnv(r0, _) => {
+                //modified_set.insert(vreg!(*r0));
+            }
+            Instruction::Push(r0) => {
+                //(vreg!(*r0));
+            }
+            Instruction::Pop(r0) => {
+                def_set.insert(vreg!(*r0));
+            }
 
+            Instruction::StoreStack(r, _) => {
+                //(vreg!(*r));
+            }
+            Instruction::LoadStack(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::Binary(_, r0, r1, r2) => {
+                def_set.insert(vreg!(*r0));
+                //(vreg!(*r1));
+                //(vreg!(*r2));
+            }
+            Instruction::LoadTrue(r) | Instruction::LoadFalse(r) => {
+                def_set.insert(vreg!(*r));
+            }
+            Instruction::Unary(_, r0, r1) => {
+                def_set.insert(vreg!(*r0));
+                //(vreg!(*r1));
+            }
+            Instruction::BranchIfFalse(r0, _)
+            | Instruction::BranchIfTrue(r0, _)
+            | Instruction::ConditionalBranch(r0, _, _) => {
+                //(vreg!(*r0));
+            }
+            Instruction::LoadThis(r0) => {
+                def_set.insert(vreg!(*r0));
+            }
+            Instruction::SetThis(r0) => {
+                //(vreg!(*r0));
+            }
+            Instruction::LoadCurrentModule(r0) => {
+                def_set.insert(vreg!(*r0));
+            }
+            _ => {}
+        };
+        def_set.iter().map(|x| *x as usize).collect()
+    }
+    pub fn get_uses(&self) -> Vec<usize> {
+        let mut use_set = std::collections::HashSet::new();
+        macro_rules! vreg {
+            ($e: expr) => {
+                $e
+            };
+        }
+        match self {
+            Instruction::Move(to, from) => {
+                use_set.insert(vreg!(*from));
+            }
+            Instruction::LoadUpvalue(r, _) => {}
+            Instruction::StoreUpvalue(r, _) => {
+                use_set.insert(vreg!(*r));
+            }
+            Instruction::LoadById(x, y, _) | Instruction::LoadByIndex(x, y, _) => {
+                use_set.insert(vreg!(*y));
+            }
+            Instruction::LoadByValue(x, y, z) => {
+                use_set.insert(vreg!(*y));
+                use_set.insert(vreg!(*z));
+            }
+            Instruction::StoreById(x, y, _) | Instruction::StoreByIndex(x, y, _) => {
+                use_set.insert(vreg!(*y));
+                use_set.insert(vreg!(*y));
+            }
+            Instruction::StoreByValue(x, y, z) => {
+                use_set.insert(vreg!(*x));
+                use_set.insert(vreg!(*y));
+                use_set.insert(vreg!(*z));
+            }
+            Instruction::LoadNumber(r, _) => {}
+            Instruction::LoadInt(r, _) => {}
+            Instruction::LoadConst(r, _) => {}
+            Instruction::LoadUndefined(r) => {}
+            Instruction::CatchBlock(r, _) => {}
+            Instruction::Throw(r) => {
+                use_set.insert(vreg!(*r));
+            }
+            Instruction::VirtCall(r0, r1, r2, _) => {
+                use_set.insert(vreg!(*r1));
+                use_set.insert(vreg!(*r2));
+            }
+            Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
+                use_set.insert(vreg!(*r1));
+            }
+            Instruction::New(r0, r1, _) => {
+                use_set.insert(vreg!(*r1));
+            }
+            Instruction::Return(Some(r)) => {
+                use_set.insert(vreg!(*r));
+            }
+            Instruction::Return(None) => (),
+            Instruction::MakeEnv(r0, _) => {
+                use_set.insert(vreg!(*r0));
+            }
+            Instruction::Push(r0) => {
+                use_set.insert(vreg!(*r0));
+            }
+            Instruction::Pop(r0) => {}
+
+            Instruction::StoreStack(r, _) => {
+                use_set.insert(vreg!(*r));
+            }
+            Instruction::LoadStack(r, _) => {}
+            Instruction::Binary(_, r0, r1, r2) => {
+                use_set.insert(vreg!(*r1));
+                use_set.insert(vreg!(*r2));
+            }
+            Instruction::Unary(_, r0, r1) => {
+                use_set.insert(vreg!(*r1));
+            }
+            Instruction::BranchIfFalse(r0, _)
+            | Instruction::BranchIfTrue(r0, _)
+            | Instruction::ConditionalBranch(r0, _, _) => {
+                use_set.insert(vreg!(*r0));
+            }
+            Instruction::LoadThis(r0) => {}
+            Instruction::SetThis(r0) => {
+                use_set.insert(vreg!(*r0));
+            }
+            Instruction::LoadCurrentModule(r0) => {}
+            _ => {}
+        }
+
+        use_set.iter().map(|x| *x as usize).collect()
+    }
+
+    pub fn replace_reg(&mut self, temp: usize, to: usize) {
+        macro_rules! r {
+            ($t: expr) => {{
+                if *$t == temp as u16 {
+                    *$t = to as u16;
+                }
+            }};
+            ($($t: expr),*) => {
+                {$(
+                    r!($t);
+                )*
+                }
+            };
+        }
+        match self {
+            Instruction::LoadNull(r)
+            | Instruction::LoadUndefined(r)
+            | Instruction::LoadInt(r, _)
+            | Instruction::LoadNumber(r, _)
+            | Instruction::LoadTrue(r)
+            | Instruction::LoadUpvalue(r, _)
+            | Instruction::StoreUpvalue(r, _)
+            | Instruction::StoreStack(r, _)
+            | Instruction::LoadStack(r, _)
+            | Instruction::LoadStaticById(r, _)
+            | Instruction::StoreStaticById(r, _)
+            | Instruction::ConditionalBranch(r, _, _)
+            | Instruction::BranchIfFalse(r, _)
+            | Instruction::BranchIfTrue(r, _)
+            | Instruction::CatchBlock(r, _)
+            | Instruction::Throw(r)
+            | Instruction::MakeEnv(r, _)
+            | Instruction::Return(Some(r))
+            | Instruction::Pop(r)
+            | Instruction::Push(r)
+            | Instruction::LoadConst(r, _)
+            | Instruction::LoadThis(r)
+            | Instruction::SetThis(r)
+            | Instruction::LoadCurrentModule(r)
+            | Instruction::LoadFalse(r) => r!(r),
+            Instruction::LoadById(r1, r2, _)
+            | Instruction::Move(r1, r2)
+            | Instruction::Unary(_, r1, r2)
+            | Instruction::Call(r1, r2, _)
+            | Instruction::TailCall(r1, r2, _)
+            | Instruction::StoreById(r1, r2, _)
+            | Instruction::New(r1, r2, _)
+            | Instruction::LoadStaticByValue(r1, r2) => r!(r1, r2),
+            Instruction::LoadByValue(r1, r2, r3)
+            | Instruction::StoreByValue(r1, r2, r3)
+            | Instruction::VirtCall(r1, r2, r3, _)
+            | Instruction::Binary(_, r1, r2, r3) => r!(r1, r2, r3),
+            _ => (),
+        }
+    }
     pub fn get_reg_usage(&self) -> (Set<Reg>, Set<Reg>, Set<Reg>) {
-        let mut def = Set::<Reg>::empty();
-        let mut m0d = Set::<Reg>::empty();
-        let mut uce = Set::<Reg>::empty();
+        let mut def_set = Set::<Reg>::empty();
+        let mut modified_set = Set::<Reg>::empty();
+        let mut use_set = Set::<Reg>::empty();
         macro_rules! vreg {
             ($v: expr) => {
                 if $v > 32 {
@@ -120,110 +392,110 @@ impl Instruction {
         }
         match self {
             Instruction::LoadStaticById(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
             Instruction::Move(to, from) => {
-                def.insert(vreg!(*to));
-                uce.insert(vreg!(*from));
+                def_set.insert(vreg!(*to));
+                use_set.insert(vreg!(*from));
             }
             Instruction::LoadUpvalue(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
             Instruction::StoreUpvalue(r, _) => {
-                uce.insert(vreg!(*r));
+                use_set.insert(vreg!(*r));
             }
             Instruction::LoadById(x, y, _) | Instruction::LoadByIndex(x, y, _) => {
-                def.insert(vreg!(*x));
-                uce.insert(vreg!(*y));
+                def_set.insert(vreg!(*x));
+                use_set.insert(vreg!(*y));
             }
             Instruction::LoadByValue(x, y, z) => {
-                def.insert(vreg!(*x));
-                uce.insert(vreg!(*y));
-                uce.insert(vreg!(*z));
+                def_set.insert(vreg!(*x));
+                use_set.insert(vreg!(*y));
+                use_set.insert(vreg!(*z));
             }
             Instruction::StoreById(x, y, _) | Instruction::StoreByIndex(x, y, _) => {
-                m0d.insert(vreg!(*x));
-                uce.insert(vreg!(*y));
+                modified_set.insert(vreg!(*x));
+                use_set.insert(vreg!(*y));
             }
             Instruction::StoreByValue(x, y, z) => {
-                m0d.insert(vreg!(*x));
-                uce.insert(vreg!(*y));
-                uce.insert(vreg!(*z));
+                modified_set.insert(vreg!(*x));
+                use_set.insert(vreg!(*y));
+                use_set.insert(vreg!(*z));
             }
             Instruction::LoadNumber(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
             Instruction::LoadInt(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
             Instruction::LoadConst(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
-            Instruction::LoadUndefined(r) => def.insert(vreg!(*r)),
-            Instruction::LoadNull(r) => def.insert(vreg!(*r)),
-            Instruction::CatchBlock(r, _) => def.insert(vreg!(*r)),
-            Instruction::Throw(r) => uce.insert(vreg!(*r)),
+            Instruction::LoadUndefined(r) => def_set.insert(vreg!(*r)),
+            Instruction::LoadNull(r) => def_set.insert(vreg!(*r)),
+            Instruction::CatchBlock(r, _) => def_set.insert(vreg!(*r)),
+            Instruction::Throw(r) => use_set.insert(vreg!(*r)),
             Instruction::VirtCall(r0, r1, r2, _) => {
-                def.insert(vreg!(*r0));
-                uce.insert(vreg!(*r1));
-                uce.insert(vreg!(*r2));
+                def_set.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r1));
+                use_set.insert(vreg!(*r2));
             }
             Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
-                def.insert(vreg!(*r0));
-                uce.insert(vreg!(*r1));
+                def_set.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r1));
             }
             Instruction::New(r0, r1, _) => {
-                def.insert(vreg!(*r0));
-                uce.insert(vreg!(*r1));
+                def_set.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r1));
             }
             Instruction::Return(Some(r)) => {
-                uce.insert(vreg!(*r));
+                use_set.insert(vreg!(*r));
             }
             Instruction::Return(None) => (),
             Instruction::MakeEnv(r0, _) => {
-                m0d.insert(vreg!(*r0));
+                modified_set.insert(vreg!(*r0));
             }
             Instruction::Push(r0) => {
-                uce.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r0));
             }
             Instruction::Pop(r0) => {
-                def.insert(vreg!(*r0));
+                def_set.insert(vreg!(*r0));
             }
 
             Instruction::StoreStack(r, _) => {
-                uce.insert(vreg!(*r));
+                use_set.insert(vreg!(*r));
             }
             Instruction::LoadStack(r, _) => {
-                def.insert(vreg!(*r));
+                def_set.insert(vreg!(*r));
             }
             Instruction::Binary(_, r0, r1, r2) => {
-                def.insert(vreg!(*r0));
-                uce.insert(vreg!(*r1));
-                uce.insert(vreg!(*r2));
+                def_set.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r1));
+                use_set.insert(vreg!(*r2));
             }
-            Instruction::LoadTrue(r) | Instruction::LoadFalse(r) => def.insert(vreg!(*r)),
+            Instruction::LoadTrue(r) | Instruction::LoadFalse(r) => def_set.insert(vreg!(*r)),
             Instruction::Unary(_, r0, r1) => {
-                def.insert(vreg!(*r0));
-                uce.insert(vreg!(*r1));
+                def_set.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r1));
             }
             Instruction::BranchIfFalse(r0, _)
             | Instruction::BranchIfTrue(r0, _)
             | Instruction::ConditionalBranch(r0, _, _) => {
-                uce.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r0));
             }
             Instruction::LoadThis(r0) => {
-                def.insert(vreg!(*r0));
+                def_set.insert(vreg!(*r0));
             }
             Instruction::SetThis(r0) => {
-                uce.insert(vreg!(*r0));
+                use_set.insert(vreg!(*r0));
             }
             Instruction::LoadCurrentModule(r0) => {
-                def.insert(vreg!(*r0));
+                def_set.insert(vreg!(*r0));
             }
             _ => {}
         }
 
-        (def, m0d, uce)
+        (def_set, modified_set, use_set)
     }
 
     pub fn map_regs_d_u(
@@ -241,7 +513,7 @@ impl Instruction {
                     map!($($rest)*);
                 }
             };
-            (def $r: ident $($rest:tt)*) => {
+            (def_set $r: ident $($rest:tt)*) => {
                 {
                     *$r = map_defs
                         .get(&vreg!(*$r).to_virtual_reg())
@@ -256,47 +528,47 @@ impl Instruction {
             }
         }
         match self {
-            Instruction::LoadStaticById(r0, _) => map!(def r0),
-            Instruction::LoadStaticByValue(r0, r1) => map!(def r0 use r1),
+            Instruction::LoadStaticById(r0, _) => map!(def_set r0),
+            Instruction::LoadStaticByValue(r0, r1) => map!(def_set r0 use r1),
             Instruction::StoreStaticById(r0, _) => map!(use r0),
             Instruction::StoreStaticByValue(r0, _) => map!(use r0),
-            Instruction::LoadById(r0, r1, _) => map!(def r0 use r1),
+            Instruction::LoadById(r0, r1, _) => map!(def_set r0 use r1),
             Instruction::StoreById(r0, r1, _) => map!(use r0 use r1),
             Instruction::StoreByValue(r0, r1, r2) => map!(use r0 use r1 use r2),
-            Instruction::LoadByValue(r0, r1, r2) => map!(def r0 use r1 use r2),
-            Instruction::LoadByIndex(r0, r1, _) => map!(def r0 use r1),
+            Instruction::LoadByValue(r0, r1, r2) => map!(def_set r0 use r1 use r2),
+            Instruction::LoadByIndex(r0, r1, _) => map!(def_set r0 use r1),
             Instruction::StoreByIndex(r0, r1, _) => map!(use r0 use r1),
             Instruction::Throw(r) => map!(use r),
-            Instruction::CatchBlock(r, _) => map!(def r),
+            Instruction::CatchBlock(r, _) => map!(def_set r),
             Instruction::SetThis(r) => map!(use r),
-            Instruction::LoadThis(r) => map!(def r),
-            Instruction::New(r0, r1, _) => map!(def r0 use r1),
-            Instruction::LoadUndefined(r) | Instruction::LoadNull(r) => map!(def r),
-            Instruction::LoadTrue(r0) | Instruction::LoadFalse(r0) => map!(def r0),
+            Instruction::LoadThis(r) => map!(def_set r),
+            Instruction::New(r0, r1, _) => map!(def_set r0 use r1),
+            Instruction::LoadUndefined(r) | Instruction::LoadNull(r) => map!(def_set r),
+            Instruction::LoadTrue(r0) | Instruction::LoadFalse(r0) => map!(def_set r0),
             Instruction::Binary(_, r0, r1, r2) => {
-                map!(def r0 use r1 use r2);
+                map!(def_set r0 use r1 use r2);
             }
 
             Instruction::LoadNumber(r0, _) => {
-                map!(def r0);
+                map!(def_set r0);
             }
             Instruction::LoadInt(r0, _) => {
-                map!(def r0);
+                map!(def_set r0);
             }
             Instruction::LoadConst(r0, _) => {
-                map!(def r0);
+                map!(def_set r0);
             }
             Instruction::Call(r0, r1, _) | Instruction::TailCall(r0, r1, _) => {
-                map!(def r0 use r1);
+                map!(def_set r0 use r1);
             }
-            Instruction::VirtCall(r0, r1, r2, _) => map!(def r0 use r1 use r2),
+            Instruction::VirtCall(r0, r1, r2, _) => map!(def_set r0 use r1 use r2),
             Instruction::Return(r0) => {
                 if let Some(r0) = r0 {
                     map!(use r0);
                 }
             }
             Instruction::LoadUpvalue(r, _) => {
-                map!(def r);
+                map!(def_set r);
             }
             Instruction::StoreUpvalue(r, _) => {
                 map!(use r);
@@ -308,25 +580,25 @@ impl Instruction {
                 map!(use r0);
             }
             Instruction::Pop(r0) => {
-                map!(def r0);
+                map!(def_set r0);
             }
             Instruction::Move(r0, r1) => {
-                map!(def r0 use r1);
+                map!(def_set r0 use r1);
             }
             Instruction::StoreStack(r0, _) => {
                 map!(use r0);
             }
             Instruction::LoadStack(r0, _) => {
-                map!(def r0);
+                map!(def_set r0);
             }
-            Instruction::Unary(_, r0, r1) => map!(def r0 use r1),
+            Instruction::Unary(_, r0, r1) => map!(def_set r0 use r1),
             Instruction::BranchIfFalse(r0, _)
             | Instruction::BranchIfTrue(r0, _)
             | Instruction::ConditionalBranch(r0, _, _) => {
                 map!(use r0);
             }
 
-            Instruction::LoadCurrentModule(r0) => map!(def r0),
+            Instruction::LoadCurrentModule(r0) => map!(def_set r0),
 
             _ => {}
         }

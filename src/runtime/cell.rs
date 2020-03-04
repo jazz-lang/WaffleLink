@@ -413,12 +413,8 @@ impl CellPointer {
         self.raw.set_bit(0)
     }
 
-    pub fn prototype(&self, state: &State) -> Option<CellPointer> {
-        if self.is_tagged_number() {
-            Some(state.number_prototype.as_cell())
-        } else {
-            self.get().prototype()
-        }
+    pub fn prototype(&self, _: &State) -> Option<CellPointer> {
+        self.get().prototype()
     }
     pub fn set_prototype(&self, proto: CellPointer) {
         self.get_mut().set_prototype(proto);
@@ -428,6 +424,15 @@ impl CellPointer {
         let mut prototype = self.prototype(state);
 
         while let Some(proto) = prototype {
+            if other.is_function() {
+                if let Some(other) =
+                    other.lookup_attribute_in_self(state, &Arc::new("prototype".to_owned()))
+                {
+                    if other.as_cell() == proto {
+                        return true;
+                    }
+                }
+            }
             if proto == other {
                 return true;
             }

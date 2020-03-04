@@ -17,16 +17,16 @@
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(unused_variables)]
 
 #[macro_use]
 extern crate intrusive_collections;
-
+#[macro_use]
+pub mod util;
 pub mod bytecode;
 pub mod heap;
 pub mod interpreter;
 pub mod jit;
 pub mod runtime;
 pub mod types;
-pub mod util;
-
 pub use runtime::cell::ReturnValue;

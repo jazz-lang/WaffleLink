@@ -30,6 +30,7 @@ use color::*;
 use crossbeam::epoch::pin as _pin;
 use phase::*;
 
+#[allow(unused_macros)]
 macro_rules! guard {
     () => {
         &_pin()

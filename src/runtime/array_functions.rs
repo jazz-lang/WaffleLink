@@ -134,6 +134,26 @@ pub extern "C" fn array_length(
     }
 }
 
+pub extern "C" fn array_remove(
+    _: &mut ProcessWorker,
+    _state: &RcState,
+    _process: &Arc<Process>,
+    this: Value,
+    arguments: &[Value],
+) -> Result<ReturnValue, Value> {
+    let index = arguments[0].to_number();
+    if index.is_infinite() || index.is_nan() {
+        return Ok(ReturnValue::Value(Value::from(VTag::Undefined)));
+    }
+    let index = index.ceil() as i64 as usize;
+
+    let val = match this.as_cell().get_mut().value {
+        CellValue::Array(ref mut arr) if index < arr.len() => arr.remove(index),
+        _ => return Ok(ReturnValue::Value(Value::from(VTag::Undefined))),
+    };
+    return Ok(ReturnValue::Value(val));
+}
+
 pub fn initialize_array_builtins(state: &RcState) {
     let array_prototype: CellPointer = state.array_prototype.as_cell();
     let new = state.allocate_native_fn(array_new, "constructor", -1);
@@ -146,6 +166,10 @@ pub fn initialize_array_builtins(state: &RcState) {
     array_prototype.add_attribute_without_barrier(&Arc::new("push".to_owned()), Value::from(push));
     let pop = state.allocate_native_fn(array_pop, "pop", 0);
     array_prototype.add_attribute_without_barrier(&Arc::new("pop".to_owned()), Value::from(pop));
+    array_prototype.add_attribute_without_barrier(
+        &Arc::new("remove".to_owned()),
+        Value::from(state.allocate_native_fn(array_remove, "remove", 1)),
+    );
     state
         .static_variables
         .lock()

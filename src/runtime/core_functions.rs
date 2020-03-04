@@ -97,10 +97,22 @@ pub extern "C" fn __start(
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
 
+pub extern "C" fn instanceof(
+    _: &mut ProcessWorker,
+    _: &RcState,
+    _: &Arc<Process>,
+    _: Value,
+    args: &[Value],
+) -> Result<ReturnValue, Value> {
+    Ok(ReturnValue::Value(Value::from(args[0].is_kind_of(args[1]))))
+}
+
 pub fn initialize_core(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let require = state.allocate_native_fn(require, "require", 1);
     let start = state.allocate_native_fn(__start, "__start__", 0);
+    let instanceof = state.allocate_native_fn(instanceof, "instanceof", 2);
     lock.insert("require".to_owned(), Value::from(require));
     lock.insert("__start__".to_owned(), Value::from(start));
+    lock.insert("instanceof".to_owned(), Value::from(instanceof));
 }

@@ -19,3 +19,13 @@ pub mod arc;
 pub mod mem;
 pub mod ptr;
 pub mod tagged;
+
+/// print trace!() log if condition is true (the condition should be a constant boolean)
+#[macro_export]
+macro_rules! trace_if {
+    ($cond: expr, $($arg:tt)*) => {
+        if $cond {
+            trace!($($arg)*)
+        }
+    }
+}
