@@ -18,6 +18,7 @@
 pub mod cms;
 pub mod freelist;
 pub mod freelist_alloc;
+pub mod gc_pool;
 pub mod generational;
 pub mod incremental;
 use crate::runtime::cell::*;

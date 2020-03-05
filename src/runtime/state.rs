@@ -18,6 +18,7 @@
 use super::cell::*;
 use super::scheduler;
 use super::value::*;
+use crate::heap::gc_pool::GcPool;
 use crate::heap::PermanentHeap;
 use crate::util::arc::Arc;
 use parking_lot::Mutex;
@@ -27,6 +28,7 @@ pub struct State {
     pub scheduler: ProcessScheduler,
     pub timeout_worker: TimeoutWorker,
     pub perm_heap: Mutex<PermanentHeap>,
+    pub gc_pool: GcPool,
     pub string_prototype: Value,
     pub object_prototype: Value,
     pub array_prototype: Value,
@@ -103,6 +105,7 @@ impl State {
         };
         Arc::new(Self {
             scheduler,
+            gc_pool: GcPool::new(_gc_workers),
             timeout_worker,
             perm_heap: Mutex::new(perm),
             object_prototype,

@@ -112,6 +112,10 @@ impl SimplifyCFGPass {
                     if replaced {}
                 }
             }
+            // change basic blocks indexes to new one
+            for (i, bb) in code.iter_mut().enumerate() {
+                bb.index = i;
+            }
             //n_basic_blocks = f.basic_blocks.len();
         }
     }

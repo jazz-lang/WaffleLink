@@ -18,6 +18,7 @@
 pub mod context;
 pub mod tracing_interpreter;
 use crate::bytecode::instruction::*;
+use crate::heap::gc_pool::*;
 use crate::runtime::*;
 use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
@@ -72,14 +73,8 @@ macro_rules! enter_context {
 
 macro_rules! safepoint_and_reduce {
     ($rt: expr,$process: expr,$reductions: expr) => {
-        /*if $rt.gc_safepoint($process) {
+        if $rt.gc_safepoint($process) {
             return Ok(Value::from(VTag::Null));
-        }*/
-        match $rt.gc_safepoint($process) {
-            Ok(()) => (),
-            Err(_) => {
-                return Ok(Value::from(VTag::Null));
-            }
         }
 
         if $reductions > 0 {
@@ -588,8 +583,8 @@ impl Runtime {
                     Err(_) => return Ok(Value::from(VTag::Null)),
                 },
                 Instruction::GcSafepoint => match self.gc_safepoint(process) {
-                    Ok(_) => (),
-                    Err(_) => return Ok(Value::from(VTag::Null)),
+                    true => return Ok(Value::from(VTag::Null)),
+                    _ => (),
                 },
                 Instruction::New(dest, function, argc) => {
                     let function = context.get_register(function);
@@ -967,11 +962,15 @@ impl Runtime {
         Ok(ret)
     }
     /// Returns true if a process is garbage collected.
-    pub fn gc_safepoint(&self, process: &Arc<Process>) -> Result<(), bool> {
+    /// Returns true if a process should be suspended for garbage collection.
+    pub fn gc_safepoint(&self, process: &Arc<Process>) -> bool {
         if !process.local_data().heap.should_collect() {
-            return Ok(());
+            return false;
         }
-        process.local_data_mut().heap.collect_garbage(process)
+        self.state
+            .gc_pool
+            .schedule(Collection::new(process.clone()));
+        true
     }
 
     pub fn schedule_main_process(&self, proc: Arc<Process>) {

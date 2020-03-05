@@ -11,7 +11,7 @@ impl BytecodePass for CSEPass {
         let mut stats = 0;
         for bb in f.iter_mut() {
             for i in bb.instructions.iter_mut() {
-                let k = if let Instruction::Binary { .. } = i {
+                let k = if let Instruction::Binary(_, _, lhs, rhs) = i {
                     *i
                 } else {
                     match i {

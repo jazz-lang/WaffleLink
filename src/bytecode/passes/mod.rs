@@ -17,12 +17,13 @@
 
 use super::basicblock::*;
 use super::instruction::*;
+use crate::runtime;
 use crate::util::arc::Arc;
-
 pub mod cse;
 pub mod load_after_store;
 pub mod peephole;
 pub mod ret_sink;
+pub mod simple_inlining;
 pub mod simplify;
 pub mod tail_call_elim;
 

@@ -90,6 +90,7 @@ pub mod config;
 pub mod core_functions;
 pub mod env_functions;
 pub mod exception;
+pub mod function_functions;
 pub mod interner;
 pub mod io_functions;
 pub mod math_object;
@@ -139,6 +140,7 @@ impl Runtime {
         env_functions::initialize_env(&self.state);
         math_object::initialize_math(&self.state);
         string_functions::initialize_string(&self.state);
+        function_functions::initialize_function(&self.state);
     }
 
     pub fn start_pools(&self) {

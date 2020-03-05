@@ -613,7 +613,7 @@ impl CellPointer {
                     {
                         write!(fmt_buf, "  {}: {}\n", key, value.to_string()).unwrap();
                     }
-                    write!(fmt_buf, "\n}}").unwrap();
+                    write!(fmt_buf, "}}").unwrap();
 
                     fmt_buf
                 } else {
