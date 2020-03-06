@@ -8,7 +8,8 @@ use crate::bytecode;
 use crate::util::arc::Arc;
 
 impl BytecodePass for TailCallEliminationPass {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        let f = &mut f.code;
         for bb in f.iter_mut() {
             // The last instruction is always a Return or Branch to Return instruction, so we check the
             // instruction that preceeds it.

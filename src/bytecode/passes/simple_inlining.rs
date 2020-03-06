@@ -35,6 +35,10 @@ pub fn do_inlining(f: &mut Arc<Function>, module: &Arc<Module>) {
         for ins in bb.instructions.iter() {
             if let Instruction::Call(dest,callee,_) = ins {
                 if let Some(func) = inlinable.get(&callee) {
+                    if func.native.is_some() {
+                        curr_block.instructions.push(*ins);
+                        continue;
+                    }
                     remap.insert(bb.index,new_blocks.len());
                     curr_block.instructions.push(Instruction::Branch(new_blocks.len() as u16 + 1));
                     new_blocks.push(curr_block.clone());
@@ -59,6 +63,7 @@ pub fn do_inlining(f: &mut Arc<Function>, module: &Arc<Module>) {
                         }
                     }
                     let continue_bb_id = new_blocks.len() + inlined.len();
+                    let mut add_branches = vec![0];
                     for bb in inlined.iter_mut() {
                         if bb.instructions.is_empty() {continue;}
                         if let Instruction::Return(Some(r)) = bb.instructions.last().copied().unwrap() {
@@ -67,9 +72,14 @@ pub fn do_inlining(f: &mut Arc<Function>, module: &Arc<Module>) {
                             bb.instructions.pop();
                             bb.instructions.push(Instruction::Move(*dest,r));
                             bb.instructions.push(Instruction::Branch(continue_bb_id as _));
+                            //add_branches.push(bb.index);
                         }
                     }
                     new_blocks.extend(inlined.into_iter());
+                    let to = new_blocks.len() - 1;
+                    for i in add_branches.iter() {
+                       // new_blocks[*i].instructions.push(Instruction::Branch(to as _));
+                    }
                     curr_block = BasicBlock {
                         index: new_blocks.len(),
                         liveout: vec![],

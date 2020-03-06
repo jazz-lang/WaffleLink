@@ -17,8 +17,7 @@ Math.factorial = function factorial(n) {
         } else {
             return factorialCalc(x - 1,x*y)
         }
-    }
-    return factorialCalc(n,1)
+    }(n,1)
 }
 
 Math.PI = 3.14159265358979323846264338327950288

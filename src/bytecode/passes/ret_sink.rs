@@ -25,10 +25,10 @@ use crate::runtime::cell::Function;
 use crate::util::arc::Arc;
 
 impl BytecodePass for RetSink {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
-        let return_sink = { BasicBlock::new(vec![Instruction::Return(Some(0))], f.len()) };
-        let target = f.len();
-        for block in f.iter_mut() {
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        let return_sink = { BasicBlock::new(vec![Instruction::Return(Some(0))], f.code.len()) };
+        let target = f.code.len();
+        for block in f.code.iter_mut() {
             let mut new_instructions = vec![];
             for ins in block.instructions.iter() {
                 match *ins {
@@ -45,6 +45,6 @@ impl BytecodePass for RetSink {
             }
             block.instructions = new_instructions;
         }
-        f.push(return_sink);
+        f.code.push(return_sink);
     }
 }

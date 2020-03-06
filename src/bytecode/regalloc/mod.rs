@@ -7,6 +7,7 @@ use crate::bytecode::*;
 use crate::util::arc::Arc;
 use basicblock::*;
 use instruction::*;
+use crate::runtime::cell::Function;
 use passes::BytecodePass;
 
 impl RegisterAllocation {
@@ -30,7 +31,7 @@ impl RegisterAllocation {
 }
 
 impl BytecodePass for RegisterAllocation {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
-        self.coloring(f);
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        self.coloring(&mut f.code);
     }
 }

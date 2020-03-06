@@ -21,8 +21,8 @@ use super::*;
 use crate::runtime::cell::Function;
 use crate::util::arc::Arc;
 impl BytecodePass for PeepholePass {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
-        for block in f.iter_mut() {
+    fn execute(&mut self, f: &mut Arc<Function>) {
+        for block in f.code.iter_mut() {
             block.instructions.retain(|x| {
                 if let Instruction::Move(to, from) = x {
                     to != from

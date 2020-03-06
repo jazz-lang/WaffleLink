@@ -18,13 +18,15 @@
 use super::*;
 use crate::bytecode;
 use crate::util::arc::Arc;
+use crate::runtime::cell::Function;
 use std::collections::{BTreeSet, HashSet};
 /// Simplifies CFG, removes unused blocks and replaces some branches.
 /// SimpliyCFGPass is really nice in reducing bytecode size, through it doesn't improve performance.
 pub struct SimplifyCFGPass;
 
 impl SimplifyCFGPass {
-    fn simplify(&self, code: &mut Arc<Vec<BasicBlock>>) {
+    fn simplify(&self, code: &mut Arc<Function>) {
+        let code = &mut code.code;
         if code.len() == 0 {
             return;
         }
@@ -122,7 +124,7 @@ impl SimplifyCFGPass {
 }
 
 impl BytecodePass for SimplifyCFGPass {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
+    fn execute(&mut self, f: &mut Arc<Function>) {
         self.simplify(f);
     }
 }

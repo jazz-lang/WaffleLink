@@ -907,6 +907,7 @@ impl<'a> GraphColoring<'a> {
         self.checkinv_spill_worklist();
     }
     fn rewrite_program(&mut self) {
+        unimplemented!("Spilling is not yet supported");
         /*let spills = self.spills();
 
         let mut spilled_mem = LinkedHashMap::new();

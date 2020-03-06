@@ -1,15 +1,16 @@
 use super::*;
 use crate::runtime::cell::Function;
 use crate::util::arc::Arc;
+
 use std::collections::HashMap;
 // TODO: This pass does not work as it should.
 pub struct CSEPass;
 
 impl BytecodePass for CSEPass {
-    fn execute(&mut self, f: &mut Arc<Vec<BasicBlock>>) {
+    fn execute(&mut self, f: &mut Arc<Function>) {
         let mut ins_map = HashMap::new();
         let mut stats = 0;
-        for bb in f.iter_mut() {
+        for bb in f.code.iter_mut() {
             for i in bb.instructions.iter_mut() {
                 let k = if let Instruction::Binary(_, _, lhs, rhs) = i {
                     *i
