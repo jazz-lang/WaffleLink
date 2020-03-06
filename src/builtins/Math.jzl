@@ -11,13 +11,13 @@ Math.abs = function abs(x) {
 }
 
 Math.factorial = function factorial(n) {
-    function factorialCalc(x,y) {
+    (function factorialCalc(x,y) {
         if x < 2 {
             return y
         } else {
             return factorialCalc(x - 1,x*y)
         }
-    }(n,1)
+    })(n,1)
 }
 
 Math.PI = 3.14159265358979323846264338327950288

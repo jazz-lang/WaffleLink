@@ -98,7 +98,8 @@ impl<'a> BytecodeReader<'a> {
                             let op = self.read_u8();
                             assert!(
                                 op >= InstructionByte::LOAD_NULL
-                                    && op <= InstructionByte::STORE_UPVALUE
+                                    && op <= InstructionByte::STORE_UPVALUE,
+                                "unexpected opcode 0x{:x} at {}",op,self.bytes.position(),
                             );
                             let ins = match op {
                                 InstructionByte::LOAD_NULL => {

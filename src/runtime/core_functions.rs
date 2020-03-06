@@ -6,6 +6,7 @@ use super::value::*;
 use super::*;
 use crate::interpreter::context::*;
 use crate::util::arc::Arc;
+use std::sync::atomic::*;
 pub extern "C" fn require(
     worker: &mut ProcessWorker,
     state: &RcState,
@@ -18,6 +19,7 @@ pub extern "C" fn require(
     let (module, not_loaded) = registry
         .load("", &arguments[0].to_string())
         .map_err(|err| Value::from(Process::allocate_string(process, state, &err)))?;
+    drop(registry);
     if !not_loaded {
         return Ok(ReturnValue::Value(
             process
@@ -31,6 +33,7 @@ pub extern "C" fn require(
     match function.get().value {
         CellValue::Function(ref function) => {
             let ctx = Context {
+                arguments: vec![],
                 terminate_upon_return: true,
                 return_register: None,
                 n: process.context_ptr().n,
@@ -59,6 +62,8 @@ pub extern "C" fn require(
     };
 }
 
+static LOADED: AtomicBool = AtomicBool::new(false);
+
 pub extern "C" fn __start(
     worker: &mut ProcessWorker,
     state: &RcState,
@@ -66,10 +71,16 @@ pub extern "C" fn __start(
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
+    if LOADED.load(Ordering::Acquire) {
+        panic!("ALREADY LOADED: trying to load builtins from module '{}'",process.context_ptr().parent.unwrap().function.function_value().unwrap().module.name);
+        //return Err(Value::from(state.intern_string(String::from("already loaded"))));
+    }
     let home_dir = format!(
         "{}/.waffle/builtins/",
         dirs::home_dir().unwrap().to_str().unwrap().to_owned()
     );
+    LOADED.store(true,Ordering::Release);
+    log::trace!("Loading array builtins...");
     require(
         worker,
         state,
@@ -79,6 +90,7 @@ pub extern "C" fn __start(
             state.intern(&format!("{}/Array.wfl", home_dir)),
         )],
     )?;
+    log::trace!("Loading math builtins...");
     require(
         worker,
         state,
@@ -86,6 +98,7 @@ pub extern "C" fn __start(
         Value::empty(),
         &[Value::from(state.intern(&format!("{}/Math.wfl", home_dir)))],
     )?;
+    log::trace!("Loadingg core builtins...");
     require(
         worker,
         state,

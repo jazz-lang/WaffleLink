@@ -374,14 +374,14 @@ fn build_cfg_nodes(cf: &mut Arc<Vec<BasicBlock>>) -> LinkedHashMap<ID, CFGBlockN
         }
 
         for target in block.instructions.last().unwrap().branch_targets() {
-            match successors_.get_mut(&target) {
+            match successors_.get_mut(&id) {
                 Some(set) => {
                     set.insert(target);
                 }
                 None => {
                     let mut set = LinkedHashSet::new();
                     set.insert(target);
-                    successors_.insert(target, set);
+                    successors_.insert(id, set);
                 }
             }
         }

@@ -32,9 +32,9 @@ Array.swap = function swap(a,b) {
 
 Array.retain = function retain(f) {
     var i = 0
-    var del = 0 
+    var del = 0
     var len = this.length()
-    while i < len {   
+    while i < len {
         if !f(this[i]) {
             del = del + 1
         } else if del > 1 {
@@ -45,4 +45,11 @@ Array.retain = function retain(f) {
     if del > 0 {
         this.truncate(len)
     }
+}
+
+Array.concat = function concat(a2) {
+    var a3 = new Array()
+    this.forEach(|elem| a3.push(elem))
+    a2.forEach(|elem| a3.push(elem))
+    a3
 }

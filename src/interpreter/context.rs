@@ -26,6 +26,7 @@ use util::arc::Arc;
 use util::ptr::*;
 pub struct Context {
     pub registers: [Value; 32],
+    pub arguments: Vec<Value>,
     pub stack: Vec<Value>,
     pub module: Arc<Module>,
     pub parent: Option<Ptr<Context>>,
@@ -50,6 +51,7 @@ impl Context {
         Self {
             registers: [Value::from(VTag::Undefined); 32],
             stack: Vec::with_capacity(32),
+            arguments: Vec::new(),
             module: Arc::new(Module {
                 globals: vec![],
                 name: Value::empty(),

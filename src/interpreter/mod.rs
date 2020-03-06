@@ -415,6 +415,10 @@ impl Runtime {
                     }
 
                     if let Some(native_fn) = function.native {
+                        let mut ctx = Context::new();
+                        ctx.function = cell;
+                        ctx.n = context.n + 1;
+                        process.push_context(ctx);
                         let result = native_fn(
                             worker,
                             &self.state,
@@ -425,6 +429,7 @@ impl Runtime {
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
+                        process.pop_context();
                         let result = result.unwrap();
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
@@ -445,7 +450,8 @@ impl Runtime {
                         if let Instruction::Call { .. } = ins {
                             let mut new_context = Context::new();
                             new_context.return_register = Some(dest);
-                            new_context.stack = args;
+                            new_context.stack = args.clone();
+                            new_context.arguments = args;
                             new_context.function = cell;
                             new_context.module = function.module.clone();
                             new_context.n = context.n + 1;
@@ -469,7 +475,8 @@ impl Runtime {
                             prev_ctx*/
                             let mut new_context = context;
                             new_context.return_register = Some(dest);
-                            new_context.stack = args;
+                            new_context.stack = args.clone();
+                            new_context.arguments = args;
                             new_context.function = cell;
                             new_context.module = function.module.clone();
                             //new_context.n = context.n + 1;
@@ -556,7 +563,8 @@ impl Runtime {
                     } else {
                         let mut new_context = Context::new();
                         new_context.return_register = Some(dest);
-                        new_context.stack = args;
+                        new_context.stack = args.clone();
+                        new_context.arguments = args;
                         new_context.function = cell;
                         new_context.module = function.module.clone();
                         new_context.n = context.n + 1;
@@ -706,7 +714,8 @@ impl Runtime {
                     } else {
                         let mut new_context = Context::new();
                         new_context.return_register = Some(dest);
-                        new_context.stack = args;
+                        new_context.stack = args.clone();
+                        new_context.arguments = args;
                         new_context.function = cell;
                         new_context.module = function.module.clone();
                         new_context.n = context.n + 1;
@@ -1050,7 +1059,7 @@ pub fn runtime_panic(process: &Arc<Process>, message: &Value) {
         frames.push(format!(
             "in module \"{}\": {}",
             ctx.module.name,
-            ctx.function.function_value().unwrap().name
+            ctx.function.function_value().map(|f| f.name.to_string()).unwrap_or(ctx.function.to_string())
         ));
     }
 

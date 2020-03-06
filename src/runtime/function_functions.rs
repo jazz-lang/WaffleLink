@@ -33,6 +33,8 @@ pub fn invoke_value(
                 ctx.n = proc.context_ptr().n + 1;
                 ctx.module = func.module.clone();
                 ctx.code = func.code.clone();
+                ctx.arguments = args.clone();
+                ctx.function = cell;
                 ctx.terminate_upon_return = true;
                 ctx.stack = args;
                 ctx.this = this;
@@ -50,19 +52,6 @@ native_fn!(
         let this = this.as_cell();
         match this.get().value {
             CellValue::Function(ref func) => {
-                let mut cell = Cell::with_prototype(CellValue::None,state.object_prototype.as_cell());
-                /*cell.add_attribute(
-                    Arc::new("constants".to_owned()),
-                    Value::from(
-                        Process::allocate(proc,
-                            Cell::with_prototype(
-                                CellValue::Array(Box::new(func.module.globals.clone())),
-                                state.array_prototype.as_cell()
-                            )
-                        )
-                        )
-                    );*/
-
                 let mut array = vec![];
                 for bb in func.code.iter() {
                     let mut cell = Cell::with_prototype(CellValue::None,state.object_prototype.as_cell());
@@ -97,8 +86,16 @@ native_fn!(
     }
 );
 
+native_fn!(
+    _worker,state,proc => arguments this(..._args) {
+        let args = proc.context_ptr().arguments.clone();
+        let cell = Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()));
+        Ok(ReturnValue::Value(Value::from(cell)))
+    }
+);
+
 pub fn initialize_function(state: &RcState) {
-    let mut lock = state.static_variables.lock();
+    let mut lock = state.static_variables.try_lock().unwrap();
     let func = state.function_prototype.as_cell();
     func.add_attribute_without_barrier(
         &Arc::new("apply".to_owned()),
@@ -107,6 +104,10 @@ pub fn initialize_function(state: &RcState) {
     func.add_attribute_without_barrier(
         &Arc::new("bytecode".to_owned()),
         Value::from(state.allocate_native_fn(bytecode,"bytecode",0))
+    );
+    func.add_attribute_without_barrier(
+        &Arc::new("arguments".to_owned()),
+        Value::from(state.allocate_native_fn(arguments,"arguments",0))
     );
     lock.insert("Function".to_owned(), Value::from(func));
 }

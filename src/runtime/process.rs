@@ -152,6 +152,7 @@ impl Process {
         match value.get().value {
             CellValue::Function(ref function) => {
                 let context = Context {
+                    arguments: vec![],
                     bindex: 0,
                     in_tail: false,
                     index: 0,

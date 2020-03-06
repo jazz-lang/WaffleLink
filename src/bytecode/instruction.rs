@@ -176,6 +176,7 @@ impl Instruction {
             }
             Instruction::Return(None) => (),
             Instruction::MakeEnv(r0, _) => {
+                def_set.insert(vreg!(*r0));
                 //modified_set.insert(vreg!(*r0));
             }
             Instruction::Push(r0) => {
@@ -286,7 +287,7 @@ impl Instruction {
                 use_set.insert(vreg!(*r));
             }
             Instruction::LoadStack(r, _) => {}
-            Instruction::Binary(_, r0, r1, r2) => {
+            Instruction::Binary(_, _r0, r1, r2) => {
                 use_set.insert(vreg!(*r1));
                 use_set.insert(vreg!(*r2));
             }
