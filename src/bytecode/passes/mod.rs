@@ -17,15 +17,16 @@
 
 use super::basicblock::*;
 use super::instruction::*;
-use runtime::cell::*;
-use crate::util::arc::Arc;
 use crate::runtime;
+use crate::util::arc::Arc;
+use runtime::cell::*;
+pub mod constant_folding;
 pub mod cse;
 pub mod load_after_store;
 pub mod peephole;
 pub mod ret_sink;
-pub mod simplify;
 pub mod simple_inlining;
+pub mod simplify;
 pub mod tail_call_elim;
 
 pub trait BytecodePass {

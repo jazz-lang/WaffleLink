@@ -10,15 +10,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0989268a37e128d4d7a8028f1c60099430113fdbc70419010601ce51a228e4fe"
-dependencies = [
- "const-random",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -309,7 +300,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e6073d0ca812575946eb5f35ff68dbe519907b25c42530389ff946dc84c6ead"
 dependencies = [
- "ahash 0.2.18",
+ "ahash",
  "autocfg 0.1.7",
 ]
 
@@ -387,15 +378,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14b6052be84e6b71ab17edffc2eeabf5c2c3ae1fdb464aae35ac50c67a44e1f7"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "lru"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0609345ddee5badacf857d4f547e0e5a2e987db77085c24cd887f73573a04237"
-dependencies = [
- "hashbrown",
 ]
 
 [[package]]
@@ -779,13 +761,10 @@ checksum = "078775d0255232fb988e6fccf26ddc9d1ac274299aaedcedce21c6f72cc533ce"
 name = "waffle"
 version = "0.0.1"
 dependencies = [
- "ahash 0.3.2",
  "byteorder",
  "cfg-if",
  "const-if",
  "crossbeam",
- "crossbeam-channel",
- "crossbeam-deque",
  "dirs",
  "fxhash",
  "hashlink",
@@ -794,13 +773,11 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "lru",
  "num_cpus",
  "parking_lot",
  "rand",
  "regex",
  "simple_logger",
- "smallvec",
  "structopt",
  "winapi 0.3.8",
 ]

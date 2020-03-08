@@ -54,20 +54,22 @@ pub fn prelink_module(m: &Arc<Module>, opt_level: OptLevel) {
                         ra.execute(f);
                     }
                     OptLevel::Fast => {
+                        let mut simplify = passes::simplify::SimplifyCFGPass;
+                        //simplify.execute(f);
+                        //let mut cfold = passes::constant_folding::ConstantFoldingPass;
+                        //cfold.execute(f);
                         let mut ra = regalloc::RegisterAllocation::new();
                         ra.execute(f);
-                        let mut simplify = passes::simplify::SimplifyCFGPass;
                         simplify.execute(f);
 
                         let mut peephole = passes::peephole::PeepholePass;
                         peephole.execute(f);
                         let mut tcall = passes::tail_call_elim::TailCallEliminationPass;
                         let mut ret_sink = passes::ret_sink::RetSink;
-                        tcall.execute(f);
                         ret_sink.execute(f);
-                        peephole.execute(f);
-
                         simplify.execute(f);
+                        peephole.execute(f);
+                        tcall.execute(f);
                     }
                     OptLevel::VeryFast => {
                         // TODO: Invoke CSE, alias analysing.

@@ -43,4 +43,3 @@ threaded = []
 opt-level = 3
 lto = true
 panic = "unwind"
-
