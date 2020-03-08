@@ -18,7 +18,7 @@
 use super::parking::ParkGroup;
 use super::queue::*;
 
-use crossbeam_deque::{Injector, Steal};
+use crossbeam::deque::{Injector, Steal};
 use std::iter;
 use std::sync::atomic::{AtomicBool, Ordering};
 

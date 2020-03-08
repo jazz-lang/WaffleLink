@@ -19,7 +19,8 @@ use super::process_scheduler::ProcessScheduler;
 use super::timeout::*;
 use crate::runtime::process::Process;
 use crate::util::arc::Arc;
-use crossbeam_channel::{unbounded, Receiver, Sender};
+
+use crossbeam::channel::{unbounded, Receiver, Sender};
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;

@@ -90,18 +90,7 @@ pub extern "C" fn __start(
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     if LOADED.load(Ordering::Acquire) {
-        panic!(
-            "ALREADY LOADED: trying to load builtins from module '{}'",
-            process
-                .context_ptr()
-                .parent
-                .unwrap()
-                .function
-                .function_value()
-                .unwrap()
-                .module
-                .name
-        );
+        return Ok(ReturnValue::Value(Value::from(true)));
         //return Err(Value::from(state.intern_string(String::from("already loaded"))));
     }
     let home_dir = format!(
@@ -137,7 +126,7 @@ pub extern "C" fn __start(
         &[Value::from(state.intern(&format!("{}/Core.wfl", home_dir)))],
     )?;
     log::debug!("--Builtins loaded--");
-    Ok(ReturnValue::Value(Value::from(VTag::Null)))
+    Ok(ReturnValue::Value(Value::from(false)))
 }
 
 pub extern "C" fn instanceof(

@@ -39,9 +39,9 @@ pub struct State {
     pub module_prototype: Value,
     pub boolean_prototype: Value,
     pub byte_array_prototype: Value,
-    pub static_variables: Mutex<ahash::AHashMap<String, Value>>,
+    pub static_variables: Mutex<std::collections::HashMap<String, Value>>,
     pub config: super::config::Config,
-    pub string_map: Mutex<ahash::AHashMap<String, CellPointer>>,
+    pub string_map: Mutex<std::collections::HashMap<String, CellPointer>>,
 }
 
 #[inline]
@@ -79,7 +79,7 @@ impl State {
         module_prototype.set_prototype(object_prototype);
         boolean_prototype.set_prototype(object_prototype);
         byte_array_prototype.set_prototype(object_prototype);
-        let map = ahash::AHashMap::new();
+        let map = Default::default();
         /*{
             map.insert("Array".to_owned(), array_prototype);
             map.insert("Process".to_owned(), process_prototype);
@@ -120,7 +120,7 @@ impl State {
             generator_prototype,
             static_variables: Mutex::new(map),
             config,
-            string_map: Mutex::new(ahash::AHashMap::new()),
+            string_map: Mutex::new(Default::default()),
         })
     }
 

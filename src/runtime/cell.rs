@@ -118,7 +118,7 @@ pub struct Cell {
     pub forward: crate::util::mem::Address,
 }
 
-pub type AttributesMap = ahash::AHashMap<Arc<String>, Value>;
+pub type AttributesMap = hashlink::LinkedHashMap<Arc<String>, Value, fxhash::FxBuildHasher>;
 
 pub const MARK_BIT: usize = 0;
 

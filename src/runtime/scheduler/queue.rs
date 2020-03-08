@@ -16,8 +16,8 @@
 */
 
 use crate::util::arc::Arc;
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use crossbeam_deque::{Steal, Stealer, Worker};
+use crossbeam::channel::{unbounded, Receiver, Sender};
+use crossbeam::deque::{Steal, Stealer, Worker};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct Queue<T: Send> {

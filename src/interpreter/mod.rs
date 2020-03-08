@@ -436,7 +436,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -445,7 +445,7 @@ impl Runtime {
                                 return Ok(Value::from(VTag::Null));
                             }
                             ReturnValue::YieldProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -556,7 +556,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -564,7 +564,7 @@ impl Runtime {
                                 return Ok(Value::from(VTag::Null));
                             }
                             ReturnValue::YieldProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
