@@ -1,3 +1,20 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use crate::runtime;
 use crate::runtime::scheduler;
 use crate::util::arc::Arc;
@@ -59,7 +76,7 @@ impl Collection {
 
     pub fn perform(&self, state: &State) {
         let local_data = self.process.local_data_mut();
-        //local_data.heap.trace_process(&self.process);
+        log::debug!("Invoking GC");
         let _ = local_data.heap.collect_garbage(&self.process);
         state.scheduler.schedule(self.process.clone());
     }
@@ -107,9 +124,9 @@ impl GcPool {
         rt_state: RcState,
     ) -> thread::JoinHandle<()> {
         let state = self.state.clone();
-        log::trace!("Spawn GC Worker {}", id);
+        log::warn!("Spawn GC Worker {}", id);
         thread::Builder::new()
-            .name(format!("GC {}", id))
+            .name(format!("GC{}", id))
             .spawn(move || {
                 Worker::new(queue, state, rt_state).run();
             })

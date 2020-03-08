@@ -144,6 +144,7 @@ impl Runtime {
     }
 
     pub fn start_pools(&self) {
+        let gguard = self.state.gc_pool.start(self.state.clone());
         self.state.scheduler.blocking_pool.start();
         let pguard = self.state.scheduler.primary_pool.start_main();
         let state = self.state.clone();
@@ -151,5 +152,6 @@ impl Runtime {
             state.timeout_worker.run(&state.scheduler);
         });
         pguard.join().unwrap();
+        gguard.join().unwrap();
     }
 }

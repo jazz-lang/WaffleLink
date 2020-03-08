@@ -1,9 +1,27 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use super::cell::*;
 use super::process::*;
 use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
 use super::value::*;
 use super::*;
+use crate::heap::gc_pool::Collection;
 use crate::interpreter::context::*;
 use crate::util::arc::Arc;
 use std::sync::atomic::*;
@@ -72,14 +90,26 @@ pub extern "C" fn __start(
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     if LOADED.load(Ordering::Acquire) {
-        panic!("ALREADY LOADED: trying to load builtins from module '{}'",process.context_ptr().parent.unwrap().function.function_value().unwrap().module.name);
+        panic!(
+            "ALREADY LOADED: trying to load builtins from module '{}'",
+            process
+                .context_ptr()
+                .parent
+                .unwrap()
+                .function
+                .function_value()
+                .unwrap()
+                .module
+                .name
+        );
         //return Err(Value::from(state.intern_string(String::from("already loaded"))));
     }
     let home_dir = format!(
         "{}/.waffle/builtins/",
         dirs::home_dir().unwrap().to_str().unwrap().to_owned()
     );
-    LOADED.store(true,Ordering::Release);
+    log::debug!("--Loading builtins--");
+    LOADED.store(true, Ordering::Release);
     log::trace!("Loading array builtins...");
     require(
         worker,
@@ -106,7 +136,7 @@ pub extern "C" fn __start(
         Value::empty(),
         &[Value::from(state.intern(&format!("{}/Core.wfl", home_dir)))],
     )?;
-
+    log::debug!("--Builtins loaded--");
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
 
@@ -120,12 +150,28 @@ pub extern "C" fn instanceof(
     Ok(ReturnValue::Value(Value::from(args[0].is_kind_of(args[1]))))
 }
 
+pub extern "C" fn force_collect(
+    _: &mut ProcessWorker,
+    _: &RcState,
+    proc: &Arc<Process>,
+    _: Value,
+    _: &[Value],
+) -> Result<ReturnValue, Value> {
+    let rt: &Runtime = &RUNTIME;
+    log::debug!("--Forced GC Cycle--");
+    rt.state.gc_pool.schedule(Collection::new(proc.clone()));
+    log::debug!("Suspending process...");
+    Ok(ReturnValue::SuspendProcess)
+}
+
 pub fn initialize_core(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let require = state.allocate_native_fn(require, "require", 1);
     let start = state.allocate_native_fn(__start, "__start__", 0);
     let instanceof = state.allocate_native_fn(instanceof, "instanceof", 2);
+    let force_collect = state.allocate_native_fn(force_collect, "forceCollect", 0);
     lock.insert("require".to_owned(), Value::from(require));
     lock.insert("__start__".to_owned(), Value::from(start));
     lock.insert("instanceof".to_owned(), Value::from(instanceof));
+    lock.insert("forceCollect".to_owned(), Value::from(force_collect));
 }

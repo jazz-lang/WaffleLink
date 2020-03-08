@@ -434,14 +434,20 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
                                 }
+                                log::debug!("Suspend...");
                                 return Ok(Value::from(VTag::Null));
                             }
                             ReturnValue::YieldProcess => {
+                                context.index = index;
+                                context.bindex = bindex;
+                                for arg in args.iter().rev() {
+                                    context.stack.push(*arg);
+                                }
                                 self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
@@ -548,7 +554,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -556,6 +562,11 @@ impl Runtime {
                                 return Ok(Value::from(VTag::Null));
                             }
                             ReturnValue::YieldProcess => {
+                                context.index = index;
+                                context.bindex = bindex;
+                                for arg in args.iter().rev() {
+                                    context.stack.push(*arg);
+                                }
                                 self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
@@ -1049,6 +1060,7 @@ impl Runtime {
     pub fn terminate(&self) {
         self.state.scheduler.terminate();
         self.state.timeout_worker.terminate();
+        self.state.gc_pool.terminate();
     }
 }
 
@@ -1059,7 +1071,10 @@ pub fn runtime_panic(process: &Arc<Process>, message: &Value) {
         frames.push(format!(
             "in module \"{}\": {}",
             ctx.module.name,
-            ctx.function.function_value().map(|f| f.name.to_string()).unwrap_or(ctx.function.to_string())
+            ctx.function
+                .function_value()
+                .map(|f| f.name.to_string())
+                .unwrap_or(ctx.function.to_string())
         ));
     }
 

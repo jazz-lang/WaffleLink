@@ -515,20 +515,6 @@ use super::HeapTrait;
 
 impl HeapTrait for GenerationalHeap {
     fn allocate(&mut self, proc: &Arc<Process>, _: super::GCType, cell: Cell) -> CellPointer {
-        if (self.should_collect()
-            || !self
-                .nursery_space
-                .may_allocate_in_current(std::mem::size_of::<Cell>()))
-            && !self.disabled
-        {
-            self.scavenge();
-            if self.needs_gc == GenerationalGCType::Intermediate {
-                if self.minor(proc) {
-                    self.major(proc);
-                }
-            }
-        }
-        self.needs_gc = GenerationalGCType::None;
         let cell = self.allocate_young(cell);
         /*if self.needs_gc == GenerationalGCType::Young {
             self.trace_process(proc);

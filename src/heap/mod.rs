@@ -16,6 +16,7 @@
 */
 
 pub mod cms;
+pub mod copying;
 pub mod freelist;
 pub mod freelist_alloc;
 pub mod gc_pool;
@@ -51,6 +52,8 @@ pub enum GCVariant {
     IncrementalMarkCompact,
     IncrementalMarkSweep,
     GenIncMarkSweep,
+    #[structopt(name = "copying", help = "Copying GC")]
+    Copying,
 }
 
 impl std::str::FromStr for GCVariant {
@@ -64,6 +67,7 @@ impl std::str::FromStr for GCVariant {
             "incremental mark-sweep" | "incremental-mark-sweep" => Self::IncrementalMarkSweep,
             "generational mark-sweep" => Self::GenIncMarkSweep,
             "generational" | "ieiunium" => Self::Generational,
+            "copying" | "semispace" => Self::Copying,
             _ => return Err(format!("Unknown GC Type '{}'", s)),
         })
     }
@@ -83,6 +87,10 @@ pub fn initialize_process_heap(variant: GCVariant, config: &Config) -> Box<dyn H
             align_usize(config.young_size, page_size()),
             align_usize(config.old_size, page_size()),
         )),
+        GCVariant::Copying => Box::new(copying::CopyingCollector::new(align_usize(
+            config.heap_size,
+            page_size(),
+        ))),
 
         _ => unimplemented!(),
     }
