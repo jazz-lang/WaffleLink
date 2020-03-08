@@ -25,7 +25,7 @@ pub mod writer;
 
 use passes::BytecodePass;
 
-use crate::runtime::{cell::*,module::*};
+use crate::runtime::{cell::*, module::*};
 use crate::util::arc::Arc;
 
 /// Bytecode optimization level
@@ -41,10 +41,10 @@ pub enum OptLevel {
     Fast,
     /// This pass is not recommended since it's **really** unstable and may cause program crashes.
     /// Includes function inlining,CSE, rematerialization and some form of alias analysing.
-    VeryFast
+    VeryFast,
 }
 
-pub fn prelink_module(m: &Arc<Module>,opt_level: OptLevel) {
+pub fn prelink_module(m: &Arc<Module>, opt_level: OptLevel) {
     for f in m.globals.iter() {
         if f.is_cell() {
             if let CellValue::Function(ref mut f) = f.as_cell().get_mut().value {
@@ -54,7 +54,6 @@ pub fn prelink_module(m: &Arc<Module>,opt_level: OptLevel) {
                         ra.execute(f);
                     }
                     OptLevel::Fast => {
-
                         let mut ra = regalloc::RegisterAllocation::new();
                         ra.execute(f);
                         let mut simplify = passes::simplify::SimplifyCFGPass;
@@ -69,20 +68,24 @@ pub fn prelink_module(m: &Arc<Module>,opt_level: OptLevel) {
                         peephole.execute(f);
 
                         simplify.execute(f);
-
                     }
                     OptLevel::VeryFast => {
                         // TODO: Invoke CSE, alias analysing.
-                        passes::simple_inlining::do_inlining(f,m);
+                        let mut simplify = passes::simplify::SimplifyCFGPass;
+                        simplify.execute(f);
+                        simplify.execute(f);
+                        passes::simple_inlining::do_inlining(f, m);
                         let mut ra = regalloc::RegisterAllocation::new();
                         ra.execute(f);
+
+                        let mut tcall = passes::tail_call_elim::TailCallEliminationPass;
+                        tcall.execute(f);
                         let mut simplify = passes::simplify::SimplifyCFGPass;
                         simplify.execute(f);
                         let mut ret_sink = passes::ret_sink::RetSink;
                         ret_sink.execute(f);
-                        let mut tcall = passes::tail_call_elim::TailCallEliminationPass;
-                        tcall.execute(f);
-
+                        let mut peephole = passes::peephole::PeepholePass;
+                        peephole.execute(f);
                     }
                 }
             }

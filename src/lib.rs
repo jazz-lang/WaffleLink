@@ -15,6 +15,7 @@
 *   limitations under the License.
 */
 
+#![cfg_attr(all(feature = "nightly", feature = "threaded"), feature(asm))]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]

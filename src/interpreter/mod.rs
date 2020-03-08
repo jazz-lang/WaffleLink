@@ -16,6 +16,7 @@
 */
 
 pub mod context;
+
 pub mod tracing_interpreter;
 use crate::bytecode::instruction::*;
 use crate::heap::gc_pool::*;
@@ -87,6 +88,7 @@ macro_rules! safepoint_and_reduce {
 }
 
 impl Runtime {
+    #[cfg(not(all(feature = "nightly", feature = "threaded")))]
     pub fn run(&self, worker: &mut ProcessWorker, process: &Arc<Process>) -> Result<Value, Value> {
         let mut reductions = 1000;
         let mut index;

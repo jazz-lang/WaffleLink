@@ -80,16 +80,6 @@ pub enum Instruction {
     LoadCurrentModule(u16),
 }
 
-macro_rules! vreg {
-    ($v: expr) => {
-        if $v > 32 {
-            Reg::new_virtual(RegClass::I64, $v as u32)
-        } else {
-            Reg::new_real(RegClass::I64, 1, $v as _)
-        }
-    };
-}
-
 impl Instruction {
     pub fn branch_targets(&self) -> Vec<usize> {
         match &self {
@@ -100,6 +90,7 @@ impl Instruction {
             _ => vec![],
         }
     }
+
     pub fn get_defs(&self) -> Vec<usize> {
         let mut def_set = std::collections::HashSet::new();
         macro_rules! vreg {
@@ -378,30 +369,48 @@ impl Instruction {
             | Instruction::Pop(r)
             | Instruction::Throw(r)
             | Instruction::LoadCurrentModule(r) => vec![r as u64],
-            Instruction::Binary(op,r1,r2,r3) => vec![op as u8 as u64,r1 as u64,r2 as u64,r3 as u64],
-            Instruction::VirtCall(r1,r2,r3,argc) => vec![r1 as u64,r2 as u64,r3 as u64],
-            Instruction::TailCall(r1,r2,argc) | Instruction::Call(r1,r2,argc) | Instruction::New(r1,r2,argc) => vec![r1 as u64,r2 as u64,argc as u64],
-            Instruction::Unary(op,r1,r2) => vec![op as u64,r1 as u64,r2 as u64],
-            Instruction::LoadConst(r1,c1) => vec![r1 as u64,c1 as u64],
-            Instruction::LoadStack(r1,s1) => vec![r1 as u64,s1 as u64],
-            Instruction::StoreStack(r1,s1) => vec![r1 as u64,s1 as u64],
+            Instruction::Binary(op, r1, r2, r3) => {
+                vec![op as u8 as u64, r1 as u64, r2 as u64, r3 as u64]
+            }
+            Instruction::VirtCall(r1, r2, r3, argc) => vec![r1 as u64, r2 as u64, r3 as u64],
+            Instruction::TailCall(r1, r2, argc)
+            | Instruction::Call(r1, r2, argc)
+            | Instruction::New(r1, r2, argc) => vec![r1 as u64, r2 as u64, argc as u64],
+            Instruction::Unary(op, r1, r2) => vec![op as u64, r1 as u64, r2 as u64],
+            Instruction::LoadConst(r1, c1) => vec![r1 as u64, c1 as u64],
+            Instruction::LoadStack(r1, s1) => vec![r1 as u64, s1 as u64],
+            Instruction::StoreStack(r1, s1) => vec![r1 as u64, s1 as u64],
             Instruction::Branch(target) => vec![target as u64],
-            Instruction::BranchIfFalse(r1,target) | Instruction::BranchIfTrue(r1,target) => vec![r1 as u64,target as u64],
-            Instruction::ConditionalBranch(r1,t1,t2) => vec![r1 as u64,t1 as u64,t2 as u64],
-            Instruction::CatchBlock(r1,t1) => vec![r1 as u64,t1 as u64],
-            Instruction::LoadByValue(r1,r2,r3) | Instruction::StoreByValue(r1,r2,r3) => vec![r1 as u64,r2 as u64,r3 as u64],
-            Instruction::StoreById(r1,r2,r3) | Instruction::LoadById(r1,r2,r3) => vec![r1 as u64,r2 as u64,r3 as u64],
-            Instruction::StoreStaticByValue(r1,r2) | Instruction::LoadStaticByValue(r1,r2) => vec![r1 as u64,r2 as u64],
-            Instruction::StoreStaticById(r1,r2) | Instruction::LoadStaticById(r1,r2) => vec![r1 as u64,r2 as u64],
+            Instruction::BranchIfFalse(r1, target) | Instruction::BranchIfTrue(r1, target) => {
+                vec![r1 as u64, target as u64]
+            }
+            Instruction::ConditionalBranch(r1, t1, t2) => vec![r1 as u64, t1 as u64, t2 as u64],
+            Instruction::CatchBlock(r1, t1) => vec![r1 as u64, t1 as u64],
+            Instruction::LoadByValue(r1, r2, r3) | Instruction::StoreByValue(r1, r2, r3) => {
+                vec![r1 as u64, r2 as u64, r3 as u64]
+            }
+            Instruction::StoreById(r1, r2, r3) | Instruction::LoadById(r1, r2, r3) => {
+                vec![r1 as u64, r2 as u64, r3 as u64]
+            }
+            Instruction::StoreStaticByValue(r1, r2) | Instruction::LoadStaticByValue(r1, r2) => {
+                vec![r1 as u64, r2 as u64]
+            }
+            Instruction::StoreStaticById(r1, r2) | Instruction::LoadStaticById(r1, r2) => {
+                vec![r1 as u64, r2 as u64]
+            }
 
-            Instruction::LoadUpvalue(r1,r2) | Instruction::StoreUpvalue(r1,r2) => vec![r1 as u64,r2 as u64],
-            Instruction::LoadInt(r1,n) => vec![r1 as u64,n as u64],
-            Instruction::LoadNumber(r1,n) => vec![r1 as u64,n as u64],
-            Instruction::MakeEnv(r1,c) => vec![r1 as u64,c as u64],
+            Instruction::LoadUpvalue(r1, r2) | Instruction::StoreUpvalue(r1, r2) => {
+                vec![r1 as u64, r2 as u64]
+            }
+            Instruction::LoadInt(r1, n) => vec![r1 as u64, n as u64],
+            Instruction::LoadNumber(r1, n) => vec![r1 as u64, n as u64],
+            Instruction::MakeEnv(r1, c) => vec![r1 as u64, c as u64],
             Instruction::Return(Some(r)) => vec![r as u64],
-            Instruction::Move(r1,r2) => vec![r1 as u64,r2 as u64],
-            Instruction::LoadByIndex(r1,r2,i) | Instruction::StoreByIndex(r1,r2,i) => vec![r1 as u64,r2 as u64,i as u64],
-            _ => vec![]
+            Instruction::Move(r1, r2) => vec![r1 as u64, r2 as u64],
+            Instruction::LoadByIndex(r1, r2, i) | Instruction::StoreByIndex(r1, r2, i) => {
+                vec![r1 as u64, r2 as u64, i as u64]
+            }
+            _ => vec![],
         }
     }
 }
