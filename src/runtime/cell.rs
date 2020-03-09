@@ -705,3 +705,5 @@ impl Drop for Cell {
         self.generation = 127;
     }
 }
+
+unsafe impl Send for CellPointer {}

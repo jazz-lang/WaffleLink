@@ -439,10 +439,6 @@ impl Runtime {
                     }
 
                     if let Some(native_fn) = function.native {
-                        let mut ctx = Context::new();
-                        ctx.function = cell;
-                        ctx.n = context.n + 1;
-                        process.push_context(ctx);
                         let result = native_fn(
                             worker,
                             &self.state,
@@ -453,7 +449,6 @@ impl Runtime {
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
-                        process.pop_context();
                         let result = result.unwrap();
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),

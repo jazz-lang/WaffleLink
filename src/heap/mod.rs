@@ -22,6 +22,7 @@ pub mod freelist_alloc;
 pub mod gc_pool;
 pub mod generational;
 pub mod incremental;
+pub mod onthefly;
 use crate::runtime::cell::*;
 use crate::runtime::config::*;
 use crate::runtime::process::*;
@@ -54,6 +55,8 @@ pub enum GCVariant {
     GenIncMarkSweep,
     #[structopt(name = "copying", help = "Copying GC")]
     Copying,
+    #[structopt(name = "onthefly", help = "Concurrent GC")]
+    OnTheFly,
 }
 
 impl std::str::FromStr for GCVariant {
@@ -68,6 +71,7 @@ impl std::str::FromStr for GCVariant {
             "generational mark-sweep" => Self::GenIncMarkSweep,
             "generational" | "ieiunium" => Self::Generational,
             "copying" | "semispace" => Self::Copying,
+            "onthefly" | "on-the-fly" => Self::OnTheFly,
             _ => return Err(format!("Unknown GC Type '{}'", s)),
         })
     }
@@ -91,7 +95,7 @@ pub fn initialize_process_heap(variant: GCVariant, config: &Config) -> Box<dyn H
             config.heap_size,
             page_size(),
         ))),
-
+        GCVariant::OnTheFly => Box::new(onthefly::OnTheFlyHeap::new(config.heap_size)),
         _ => unimplemented!(),
     }
 }

@@ -104,6 +104,7 @@ pub mod scheduler;
 pub mod state;
 pub mod string_functions;
 pub mod value;
+use crate::heap::{onthefly, GCVariant};
 use module::*;
 use parking_lot::Mutex;
 use state::*;
@@ -144,6 +145,11 @@ impl Runtime {
     }
 
     pub fn start_pools(&self) {
+        if let GCVariant::OnTheFly = self.state.config.gc {
+            let lock = onthefly::GC.lock();
+            lock.mark_pool.start(self.state.clone());
+            lock.sweeper.start(self.state.clone());
+        }
         let gguard = self.state.gc_pool.start(self.state.clone());
         self.state.scheduler.blocking_pool.start();
         let pguard = self.state.scheduler.primary_pool.start_main();

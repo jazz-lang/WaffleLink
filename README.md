@@ -21,7 +21,7 @@ Waffle provides multiple GCs for your choise:
 - Incremental mark&sweep  
 
     Simple mark&sweep GC that uses freelist allocation and incremental collection, recommended for simple programs.
-- Incremental generational mark&sweep (Enabled by default)
+- Incremental generational mark&sweep
 
     Same as above, but also supports generations, recommended for almost every programs that doesn't make heap too fragmented.
  - Ieiunium GC 
@@ -29,16 +29,15 @@ Waffle provides multiple GCs for your choise:
     Generational GC with scavenging of nursery,copying intermediate space and mark&sweep of old space. Recommended for evey kind of programs.
 
     NOTE: Ieiunium may be slower than incremental mark&sweep but gives you fast allocation and heap defragmentation.
-- Chaney's Semispace
+- Cheney's Semispace
   
     Copying GC without generations support, does very fast collection if heap not that big.
 - Mark&Sweep and maybe compact
     
     This algorithm doesn't defragment heap until fragmentation is ~60%. Recommended for every kind of programs.
-- Concurrent Mark&Sweep
+- On the fly GC (Concurrent Mark&Sweep)
 
-    GC that does small pauses to trace roots and does all work in backgound. This GC is not instantiated per process, instead it uses thread local mutators
-    to properly manage all GC stuff. Recommended for all kind of programs that doesn't make heap fragmented.  
+    GC that does small pauses to get snapshot of the roots and does all work in the background.
     
 
 # TODO

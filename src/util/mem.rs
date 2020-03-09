@@ -17,6 +17,7 @@
 
 use std::cmp::*;
 use std::fmt;
+use std::sync::atomic::{AtomicPtr, Ordering};
 static mut PAGE_SIZE: usize = 0;
 static mut PAGE_SIZE_BITS: usize = 0;
 
@@ -650,6 +651,21 @@ impl Address {
             assert!(self.is_non_null());
             Address::from_ptr(*self.to_ptr::<*const u8>())
         }
+    }
+    /// Atomically replaces the current pointer with the given one.
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
+    pub fn atomic_store(&self, other: *mut u8) {
+        self.as_atomic().store(other, Ordering::Release);
+    }
+
+    /// Atomically loads the pointer.
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
+    pub fn atomic_load(&self) -> *mut u8 {
+        self.as_atomic().load(Ordering::Acquire)
+    }
+
+    fn as_atomic(&self) -> &AtomicPtr<u8> {
+        unsafe { &*(self as *const Address as *const AtomicPtr<u8>) }
     }
 }
 

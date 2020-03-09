@@ -75,7 +75,7 @@ pub struct Config {
     #[structopt(
         long = "gc",
         help = "GC Variant to use for process heap garbage collection.",
-        default_value = "copying"
+        default_value = "onthefly"
     )]
     pub gc: crate::heap::GCVariant,
     #[structopt(
