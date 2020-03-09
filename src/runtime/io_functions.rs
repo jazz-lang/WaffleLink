@@ -48,6 +48,36 @@ pub extern "C" fn write(
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
 
+pub extern "C" fn readln(
+    _: &mut ProcessWorker,
+    state: &RcState,
+    proc: &Arc<Process>,
+    _: Value,
+    arguments: &[Value],
+) -> Result<ReturnValue, Value> {
+    let prompt = match arguments.len() {
+        x if x == 0 => "".to_owned(),
+        1 => arguments[0].to_string(),
+        _ => "".to_owned(),
+    };
+    print!("{}", prompt);
+    use std::io::{stdin, Read};
+    let mut buf = String::new();
+    match stdin().read_line(&mut buf) {
+        Ok(_) => (),
+        Err(e) => {
+            return Err(Value::from(Process::allocate_string(
+                proc,
+                state,
+                &e.to_string(),
+            )))
+        }
+    }
+    Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+        proc, state, &buf,
+    ))))
+}
+
 pub fn initialize_io(state: &RcState) {
     let io = Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
     let io = state.allocate(io);
@@ -61,4 +91,8 @@ pub fn initialize_io(state: &RcState) {
     let write = state.allocate_native_fn_with_name(write, "Write", -1);
     io.as_cell()
         .add_attribute_without_barrier(&name, Value::from(write));
+    io.as_cell().add_attribute_without_barrier(
+        &Arc::new("readln".to_owned()),
+        Value::from(state.allocate_native_fn(readln, "readln", -1)),
+    );
 }

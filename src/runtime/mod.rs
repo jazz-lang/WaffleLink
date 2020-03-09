@@ -96,6 +96,7 @@ pub mod io_functions;
 pub mod math_object;
 pub mod module;
 pub mod module_functions;
+pub mod number_functions;
 pub mod object_functions;
 pub mod process;
 pub mod process_functions;
@@ -142,6 +143,7 @@ impl Runtime {
         math_object::initialize_math(&self.state);
         string_functions::initialize_string(&self.state);
         function_functions::initialize_function(&self.state);
+        number_functions::initialize_number(&self.state);
     }
 
     pub fn start_pools(&self) {

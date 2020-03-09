@@ -104,6 +104,18 @@ native_fn!(_worker,_state,_proc => string_length this(..._args) {
     return Ok(ReturnValue::Value(Value::new_int(this.to_string().len() as _)));
 });
 
+native_fn!(_worker,state,proc => replace this(...args) {
+    if args.is_empty() || args.len() < 2 {
+        return Ok(ReturnValue::Value(this));
+    } else {
+        let this = this.to_string();
+        let from = args[0].to_string();
+        let to = args[1].to_string();
+        let replaced = this.replace(&from,&to);
+        Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc, state, &replaced))))
+    }
+});
+
 pub fn initialize_string(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let cell = state.string_prototype.as_cell();
@@ -138,6 +150,10 @@ pub fn initialize_string(state: &RcState) {
     cell.add_attribute_without_barrier(
         &Arc::new("length".to_owned()),
         Value::from(state.allocate_native_fn(string_length, "length", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("replace".to_owned()),
+        Value::from(state.allocate_native_fn(replace, "replace", -1)),
     );
     lock.insert("String".to_owned(), Value::from(cell));
 }

@@ -162,7 +162,9 @@ macro_rules! waffle_asm {
 }
 
 fn main() {
-    simple_logger::init().unwrap();
+    if CONFIG.read().verbose {
+        simple_logger::init().unwrap();
+    }
     CONFIG.write().directories.push(PathBuf::from(format!(
         "{}/.waffle/std/",
         dirs::home_dir().unwrap().display()

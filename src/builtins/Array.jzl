@@ -9,7 +9,7 @@ Array.map = function map(f) {
 Array.forEach = function for_each(f) {
     var i = 0
     while i < this.length() {
-        f(this[i])
+        f(this[i],i)
         i = i + 1
     }
 }

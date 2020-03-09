@@ -341,13 +341,14 @@ impl Value {
     }
 
     pub fn is_kind_of(&self, value: Value) -> bool {
-        if !self.is_cell() {
-            return false;
-        }
-        if value.is_cell() {
+        if self.is_cell() && value.is_cell() {
             self.as_cell().is_kind_of(&RUNTIME.state, value.as_cell())
         } else {
-            return false;
+            let prototype = self.prototype();
+            if prototype.is_null_or_undefined() {
+                return false;
+            }
+            return prototype.is_kind_of(value.prototype());
         }
     }
     pub fn set_prototype(&self, value: Value) {

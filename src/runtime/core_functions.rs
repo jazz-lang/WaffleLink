@@ -153,9 +153,16 @@ pub extern "C" fn force_collect(
     Ok(ReturnValue::SuspendProcess)
 }
 
+native_fn!(
+    _worker,_state,_proc => isNullOrUndef(arg) {
+        Ok(ReturnValue::Value(Value::from(arg.is_null_or_undefined())))
+    }
+);
+
 pub fn initialize_core(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let require = state.allocate_native_fn(require, "require", 1);
+    let to_bool = state.allocate_native_fn(isNullOrUndef, "isNull", 1);
     let start = state.allocate_native_fn(__start, "__start__", 0);
     let instanceof = state.allocate_native_fn(instanceof, "instanceof", 2);
     let force_collect = state.allocate_native_fn(force_collect, "forceCollect", 0);
@@ -163,4 +170,5 @@ pub fn initialize_core(state: &RcState) {
     lock.insert("__start__".to_owned(), Value::from(start));
     lock.insert("instanceof".to_owned(), Value::from(instanceof));
     lock.insert("forceCollect".to_owned(), Value::from(force_collect));
+    lock.insert("isNull".to_owned(), Value::from(to_bool));
 }

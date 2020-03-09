@@ -20,6 +20,8 @@ use structopt::StructOpt;
 #[derive(StructOpt, Clone)]
 #[structopt(name = "waffle")]
 pub struct Config {
+    #[structopt(name = "verbose", long, short, help = "Verbose mode")]
+    pub verbose: bool,
     #[structopt(
         name = "directories",
         help = "The directories to search in for extra bytecode files to run.",

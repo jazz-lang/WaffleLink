@@ -222,14 +222,20 @@ impl Runtime {
                     if let Some(value) = attr {
                         context.set_register(dest, value);
                     } else {
-                        throw_error_message!(
+                        /* throw_error_message!(
                             self,
                             process,
                             &format!("Attribute '{}' not found", id),
                             context,
                             index,
                             bindex
+                        );*/
+                        object.add_attribute_without_barrier(
+                            &self.state,
+                            id,
+                            Value::from(VTag::Undefined),
                         );
+                        context.set_register(dest, Value::from(VTag::Undefined))
                     }
                 }
                 Instruction::LoadStaticById(r0, id) => {
@@ -412,7 +418,11 @@ impl Runtime {
                             throw_error_message!(
                                 self,
                                 process,
-                                &format!("Cannot invoke '{}' value.", function.to_string()),
+                                &format!(
+                                    "Cannot invoke '{}' value.(op {:?})",
+                                    function.to_string(),
+                                    ins
+                                ),
                                 context,
                                 index,
                                 bindex
@@ -519,11 +529,20 @@ impl Runtime {
                 }
                 Instruction::VirtCall(dest, function, this, argc) => {
                     let function = context.get_register(function);
+                    let _t = context.get_register(this);
                     if !function.is_cell() {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Cannot invoke '{}' value.", function.to_string()),
+                            &format!(
+                                "Cannot invoke '{}' value. (op {:?},this {} in bb {} at {:x},regs {})",
+                                function.to_string(),
+                                ins,
+                                _t,
+                                bindex,
+                                index - 1,
+                                context.registers.iter().fold(String::new(),|mut s,val| {s.push_str(&val.to_string());s.push_str("\n");s})
+                            ),
                             context,
                             index,
                             bindex
@@ -537,7 +556,11 @@ impl Runtime {
                             throw_error_message!(
                                 self,
                                 process,
-                                &format!("Cannot invoke '{}' value.", function.to_string()),
+                                &format!(
+                                    "Cannot invoke '{}' value. (op {:?})",
+                                    function.to_string(),
+                                    ins
+                                ),
                                 context,
                                 index,
                                 bindex
@@ -630,7 +653,11 @@ impl Runtime {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Cannot invoke '{}' value.", function.to_string()),
+                            &format!(
+                                "Cannot invoke '{}' value. (op {:?})",
+                                function.to_string(),
+                                ins
+                            ),
                             context,
                             index,
                             bindex
