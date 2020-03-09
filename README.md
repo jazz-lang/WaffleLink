@@ -8,6 +8,8 @@ Fast runtime for programming languages. Includes multiple GCs for different uses
 - Baseline JIT and Fusion JIT included (W.I.P)
 - Multiple GC algorithms supported.
 
+Read more there: [Waffle architecture overview](https://github.com/jazz-lang/Waffle/wiki/Waffle-architecture-overview)
+
 # Concurrency
 Waffle uses thing called lightweight processes, you may think of it like green threads,fibers or coroutines except that lighweight processes 
 does not share heap and when message from one process sent to another it's deep copied into another process heap.
