@@ -78,6 +78,7 @@ pub enum Instruction {
     LoadThis(u16),
     SetThis(u16),
     LoadCurrentModule(u16),
+    ToBoolean(u16, u16),
 }
 
 impl Instruction {
@@ -200,6 +201,9 @@ impl Instruction {
             | Instruction::ConditionalBranch(r0, _, _) => {
                 //(vreg!(*r0));
             }
+            Instruction::ToBoolean(r0, _) => {
+                def_set.insert(vreg!(*r0));
+            }
             Instruction::LoadThis(r0) => {
                 def_set.insert(vreg!(*r0));
             }
@@ -294,6 +298,9 @@ impl Instruction {
             Instruction::SetThis(r0) => {
                 use_set.insert(vreg!(*r0));
             }
+            Instruction::ToBoolean(_, r1) => {
+                use_set.insert(vreg!(*r1));
+            }
             Instruction::LoadCurrentModule(r0) => {}
             _ => {}
         }
@@ -347,6 +354,7 @@ impl Instruction {
             | Instruction::Call(r1, r2, _)
             | Instruction::TailCall(r1, r2, _)
             | Instruction::StoreById(r1, r2, _)
+            | Instruction::ToBoolean(r1, r2)
             | Instruction::New(r1, r2, _)
             | Instruction::LoadStaticByValue(r1, r2) => r!(r1, r2),
             Instruction::LoadByValue(r1, r2, r3)
@@ -410,6 +418,7 @@ impl Instruction {
             Instruction::LoadByIndex(r1, r2, i) | Instruction::StoreByIndex(r1, r2, i) => {
                 vec![r1 as u64, r2 as u64, i as u64]
             }
+            Instruction::ToBoolean(r1, r2) => vec![r1 as u64, r2 as u64],
             _ => vec![],
         }
     }
@@ -504,4 +513,5 @@ pub mod InstructionByte {
     pub const LOAD_CURRENT_MODULE: u8 = 0x37;
     pub const LOAD_UPVALUE: u8 = 0x38;
     pub const STORE_UPVALUE: u8 = 0x39;
+    pub const TO_BOOLEAN: u8 = 0x3a;
 }

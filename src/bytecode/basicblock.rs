@@ -95,7 +95,7 @@ impl BasicBlock {
             Instruction::ConditionalBranch(_, if_true, if_false) => (Some(if_true), Some(if_false)),
             Instruction::Branch(t)
             | Instruction::BranchIfFalse(_, t)
-            | Instruction::BranchIfTrue(_, t) => (Some(t), None),
+            | Instruction::BranchIfTrue(_, t) => (Some(t), Some(self.index as u16 + 1)),
             Instruction::Return(_) => (None, None),
             _ => panic!("Terminator not found in {:#?}", self),
         }

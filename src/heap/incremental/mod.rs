@@ -91,6 +91,7 @@ pub struct IncrementalCollector {
     major_old_threshold: usize,
     process: Option<Arc<Process>>,
     disabled: bool,
+    permanent_scanned: std::collections::HashSet<usize>,
 }
 
 impl IncrementalCollector {
@@ -285,7 +286,7 @@ impl IncrementalCollector {
             if value.raw.is_null() {
                 continue;
             }
-            log::trace!("Trace {:p}", value.raw.raw);
+            log::trace!("Trace {:p} '{}'", value.raw.raw, value.to_string());
             tried_marks += self.mark_children(value);
         }
         tried_marks
@@ -295,15 +296,19 @@ impl IncrementalCollector {
         if obj.raw.is_null() {
             return 0;
         }
-        if !obj.is_permanent() {
-            paint_black(obj);
-        }
         let mut children = 0;
-        obj.get().trace(|ptr| {
-            let ptr = unsafe { *ptr };
-            self.mark(ptr);
-            children += 1;
-        });
+        if !is_black(obj) && !self.permanent_scanned.contains(&(obj.raw.raw as usize)) {
+            if !obj.is_permanent() {
+                paint_black(obj);
+            } else {
+                self.permanent_scanned.insert(obj.raw.raw as usize);
+            }
+            obj.get().trace(|ptr| {
+                let ptr = unsafe { *ptr };
+                self.mark(ptr);
+                children += 1;
+            });
+        }
 
         children
     }
@@ -380,6 +385,7 @@ impl IncrementalCollector {
             generational,
             grey: LinkedList::new(),
             roots: Vec::new(),
+            permanent_scanned: Default::default(),
             allocator: FreeListAllocator::new(Space::new(size)),
             live: 0,
             live_after_mark: 0,

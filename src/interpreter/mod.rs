@@ -306,6 +306,24 @@ impl Runtime {
                     let value = context.stack.pop().unwrap_or(Value::from(VTag::Undefined));
                     context.set_register(r, value);
                 }
+                Instruction::BranchIfFalse(r, to) => {
+                    let value = context.get_register(r);
+                    if !value.to_boolean() {
+                        bindex = to as _;
+                        index = 0;
+                    } else {
+                        bindex += 1;
+                    }
+                }
+                Instruction::BranchIfTrue(r, to) => {
+                    let value = context.get_register(r);
+                    if value.to_boolean() {
+                        bindex = to as _;
+                        index = 0;
+                    } else {
+                        bindex += 1;
+                    }
+                }
                 Instruction::Branch(block) => {
                     bindex = block as usize;
                     index = 0
@@ -318,6 +336,10 @@ impl Runtime {
                         bindex = if_false as _;
                     }
                     index = 0;
+                }
+                Instruction::ToBoolean(dest, reg) => {
+                    let value = context.get_register(reg);
+                    context.set_register(dest, Value::from(value.to_boolean()));
                 }
                 Instruction::MakeEnv(function, count) => {
                     let mut upvalues = vec![];
@@ -436,7 +458,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -556,7 +578,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -712,7 +734,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);

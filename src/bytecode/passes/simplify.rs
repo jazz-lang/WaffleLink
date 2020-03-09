@@ -17,8 +17,8 @@
 
 use super::*;
 use crate::bytecode;
-use crate::util::arc::Arc;
 use crate::runtime::cell::Function;
+use crate::util::arc::Arc;
 use std::collections::{BTreeSet, HashSet};
 /// Simplifies CFG, removes unused blocks and replaces some branches.
 /// SimpliyCFGPass is really nice in reducing bytecode size, through it doesn't improve performance.

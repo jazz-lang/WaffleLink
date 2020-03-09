@@ -43,6 +43,7 @@ pub struct CopyingCollector {
     pub space: Space,
     pub needs_gc: bool,
     pub stack: Vec<Slot>,
+    pub remembered_permanent: std::collections::HashSet<usize>,
 }
 
 impl CopyingCollector {
@@ -51,6 +52,7 @@ impl CopyingCollector {
             space: Space::new(page_size),
             needs_gc: false,
             stack: vec![],
+            remembered_permanent: Default::default(),
         }
     }
 
@@ -60,8 +62,17 @@ impl CopyingCollector {
         while let Some(slot) = self.stack.pop() {
             let ptr = self.copy_object(&slot.value, &mut new_space);
             slot.set(ptr);
-            if slot.value.get().color != CELL_BLACK {
-                slot.value.get_mut().color = CELL_BLACK;
+            if slot.value.get().color != CELL_BLACK
+                && !self
+                    .remembered_permanent
+                    .contains(&(slot.value.raw.raw as usize))
+            {
+                if !slot.value.is_permanent() {
+                    slot.value.get_mut().color = CELL_BLACK;
+                } else {
+                    self.remembered_permanent
+                        .insert(slot.value.raw.raw as usize);
+                }
                 slot.value.get().trace(|pointer| {
                     let slot = Slot::from_ptr(pointer);
                     slot.value.get_mut().color = CELL_GREY;
@@ -100,6 +111,9 @@ impl CopyingCollector {
     }
 
     fn copy_object(&mut self, slot: &CellPointer, to_space: &mut Space) -> CellPointer {
+        if slot.is_permanent() {
+            return *slot;
+        }
         if to_space.contains(slot.get().forward) {
             return slot.get().forward.to_cell();
         } else {

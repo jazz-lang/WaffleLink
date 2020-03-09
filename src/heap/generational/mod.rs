@@ -72,6 +72,8 @@ pub struct GenerationalHeap {
     tmp_space: Space,
     old2intermediate_set: remember_set::RemembrSet,
     disabled: bool,
+    young_threshold: usize,
+    intermediate_threshold: usize,
 }
 
 impl GenerationalHeap {
@@ -88,6 +90,8 @@ impl GenerationalHeap {
             rootset: Vec::new(),
             old2intermediate_set: remember_set::RemembrSet::new(),
             disabled: false,
+            young_threshold: 128,
+            intermediate_threshold: 256,
         }
     }
 
@@ -147,7 +151,8 @@ impl GenerationalHeap {
         }
     }
 
-    fn mark_live(&mut self) {
+    fn mark_live(&mut self) -> usize {
+        let mut live = 0;
         let mut stack = vec![];
         if self.current == GenerationalGCType::Young {
             for value in self.old_set.iter() {
@@ -207,6 +212,7 @@ impl GenerationalHeap {
                 let cell = unsafe { *ptr };
                 if self.in_current_space(cell) {
                     if !cell.is_marked() {
+                        live += 1;
                         log::trace!("Mark value '{}' at {:p}", cell, cell.raw.raw);
                         cell.mark(true);
                         stack.push(cell);
@@ -214,6 +220,7 @@ impl GenerationalHeap {
                 }
             });
         }
+        live
     }
 
     fn compute_forward_intermediate(&mut self) {
@@ -232,6 +239,7 @@ impl GenerationalHeap {
 
                     let shall_promote = object.get().generation >= 4;
                     let fwd = if shall_promote {
+                        log::debug!("Promote intermediate {:p} to old", object.raw.raw);
                         gc.old_space
                             .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
                     } else {
@@ -315,7 +323,7 @@ impl GenerationalHeap {
         }
     }
 
-    fn relocate(&mut self) {
+    fn relocate(&mut self) -> usize {
         let pages = {
             match self.current {
                 GenerationalGCType::Young => {
@@ -330,11 +338,13 @@ impl GenerationalHeap {
                 _ => unreachable!(),
             }
         };
+        let mut relocated = 0;
         for page in pages {
             self.walk_heap(page.data, page.top, |gc, object, address| {
                 if object.is_marked() {
                     let dest = object.get().forward;
                     if address != dest {
+                        relocated += 1;
                         log::trace!("Relocate {:p}->{:p}", object.raw.raw, dest.to_ptr::<u8>());
                         object.get().copy_to_addr(dest);
                     }
@@ -361,15 +371,25 @@ impl GenerationalHeap {
                 }
             });
         }
+        relocated
     }
     /// Copy all objects from *nursery* to *intermediate* space.
     pub fn scavenge(&mut self) {
         log::trace!("Scavenging started");
         self.current = GenerationalGCType::Young;
-        self.mark_live();
+        let survived = self.mark_live();
         self.compute_forward_scavenge();
         self.update_references();
-        self.relocate();
+        let _survived = self.relocate();
+        if survived as f64 > self.young_threshold as f64 * 0.5 {
+            self.nursery_space.clear();
+            self.nursery_space.page_size = align_usize(
+                (self.nursery_space.page_size as f64 / 0.5) as usize,
+                page_size(),
+            );
+            self.nursery_space.add_page(self.nursery_space.page_size);
+            self.young_threshold = (self.young_threshold as f64 / 0.5) as usize;
+        }
         for page in self.nursery_space.pages.iter_mut() {
             page.top = page.data;
         }
@@ -381,12 +401,26 @@ impl GenerationalHeap {
 
     pub fn minor(&mut self, proc: &Arc<Process>) -> bool {
         self.current = GenerationalGCType::Intermediate;
+        log::debug!("Minor cycle: mark live objects");
         self.trace_process(proc);
-        self.mark_live();
-        self.tmp_space = Space::new(self.intermediate_space.page_size);
+        let survived = self.mark_live();
+        self.tmp_space = Space::empty();
+        let size = if survived as f64 > self.intermediate_threshold as f64 * 0.5 {
+            self.intermediate_space.page_size = align_usize(
+                (self.nursery_space.page_size as f64 / 0.5) as usize,
+                page_size(),
+            );
+            //self.nursery_space.add_page(self.nursery_space.page_size);
+            self.intermediate_threshold = (self.intermediate_threshold as f64 / 0.5) as usize;
+            self.intermediate_space.page_size
+        } else {
+            self.intermediate_space.page_size
+        };
+        self.tmp_space.page_size = size;
+        self.tmp_space.add_page(size);
         self.compute_forward_intermediate();
         self.update_references();
-        self.relocate();
+        let _survived = self.relocate();
         std::mem::swap(&mut self.tmp_space, &mut self.intermediate_space);
         self.tmp_space.clear();
         let failed = self.needs_gc == GenerationalGCType::Old;

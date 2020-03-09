@@ -66,10 +66,10 @@ pub fn prelink_module(m: &Arc<Module>, opt_level: OptLevel) {
                         peephole.execute(f);
                         let mut tcall = passes::tail_call_elim::TailCallEliminationPass;
                         let mut ret_sink = passes::ret_sink::RetSink;
+                        tcall.execute(f);
                         ret_sink.execute(f);
                         simplify.execute(f);
                         peephole.execute(f);
-                        tcall.execute(f);
                     }
                     OptLevel::VeryFast => {
                         // TODO: Invoke CSE, alias analysing.

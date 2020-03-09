@@ -103,11 +103,11 @@ pub fn initialize_function(state: &RcState) {
     );
     func.add_attribute_without_barrier(
         &Arc::new("bytecode".to_owned()),
-        Value::from(state.allocate_native_fn(bytecode,"bytecode",0))
+        Value::from(state.allocate_native_fn(bytecode, "bytecode", 0)),
     );
     func.add_attribute_without_barrier(
         &Arc::new("arguments".to_owned()),
-        Value::from(state.allocate_native_fn(arguments,"arguments",0))
+        Value::from(state.allocate_native_fn(arguments, "arguments", 0)),
     );
     lock.insert("Function".to_owned(), Value::from(func));
 }

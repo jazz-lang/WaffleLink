@@ -4,10 +4,10 @@ pub mod liveness;
 pub struct RegisterAllocation;
 
 use crate::bytecode::*;
+use crate::runtime::cell::Function;
 use crate::util::arc::Arc;
 use basicblock::*;
 use instruction::*;
-use crate::runtime::cell::Function;
 use passes::BytecodePass;
 
 impl RegisterAllocation {
