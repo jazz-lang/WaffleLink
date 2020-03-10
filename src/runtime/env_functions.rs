@@ -17,16 +17,14 @@
 
 use super::cell::*;
 use super::exception::*;
-use super::process::*;
-use super::scheduler::process_worker::*;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 
 pub extern "C" fn get_home(
-    _: &mut ProcessWorker,
     state: &RcState,
-    _process: &Arc<Process>,
+    _process: &Arc<WaffleThread>,
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -36,17 +34,16 @@ pub extern "C" fn get_home(
 }
 
 pub extern "C" fn arguments(
-    _: &mut ProcessWorker,
     state: &RcState,
-    proc: &Arc<Process>,
+    proc: &Arc<WaffleThread>,
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     let args = std::env::args()
-        .map(|x| Process::allocate_string(proc, state, &x))
+        .map(|x| WaffleThread::allocate_string(proc, state, &x))
         .map(Value::from)
         .collect::<Vec<_>>();
-    Ok(ReturnValue::Value(Value::from(Process::allocate(
+    Ok(ReturnValue::Value(Value::from(WaffleThread::allocate(
         proc,
         Cell::with_prototype(
             CellValue::Array(Box::new(args)),

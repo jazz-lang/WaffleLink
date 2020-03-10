@@ -17,18 +17,13 @@
 
 use super::cell::*;
 use super::scheduler;
+use super::threads::Threads;
 use super::value::*;
-use crate::heap::gc_pool::GcPool;
 use crate::heap::PermanentHeap;
 use crate::util::arc::Arc;
 use parking_lot::Mutex;
-use scheduler::process_scheduler::ProcessScheduler;
-use scheduler::timeout_worker::TimeoutWorker;
+
 pub struct State {
-    pub scheduler: ProcessScheduler,
-    pub timeout_worker: TimeoutWorker,
-    pub perm_heap: Mutex<PermanentHeap>,
-    pub gc_pool: GcPool,
     pub string_prototype: Value,
     pub object_prototype: Value,
     pub array_prototype: Value,
@@ -43,6 +38,7 @@ pub struct State {
     pub static_variables: Mutex<std::collections::HashMap<String, Value>>,
     pub config: super::config::Config,
     pub string_map: Mutex<std::collections::HashMap<String, CellPointer>>,
+    pub threads: Threads,
 }
 
 #[inline]
@@ -85,7 +81,7 @@ impl State {
         let map = Default::default();
         /*{
             map.insert("Array".to_owned(), array_prototype);
-            map.insert("Process".to_owned(), process_prototype);
+            map.insert("WaffleThread".to_owned(), process_prototype);
             map.insert("Function".to_owned(), function_prototype);
             map.insert("Module".to_owned(), module_prototype);
         }*/
@@ -99,18 +95,12 @@ impl State {
         } else {
             nof_parallel_worker_threads(5, 8, 8)
         };
-        let scheduler = ProcessScheduler::new(primary, blocking);
-        let timeout_worker = TimeoutWorker::new();
         let _gc_workers = if let Some(c) = config.gc_workers {
             c
         } else {
             nof_parallel_worker_threads(5, 8, 8) / 2
         };
         Arc::new(Self {
-            scheduler,
-            gc_pool: GcPool::new(_gc_workers),
-            timeout_worker,
-            perm_heap: Mutex::new(perm),
             object_prototype,
             file_prototype,
             string_prototype,
@@ -126,18 +116,21 @@ impl State {
             static_variables: Mutex::new(map),
             config,
             string_map: Mutex::new(Default::default()),
+            threads: Threads::new(),
         })
     }
 
     pub fn allocate(&self, cell: Cell) -> Value {
-        Value::from(self.perm_heap.lock().allocate(cell))
+        /*Value::from(self.perm_heap.lock().allocate(cell))*/
+        unimplemented!()
     }
 
     pub fn allocate_fn(&self, fun: Function) -> Value {
-        Value::from(self.perm_heap.lock().allocate(Cell::with_prototype(
+        /*Value::from(self.perm_heap.lock().allocate(Cell::with_prototype(
             CellValue::Function(Arc::new(fun)),
             self.function_prototype.as_cell(),
-        )))
+        )))*/
+        unimplemented!()
     }
     pub fn allocate_native_fn(
         &self,
@@ -160,7 +153,7 @@ impl State {
             md: Default::default(),
         };
 
-        let cell = self
+        /*let cell = self
             .perm_heap
             .lock()
             .allocate(Cell::with_prototype(
@@ -168,7 +161,8 @@ impl State {
                 self.function_prototype.as_cell(),
             ))
             .as_cell();
-        cell
+        cell*/
+        unimplemented!()
     }
     pub fn allocate_native_fn_with_name(
         &self,
@@ -191,15 +185,7 @@ impl State {
             md: Default::default(),
         };
 
-        let cell = self
-            .perm_heap
-            .lock()
-            .allocate(Cell::with_prototype(
-                CellValue::Function(Arc::new(function)),
-                self.function_prototype.as_cell(),
-            ))
-            .as_cell();
-        cell
+        unimplemented!()
     }
 
     /// Interns a borrowed String.

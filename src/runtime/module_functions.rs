@@ -16,18 +16,16 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use super::*;
 use crate::interpreter::context::*;
 use crate::util::arc::Arc;
 
 pub extern "C" fn load(
-    _worker: &mut ProcessWorker,
     _state: &RcState,
-    _process: &Arc<Process>,
+    _process: &Arc<WaffleThread>,
     _: Value,
     _arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -35,9 +33,8 @@ pub extern "C" fn load(
 }
 
 pub extern "C" fn exports(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {

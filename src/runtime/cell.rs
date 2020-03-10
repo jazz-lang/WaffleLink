@@ -16,9 +16,8 @@
 */
 
 use super::module::Module;
-use super::process::Process;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::WaffleThread;
 use super::value::*;
 use super::*;
 use crate::bytecode;
@@ -55,17 +54,12 @@ pub const CELL_WHITES: u8 = CELL_WHITE_A | CELL_WHITE_B;
 #[repr(C)]
 pub enum ReturnValue {
     Value(Value),
-    YieldProcess,
-    SuspendProcess,
+    YieldWaffleThread,
+    SuspendWaffleThread,
 }
 
-pub type NativeFn = extern "C" fn(
-    &mut ProcessWorker,
-    &RcState,
-    &Arc<Process>,
-    Value,
-    &[Value],
-) -> Result<ReturnValue, Value>;
+pub type NativeFn =
+    extern "C" fn(&RcState, &Arc<WaffleThread>, Value, &[Value]) -> Result<ReturnValue, Value>;
 
 #[derive(Default, Clone)]
 #[repr(C)]
@@ -102,7 +96,7 @@ pub enum CellValue {
     ByteArray(Box<Vec<u8>>),
     Function(Arc<Function>),
     Module(Arc<Module>),
-    Process(Arc<Process>),
+    WaffleThread(Arc<WaffleThread>),
     Regex(Arc<Regex>),
     Duration(std::time::Duration),
     File(File),
@@ -444,8 +438,8 @@ impl CellPointer {
     }
 
     /// Adds an attribute to the object this pointer points to.
-    pub fn add_attribute(&self, proc: &Arc<Process>, name: &Arc<String>, attr: Value) {
-        proc.local_data_mut().heap.field_write_barrier(*self, attr);
+    pub fn add_attribute(&self, proc: &Arc<WaffleThread>, name: &Arc<String>, attr: Value) {
+        //proc.local_data_mut().heap.field_write_barrier(*self, attr);
         self.get_mut().add_attribute(name.clone(), attr);
     }
 
@@ -514,7 +508,7 @@ impl CellPointer {
 
     pub fn is_process(&self) -> bool {
         match self.get().value {
-            CellValue::Process(_) => true,
+            CellValue::WaffleThread(_) => true,
             _ => false,
         }
     }
@@ -597,7 +591,7 @@ impl CellPointer {
             }
             CellValue::InternedString(ref s) => crate::runtime::interner::str(*s).to_string(),
             CellValue::Duration(d) => format!("Duration({})", d.as_millis()),
-            CellValue::Process(_) => String::from("Process"),
+            CellValue::WaffleThread(_) => String::from("WaffleThread"),
             CellValue::File(_) => String::from("File"),
             CellValue::ByteArray(ref array) => format!("ByteArray({:?})", array),
             CellValue::Function(ref f) => format!("function {}(...) {{...}}", f.name.to_string()),
@@ -668,12 +662,12 @@ pub extern "C" fn cell_add_attribute_wo_barrier(cell: *const Cell, key: Value, v
 }
 
 pub extern "C" fn cell_add_attribute_barriered(
-    proc: *const Process,
+    proc: *const WaffleThread,
     cell: *const Cell,
     key: Value,
     value: Value,
 ) {
-    let proc = unsafe { Arc::from_raw(proc as *mut Process) };
+    let proc = unsafe { Arc::from_raw(proc as *mut WaffleThread) };
     let key = key.to_string();
     let key_ptr = Arc::new(key);
     let pointer = CellPointer::from(cell);

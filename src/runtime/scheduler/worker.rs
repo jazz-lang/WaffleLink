@@ -54,7 +54,7 @@ pub trait Worker<T: Send> {
         self.state().park_while(|| !self.state().has_global_jobs());
     }
 
-    /// Processes all local jobs until we run out of work.
+    /// WaffleThreades all local jobs until we run out of work.
     ///
     /// This method returns true if the worker should self terminate.
     fn process_local_jobs(&mut self) -> bool {

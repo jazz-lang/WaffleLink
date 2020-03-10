@@ -1,14 +1,29 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 
 pub extern "C" fn constructor(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     args: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -23,7 +38,8 @@ pub extern "C" fn constructor(
         _ => state.object_prototype.as_cell(),
     };
     if !this.is_cell() {
-        let object = Process::allocate(process, Cell::with_prototype(CellValue::None, prototype));
+        let object =
+            WaffleThread::allocate(process, Cell::with_prototype(CellValue::None, prototype));
 
         return Ok(ReturnValue::Value(Value::from(object)));
     } else {
@@ -35,17 +51,14 @@ pub extern "C" fn constructor(
 }
 
 pub extern "C" fn to_string(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
-    Ok(ReturnValue::Value(Value::from(Process::allocate_string(
-        process,
-        state,
-        &this.to_string(),
-    ))))
+    Ok(ReturnValue::Value(Value::from(
+        WaffleThread::allocate_string(process, state, &this.to_string()),
+    )))
 }
 
 pub fn initialize_object(state: &RcState) {

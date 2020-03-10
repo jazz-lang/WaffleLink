@@ -16,17 +16,15 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use super::*;
 use crate::interpreter::context::*;
 use crate::util::arc::Arc;
 
 pub fn invoke_value(
-    worker: &mut ProcessWorker,
-    proc: &Arc<Process>,
+    proc: &Arc<WaffleThread>,
     state: &RcState,
     value: Value,
     this: Value,
@@ -44,7 +42,7 @@ pub fn invoke_value(
     match cell.get().value {
         CellValue::Function(ref func) => {
             if let Some(func) = func.native {
-                return func(worker, state, proc, this, &args);
+                return func(state, proc, this, &args);
             } else {
                 let mut ctx = Context::new();
                 ctx.n = proc.context_ptr().n + 1;
@@ -56,7 +54,7 @@ pub fn invoke_value(
                 ctx.stack = args;
                 ctx.this = this;
                 proc.push_context(ctx);
-                let result = RUNTIME.run(worker, proc);
+                let result = RUNTIME.run(proc);
                 return result.map(|x| ReturnValue::Value(x));
             }
         }
@@ -81,16 +79,16 @@ native_fn!(
                         let args = ins.args().iter().map(|x| if *x < std::u32::MAX as u64 {Value::new_int(*x as _)} else {Value::new_double(f64::from_bits(*x))}).collect();
                         let mut ins_cell = Cell::with_prototype(CellValue::None,state.object_prototype.as_cell());
                         ins_cell.add_attribute(Arc::new("name".to_owned()),Value::from(state.intern_string(name.to_owned())));
-                        ins_cell.add_attribute(Arc::new("operands".to_owned()),Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()))));
-                        ins_array.push(Value::from(Process::allocate(proc,ins_cell)));
+                        ins_cell.add_attribute(Arc::new("operands".to_owned()),Value::from(WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()))));
+                        ins_array.push(Value::from(WaffleThread::allocate(proc,ins_cell)));
                     }
 
-                    let array_ = Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(ins_array)),state.array_prototype.as_cell())));
+                    let array_ = Value::from(WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(ins_array)),state.array_prototype.as_cell())));
                     cell.add_attribute(Arc::new("instructions".to_owned()),array_);
-                    array.push(Value::from(Process::allocate(proc,cell)));
+                    array.push(Value::from(WaffleThread::allocate(proc,cell)));
                 }
 
-                let ret = Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
+                let ret = WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
                 Ok(ReturnValue::Value(Value::from(ret)))
             }
             _ => return Ok(ReturnValue::Value(Value::from(VTag::Null)))
@@ -99,14 +97,14 @@ native_fn!(
 );
 native_fn!(
     _worker,state,proc => apply this (...args) {
-        invoke_value(_worker,proc,state,this,args[0],args[1])
+        invoke_value(proc,state,this,args[0],args[1])
     }
 );
 
 native_fn!(
     _worker,state,proc => arguments this(..._args) {
         let args = proc.context_ptr().arguments.clone();
-        let cell = Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()));
+        let cell = WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()));
         Ok(ReturnValue::Value(Value::from(cell)))
     }
 );

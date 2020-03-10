@@ -7,9 +7,8 @@
 macro_rules! native_fn {
     ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             _: Value,
             args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -19,9 +18,8 @@ macro_rules! native_fn {
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident ($arg: ident,$arg2: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             _: Value,
             args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -32,9 +30,8 @@ macro_rules! native_fn {
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident (...$args: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             _: Value,
             $args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -43,9 +40,8 @@ macro_rules! native_fn {
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident,$arg2: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             this: Value,
             args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -57,9 +53,8 @@ macro_rules! native_fn {
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident ($arg: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             this: Value,
             args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -71,9 +66,8 @@ macro_rules! native_fn {
     };
     ($worker: ident,$state: ident,$proc: ident => $name: ident $this: ident (...$args: ident) $e: expr ) => {
         pub extern "C" fn $name(
-            $worker: &mut ProcessWorker,
             $state: &RcState,
-            $proc: &Arc<Process>,
+            $proc: &Arc<WaffleThread>,
             this: Value,
             $args: &[Value],
         ) -> Result<ReturnValue, Value> {
@@ -99,14 +93,12 @@ pub mod module;
 pub mod module_functions;
 pub mod number_functions;
 pub mod object_functions;
-pub mod process;
-pub mod process_functions;
 pub mod regex_functions;
 pub mod scheduler;
 pub mod state;
 pub mod string_functions;
+pub mod threads;
 pub mod value;
-use crate::heap::{onthefly, GCVariant};
 use module::*;
 use parking_lot::Mutex;
 use state::*;
@@ -132,7 +124,6 @@ impl Runtime {
     }
 
     pub fn initialize_builtins(&self) {
-        process_functions::initialize_process_prototype(&self.state);
         io_functions::initialize_io(&self.state);
         array_functions::initialize_array_builtins(&self.state);
         core_functions::initialize_core(&self.state);
@@ -148,20 +139,5 @@ impl Runtime {
         file_functions::initialize_file(&self.state);
     }
 
-    pub fn start_pools(&self) {
-        if let GCVariant::OnTheFly = self.state.config.gc {
-            let lock = onthefly::GC.lock();
-            lock.mark_pool.start(self.state.clone());
-            lock.sweeper.start(self.state.clone());
-        }
-        let gguard = self.state.gc_pool.start(self.state.clone());
-        self.state.scheduler.blocking_pool.start();
-        let pguard = self.state.scheduler.primary_pool.start_main();
-        let state = self.state.clone();
-        std::thread::spawn(move || {
-            state.timeout_worker.run(&state.scheduler);
-        });
-        pguard.join().unwrap();
-        gguard.join().unwrap();
-    }
+    pub fn start_pools(&self) {}
 }

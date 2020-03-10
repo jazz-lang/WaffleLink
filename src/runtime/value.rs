@@ -16,8 +16,8 @@
 */
 
 use super::cell::*;
-use super::process::*;
 use super::state::*;
+use super::threads::*;
 use super::RUNTIME;
 use crate::util::arc::Arc;
 pub type EncodedValue = i64;
@@ -381,7 +381,7 @@ impl Value {
     pub fn add_attribute_barriered(
         &self,
         state: &RcState,
-        proc: &Arc<Process>,
+        proc: &Arc<WaffleThread>,
         name: Arc<String>,
         value: Value,
     ) {
@@ -480,7 +480,7 @@ impl Value {
 
         std::f64::NAN
     }
-    pub fn process_value(&self) -> Result<Arc<Process>, String> {
+    pub fn process_value(&self) -> Result<Arc<WaffleThread>, String> {
         if !self.is_cell() {
             panic!("{}", self);
             //return Err(format!("Value '{}' not a process", self.to_string()).to_owned());
@@ -490,7 +490,7 @@ impl Value {
             return Err("Value not a process".to_owned());
         } else {
             match &cell.get().value {
-                CellValue::Process(proc) => Ok(proc.clone()),
+                CellValue::WaffleThread(proc) => Ok(proc.clone()),
                 _ => unsafe { std::hint::unreachable_unchecked() },
             }
         }

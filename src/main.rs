@@ -16,9 +16,9 @@
 */
 
 extern crate waffle;
-use process::*;
 use reader::*;
 use std::path::PathBuf;
+use threads::*;
 use waffle::bytecode::*;
 use waffle::runtime::config::{Config, CONFIG};
 use waffle::runtime::*;
@@ -177,7 +177,7 @@ fn main() {
     };
 
     let module = reader.read_module();
-    let proc = Process::from_function(module.main_fn, &c).unwrap();
-    RUNTIME.schedule_main_process(proc.clone());
+    //let proc = WaffleThread::from_function(module.main_fn, &c).unwrap();
+    //RUNTIME.schedule_main_process(proc.clone());
     RUNTIME.start_pools();
 }

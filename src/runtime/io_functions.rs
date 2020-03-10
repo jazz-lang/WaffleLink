@@ -16,15 +16,13 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 pub extern "C" fn writeln(
-    _: &mut ProcessWorker,
     _: &RcState,
-    _: &Arc<Process>,
+    _: &Arc<WaffleThread>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -36,9 +34,8 @@ pub extern "C" fn writeln(
 }
 
 pub extern "C" fn write(
-    _: &mut ProcessWorker,
     _: &RcState,
-    _: &Arc<Process>,
+    _: &Arc<WaffleThread>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -49,9 +46,8 @@ pub extern "C" fn write(
 }
 
 pub extern "C" fn readln(
-    _: &mut ProcessWorker,
     state: &RcState,
-    proc: &Arc<Process>,
+    proc: &Arc<WaffleThread>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -66,16 +62,16 @@ pub extern "C" fn readln(
     match stdin().read_line(&mut buf) {
         Ok(_) => (),
         Err(e) => {
-            return Err(Value::from(Process::allocate_string(
+            return Err(Value::from(WaffleThread::allocate_string(
                 proc,
                 state,
                 &e.to_string(),
             )))
         }
     }
-    Ok(ReturnValue::Value(Value::from(Process::allocate_string(
-        proc, state, &buf,
-    ))))
+    Ok(ReturnValue::Value(Value::from(
+        WaffleThread::allocate_string(proc, state, &buf),
+    )))
 }
 
 pub fn initialize_io(state: &RcState) {

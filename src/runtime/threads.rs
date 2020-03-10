@@ -17,63 +17,122 @@
 
 use super::cell::*;
 use super::channel::Channel;
-use super::scheduler::timeout::*;
 use super::state::*;
 use super::value::*;
+use super::*;
 use crate::heap::{initialize_process_heap, GCType, HeapTrait};
 use crate::interpreter::context::*;
 use crate::util;
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
+use std::cell::RefCell;
 use std::ptr;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use util::arc::*;
 use util::ptr::*;
 use util::tagged;
 use util::tagged::*;
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Debug)]
-#[repr(u8)]
-pub enum ProcessPriority {
-    Max,
-    High,
-    Normal,
-    Low,
+thread_local! {
+    pub static THREAD: RefCell<Arc<WaffleThread>> = RefCell::new(WaffleThread::new());
 }
 
-/// The bit that is set to mark a process as being suspended.
-const SUSPENDED_BIT: usize = 0;
+pub struct Threads {
+    pub threads: Mutex<Vec<Arc<WaffleThread>>>,
+    pub cond_join: Condvar,
 
-/// An enum describing what rights a thread was given when trying to reschedule
-/// a process.
-pub enum RescheduleRights {
-    /// The rescheduling rights were not obtained.
-    Failed,
+    pub next_id: AtomicUsize,
+    pub safepoint: Mutex<(usize, usize)>,
 
-    /// The rescheduling rights were obtained.
-    Acquired,
-
-    /// The rescheduling rights were obtained, and the process was using a
-    /// timeout.
-    AcquiredWithTimeout(Arc<Timeout>),
+    pub barrier: Barrier,
 }
 
-impl RescheduleRights {
-    pub fn are_acquired(&self) -> bool {
-        match self {
-            RescheduleRights::Failed => false,
-            _ => true,
+impl Threads {
+    pub fn new() -> Threads {
+        Threads {
+            threads: Mutex::new(Vec::new()),
+            cond_join: Condvar::new(),
+            next_id: AtomicUsize::new(1),
+            safepoint: Mutex::new((0, 1)),
+            barrier: Barrier::new(),
         }
     }
 
-    pub fn process_had_timeout(&self) -> bool {
-        match self {
-            RescheduleRights::AcquiredWithTimeout(_) => true,
-            _ => false,
+    pub fn attach_current_thread(&self) {
+        THREAD.with(|thread| {
+            let mut threads = self.threads.lock();
+            threads.push(thread.borrow().clone());
+        });
+    }
+
+    pub fn attach_thread(&self, thread: Arc<WaffleThread>) {
+        let mut threads = self.threads.lock();
+        threads.push(thread);
+    }
+
+    pub fn next_id(&self) -> usize {
+        self.next_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub fn safepoint_id(&self) -> usize {
+        let safepoint = self.safepoint.lock();
+        safepoint.0
+    }
+
+    pub fn safepoint_requested(&self) -> bool {
+        let safepoint = self.safepoint.lock();
+        safepoint.0 != 0
+    }
+
+    pub fn request_safepoint(&self) -> usize {
+        let mut safepoint = self.safepoint.lock();
+        assert_eq!(safepoint.0, 0);
+        safepoint.0 = safepoint.1;
+        safepoint.1 += 1;
+
+        safepoint.0
+    }
+
+    pub fn clear_safepoint_request(&self) {
+        let mut safepoint = self.safepoint.lock();
+        assert_ne!(safepoint.0, 0);
+        safepoint.0 = 0;
+    }
+
+    pub fn detach_current_thread(&self) {
+        let state = &RUNTIME.state;
+        //let vm = get_vm();
+
+        // Other threads might still be running and perform a GC.
+        // Fill the TLAB for them.
+        //tlab::make_iterable_current(vm);
+
+        THREAD.with(|thread| {
+            thread.borrow_mut().park();
+            let mut threads = self.threads.lock();
+            threads.retain(|elem| !Arc::ptr_eq(elem, &*thread.borrow()));
+            self.cond_join.notify_all();
+        });
+    }
+
+    pub fn join_all(&self) {
+        let mut threads = self.threads.lock();
+
+        while threads.len() > 0 {
+            self.cond_join.wait(&mut threads);
+        }
+    }
+
+    pub fn each<F>(&self, mut f: F)
+    where
+        F: FnMut(&Arc<WaffleThread>),
+    {
+        let threads = self.threads.lock();
+
+        for thread in threads.iter() {
+            f(thread)
         }
     }
 }
-
 pub struct CatchTable {
     pub jump_to: u16,
     pub context: Ptr<Context>,
@@ -83,60 +142,42 @@ pub struct CatchTable {
 pub struct LocalData {
     pub context: Ptr<Context>,
     pub catch_tables: Vec<CatchTable>,
-    /// Channel of this process. This channel is used like `std::sync::mpsc` channel.
-    pub channel: Mutex<Channel>,
-    pub status: ProcessStatus,
-    pub heap: Box<dyn HeapTrait>,
+    pub status: WaffleThreadStatus,
     pub thread_id: Option<u8>,
+    pub state: StateManager,
 }
 
 /// Lightweight "green" process.
 ///
 /// This sturcture represents lightweight process. Each process scheduled by the virtual machine.
-pub struct Process {
+pub struct WaffleThread {
     pub local_data: Ptr<LocalData>,
-    /// If the process is waiting for a message.
-    waiting_for_message: AtomicBool,
-
-    /// A marker indicating if a process is suspened, optionally including the
-    /// pointer to the timeout.
-    ///
-    /// When this value is NULL, the process is not suspended.
-    ///
-    /// When the lowest bit is set to 1, the pointer may point to (after
-    /// unsetting the bit) to one of the following:
-    ///
-    /// 1. NULL, meaning the process is suspended indefinitely.
-    /// 2. A Timeout, meaning the process is suspended until the timeout
-    ///    expires.
-    ///
-    /// While the type here uses a `TaggedPointer`, in reality the type is an
-    /// `Arc<Timeout>`. This trick is needed to allow for atomic
-    /// operations and tagging, something which isn't possible using an
-    /// `Option<T>`.
-    suspended: TaggedPointer<Timeout>,
-    pub priority: AtomicU8,
 }
 
-impl Process {
+impl WaffleThread {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            local_data: Ptr::new(LocalData {
+                catch_tables: vec![],
+                context: Ptr::null(),
+                status: WaffleThreadStatus::new(),
+                thread_id: None,
+                state: StateManager::new(),
+            }),
+        })
+    }
+
     pub fn with_rc(context: Context, config: &super::config::Config) -> Arc<Self> {
         let local_data = LocalData {
-            heap: initialize_process_heap(config.gc, config),
-            channel: Mutex::new(Channel::new()),
             catch_tables: vec![],
             context: Ptr::new(context),
-            status: ProcessStatus::new(),
+            status: WaffleThreadStatus::new(),
             thread_id: None,
+            state: StateManager::new(),
         };
-        assert!(local_data.context.raw.is_null() == false);
         let proc = Arc::new(Self {
-            waiting_for_message: AtomicBool::new(false),
-            suspended: TaggedPointer::null(),
             local_data: Ptr::new(local_data),
-            priority: AtomicU8::new(ProcessPriority::Normal as u8),
         });
-
-        proc.local_data_mut().heap.set_proc(proc.clone());
         proc
     }
 
@@ -145,7 +186,7 @@ impl Process {
         config: &super::config::Config,
     ) -> Result<Arc<Self>, String> {
         if value.is_cell() == false {
-            return Err(format!("Expected function to Process.spawn",).to_owned());
+            return Err(format!("Expected function to WaffleThread.spawn",).to_owned());
         };
 
         let value = value.as_cell();
@@ -170,7 +211,7 @@ impl Process {
 
                 Ok(Self::with_rc(context, config))
             }
-            _ => return Err(format!("Expected function to Process.spawn").to_owned()),
+            _ => return Err(format!("Expected function to WaffleThread.spawn").to_owned()),
         }
     }
 
@@ -186,19 +227,12 @@ impl Process {
     }
 
     pub fn terminate(&self, _: &State) {
-        // The channel lock _must_ be acquired first, otherwise we may end up
-        // reclaiming memory while another process is allocating message into
-        // them.
-        let _channel = self.local_data().channel.try_lock();
-        assert!(_channel.is_some());
         // Once terminated we don't want to receive any messages any more, as
         // they will never be received and thus lead to an increase in memory.
         // Thus, we mark the process as terminated. We must do this _after_
         // acquiring the lock to ensure other processes sending messages will
         // observe the right value.
         self.set_terminated();
-
-        self.local_data_mut().heap.clear();
     }
     pub fn pop_context(&self) -> bool {
         let local_data = self.local_data_mut();
@@ -292,85 +326,6 @@ impl Process {
             current = context.parent.as_ref().map(|c| &**c);
         }
     }
-
-    pub fn suspend_with_timeout(&self, timeout: Arc<Timeout>) {
-        let pointer = Arc::into_raw(timeout);
-        let tagged = tagged::with_bit(pointer, SUSPENDED_BIT);
-
-        self.suspended.atomic_store(tagged);
-    }
-
-    pub fn suspend_without_timeout(&self) {
-        let pointer = ptr::null_mut();
-        let tagged = tagged::with_bit(pointer, SUSPENDED_BIT);
-
-        self.suspended.atomic_store(tagged);
-    }
-
-    pub fn is_suspended_with_timeout(&self, timeout: &Arc<Timeout>) -> bool {
-        let pointer = self.suspended.atomic_load();
-
-        tagged::untagged(pointer) == timeout.as_ptr()
-    }
-
-    /// Attempts to acquire the rights to reschedule this process.
-    pub fn acquire_rescheduling_rights(&self) -> RescheduleRights {
-        let current = self.suspended.atomic_load();
-
-        if current.is_null() {
-            RescheduleRights::Failed
-        } else if self.suspended.compare_and_swap(current, ptr::null_mut()) {
-            let untagged = tagged::untagged(current);
-
-            if untagged.is_null() {
-                RescheduleRights::Acquired
-            } else {
-                let timeout = unsafe { Arc::from_raw(untagged) };
-
-                RescheduleRights::AcquiredWithTimeout(timeout)
-            }
-        } else {
-            RescheduleRights::Failed
-        }
-    }
-
-    pub fn send_message_from_external_process(this: &Arc<Process>, message_to_copy: Value) {
-        let local_data = this.local_data_mut();
-
-        // The lock must be acquired first, as the receiving process may be
-        // garbage collected at this time.
-        let mut channel = local_data.channel.lock();
-
-        // When a process terminates it will acquire the channel lock first.
-        // Checking the status after acquiring the lock allows us to obtain a
-        // stable view of the status.
-        if this.is_terminated() {
-            return;
-        }
-        local_data.heap.disable();
-        channel.send(local_data.heap.copy_object(this, message_to_copy));
-        local_data.heap.enable();
-    }
-
-    pub fn send_message_from_self(&self, message: Value) {
-        self.local_data_mut().channel.lock().send(message);
-    }
-
-    pub fn waiting_for_message(&self) {
-        self.waiting_for_message.store(true, Ordering::Release);
-    }
-
-    pub fn no_longer_waiting_for_message(&self) {
-        self.waiting_for_message.store(false, Ordering::Release);
-    }
-
-    pub fn is_waiting_for_message(&self) -> bool {
-        self.waiting_for_message.load(Ordering::Acquire)
-    }
-
-    pub fn receive_message(&self) -> Option<Value> {
-        self.local_data_mut().channel.lock().receive()
-    }
     pub fn is_terminated(&self) -> bool {
         self.local_data().status.is_terminated()
     }
@@ -396,36 +351,43 @@ impl Process {
         self.local_data().status.is_main()
     }
 
-    pub fn set_blocking(&self, enable: bool) {
-        self.local_data_mut().status.set_blocking(enable);
+    pub fn park(&self) {
+        self.local_data_mut().state.park()
+    }
+    pub fn unpark(&self) {
+        if RUNTIME.state.threads.safepoint_id() != 0 {}
+        self.local_data_mut().state.unpark();
     }
 
-    pub fn is_blocking(&self) -> bool {
-        self.local_data().status.is_blocking()
+    pub fn block(&self, id: usize) {
+        self.local_data_mut().state.block(id);
     }
-
-    pub fn do_gc(this: &Arc<Process>) {
+    pub fn in_safepoint(&self, id: usize) -> bool {
+        self.local_data().state.in_safepoint(id)
+    }
+    pub fn do_gc(this: &Arc<WaffleThread>) {
         let local_data = this.local_data_mut();
-        let _ = local_data.heap.collect_garbage(this);
+        //let _ = local_data.heap.collect_garbage(this);
     }
 
     pub fn gc_enable(&self) {
         let local_data = self.local_data_mut();
-        local_data.heap.enable();
+        //local_data.heap.enable();
     }
 
     pub fn gc_disable(&self) {
         let local_data = self.local_data_mut();
-        local_data.heap.disable();
+        //local_data.heap.disable();
     }
 
     pub fn gc_is_enabled(&self) -> bool {
-        self.local_data().heap.is_enabled()
+        //self.local_data().heap.is_enabled()
+        true
     }
 
-    pub fn allocate_string(this: &Arc<Process>, state: &RcState, string: &str) -> Value {
+    pub fn allocate_string(this: &Arc<WaffleThread>, state: &RcState, string: &str) -> Value {
         let local_data = this.local_data_mut();
-        let cell = local_data.heap.allocate(
+        /*let cell = local_data.heap.allocate(
             this,
             GCType::Young,
             Cell::with_prototype(
@@ -433,22 +395,20 @@ impl Process {
                 state.string_prototype.as_cell(),
             ),
         );
-        Value::from(cell)
+        Value::from(cell)*/
+        unimplemented!()
     }
 
-    pub fn has_messages(&self) -> bool {
-        self.local_data().channel.lock().has_messages()
-    }
-
-    pub fn allocate(this: &Arc<Process>, cell: Cell) -> Value {
+    pub fn allocate(this: &Arc<WaffleThread>, cell: Cell) -> Value {
         let local_data = this.local_data_mut();
-        let cell = local_data.heap.allocate(this, GCType::Young, cell);
-        Value::from(cell)
+        //let cell = local_data.heap.allocate(this, GCType::Young, cell);
+        //Value::from(cell)
+        unimplemented!()
     }
 }
 
-impl PartialEq for Arc<Process> {
-    fn eq(&self, other: &Arc<Process>) -> bool {
+impl PartialEq for Arc<WaffleThread> {
+    fn eq(&self, other: &Arc<WaffleThread>) -> bool {
         self.as_ptr() == other.as_ptr()
     }
 }
@@ -461,7 +421,7 @@ impl PartialEq for Arc<Process> {
 ///
 /// While concurrent reads are allowed, only the owning process should change
 /// the status.
-pub struct ProcessStatus {
+pub struct WaffleThreadStatus {
     /// The bits used to indicate the status of the process.
     ///
     /// Multiple bits may be set in order to combine different statuses. For
@@ -469,16 +429,16 @@ pub struct ProcessStatus {
     bits: AtomicU8,
 }
 
-impl ProcessStatus {
-    /// A regular process.
+impl WaffleThreadStatus {
+    /// A regular thread.
     const NORMAL: u8 = 0b0;
 
-    /// The main process.
+    /// The main thread.
     const MAIN: u8 = 0b1;
 
-    /// The process is performing a blocking operation.
-    const BLOCKING: u8 = 0b10;
-
+    /// The thread is suspended at safepoint.
+    const SAFEPOINT_SUSPEND: u8 = 0b10;
+    const SUSPENDED: u8 = 0b1000;
     /// The process is terminated.
     const TERMINATED: u8 = 0b100;
 
@@ -494,14 +454,6 @@ impl ProcessStatus {
 
     pub fn is_main(&self) -> bool {
         self.bit_is_set(Self::MAIN)
-    }
-
-    pub fn set_blocking(&mut self, enable: bool) {
-        self.update_bits(Self::BLOCKING, enable);
-    }
-
-    pub fn is_blocking(&self) -> bool {
-        self.bit_is_set(Self::BLOCKING)
     }
 
     pub fn set_terminated(&mut self) {
@@ -524,13 +476,154 @@ impl ProcessStatus {
     }
 }
 
-impl Drop for Process {
+impl Drop for WaffleThread {
     fn drop(&mut self) {
         unsafe {
             while !self.pop_context() {}
             std::ptr::drop_in_place(self.local_data.raw);
-            std::ptr::drop_in_place(self.suspended.raw);
         }
-        self.acquire_rescheduling_rights();
+    }
+}
+
+pub struct Barrier {
+    active: Mutex<usize>,
+    done: Condvar,
+}
+
+impl Barrier {
+    pub fn new() -> Barrier {
+        Barrier {
+            active: Mutex::new(0),
+            done: Condvar::new(),
+        }
+    }
+
+    pub fn guard(&self, safepoint_id: usize) {
+        let mut active = self.active.lock();
+        assert_eq!(*active, 0);
+        assert_ne!(safepoint_id, 0);
+        *active = safepoint_id;
+    }
+
+    pub fn resume(&self, safepoint_id: usize) {
+        let mut active = self.active.lock();
+        assert_eq!(*active, safepoint_id);
+        assert_ne!(safepoint_id, 0);
+        *active = 0;
+        self.done.notify_all();
+    }
+
+    pub fn wait(&self, safepoint_id: usize) {
+        let mut active = self.active.lock();
+        assert_ne!(safepoint_id, 0);
+
+        while *active == safepoint_id {
+            self.done.wait(&mut active);
+        }
+    }
+}
+
+pub struct StateManager {
+    mtx: Mutex<(ThreadState, usize)>,
+}
+
+impl StateManager {
+    fn new() -> StateManager {
+        StateManager {
+            mtx: Mutex::new((ThreadState::Running, 0)),
+        }
+    }
+
+    fn state(&self) -> ThreadState {
+        let mtx = self.mtx.lock();
+        mtx.0
+    }
+
+    fn park(&self) {
+        let mut mtx = self.mtx.lock();
+        assert!(mtx.0.is_running());
+        mtx.0 = ThreadState::Parked;
+    }
+
+    fn unpark(&self) {
+        let mut mtx = self.mtx.lock();
+        assert!(mtx.0.is_parked());
+        mtx.0 = ThreadState::Running;
+    }
+
+    fn block(&self, safepoint_id: usize) {
+        let mut mtx = self.mtx.lock();
+        assert!(mtx.0.is_running());
+        mtx.0 = ThreadState::Blocked;
+        mtx.1 = safepoint_id;
+    }
+
+    fn unblock(&self) {
+        let mut mtx = self.mtx.lock();
+        assert!(mtx.0.is_blocked());
+        mtx.0 = ThreadState::Running;
+        mtx.1 = 0;
+    }
+
+    fn in_safepoint(&self, safepoint_id: usize) -> bool {
+        assert_ne!(safepoint_id, 0);
+        let mtx = self.mtx.lock();
+
+        match mtx.0 {
+            ThreadState::Running => false,
+            ThreadState::Blocked => mtx.1 == safepoint_id,
+            ThreadState::Parked => true,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ThreadState {
+    Running = 0,
+    Parked = 1,
+    Blocked = 2,
+}
+
+impl From<usize> for ThreadState {
+    fn from(value: usize) -> ThreadState {
+        match value {
+            0 => ThreadState::Running,
+            1 => ThreadState::Parked,
+            2 => ThreadState::Blocked,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl ThreadState {
+    pub fn is_running(&self) -> bool {
+        match *self {
+            ThreadState::Running => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_parked(&self) -> bool {
+        match *self {
+            ThreadState::Parked => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_blocked(&self) -> bool {
+        match *self {
+            ThreadState::Blocked => true,
+            _ => false,
+        }
+    }
+
+    pub fn to_usize(&self) -> usize {
+        *self as usize
+    }
+}
+
+impl Default for ThreadState {
+    fn default() -> ThreadState {
+        ThreadState::Running
     }
 }

@@ -16,19 +16,16 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use super::*;
-use crate::heap::gc_pool::Collection;
 use crate::interpreter::context::*;
 use crate::util::arc::Arc;
 use std::sync::atomic::*;
 pub extern "C" fn require(
-    worker: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -36,14 +33,11 @@ pub extern "C" fn require(
     let mut registry = rt.registry.lock();
     let (module, not_loaded) = registry
         .load("", &arguments[0].to_string())
-        .map_err(|err| Value::from(Process::allocate_string(process, state, &err)))?;
+        .map_err(|err| Value::from(WaffleThread::allocate_string(process, state, &err)))?;
     drop(registry);
     if !not_loaded {
         return Ok(ReturnValue::Value(
-            process
-                .local_data_mut()
-                .heap
-                .copy_object(process, module.as_cell().module_value().unwrap().exports),
+            module.as_cell().module_value().unwrap().exports,
         ));
     }
     let main_fn = module.as_cell().module_value().unwrap().main_fn;
@@ -66,12 +60,12 @@ pub extern "C" fn require(
                 stack: vec![],
                 this: Value::from(VTag::Undefined),
             };
-            module.as_cell().module_value_mut().unwrap().exports = Process::allocate(
+            module.as_cell().module_value_mut().unwrap().exports = WaffleThread::allocate(
                 process,
                 Cell::with_prototype(CellValue::None, state.object_prototype.as_cell()),
             );
             process.push_context(ctx);
-            let _ = RUNTIME.run(worker, process)?;
+            let _ = RUNTIME.run(process)?;
             return Ok(ReturnValue::Value(
                 module.as_cell().module_value().unwrap().exports,
             ));
@@ -83,9 +77,8 @@ pub extern "C" fn require(
 static LOADED: AtomicBool = AtomicBool::new(false);
 
 pub extern "C" fn __start(
-    worker: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -101,7 +94,6 @@ pub extern "C" fn __start(
     LOADED.store(true, Ordering::Release);
     log::trace!("Loading array builtins...");
     require(
-        worker,
         state,
         process,
         Value::empty(),
@@ -111,7 +103,6 @@ pub extern "C" fn __start(
     )?;
     log::trace!("Loading math builtins...");
     require(
-        worker,
         state,
         process,
         Value::empty(),
@@ -119,7 +110,6 @@ pub extern "C" fn __start(
     )?;
     log::trace!("Loadingg core builtins...");
     require(
-        worker,
         state,
         process,
         Value::empty(),
@@ -130,9 +120,8 @@ pub extern "C" fn __start(
 }
 
 pub extern "C" fn instanceof(
-    _: &mut ProcessWorker,
     _: &RcState,
-    _: &Arc<Process>,
+    _: &Arc<WaffleThread>,
     _: Value,
     args: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -140,17 +129,15 @@ pub extern "C" fn instanceof(
 }
 
 pub extern "C" fn force_collect(
-    _: &mut ProcessWorker,
     _: &RcState,
-    proc: &Arc<Process>,
+    proc: &Arc<WaffleThread>,
     _: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     let rt: &Runtime = &RUNTIME;
     log::debug!("--Forced GC Cycle--");
-    rt.state.gc_pool.schedule(Collection::new(proc.clone()));
     log::debug!("Suspending process...");
-    Ok(ReturnValue::SuspendProcess)
+    Ok(ReturnValue::SuspendWaffleThread)
 }
 
 native_fn!(

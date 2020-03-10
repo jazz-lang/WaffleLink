@@ -16,9 +16,8 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 use std::fs::File;
@@ -28,9 +27,9 @@ native_fn!(
         match File::open(path.to_string()) {
             Ok(file) => {
                 let cell = Cell::with_prototype(CellValue::File(file), state.file_prototype.as_cell());
-                Ok(ReturnValue::Value(Value::from(Process::allocate(proc, cell))))
+                Ok(ReturnValue::Value(Value::from(WaffleThread::allocate(proc, cell))))
             }
-            Err(e) => Err(Value::from(Process::allocate_string(proc, state,&e.to_string())))
+            Err(e) => Err(Value::from(WaffleThread::allocate_string(proc, state,&e.to_string())))
         }
     }
 );
@@ -50,7 +49,7 @@ native_fn!(
         let cell_buffer = if args[0].is_cell() {
             args[0].as_cell()
         } else {
-            return Err(Value::from(Process::allocate_string(proc, state, "ByteArray or Array expected to File.read_bytes")));
+            return Err(Value::from(WaffleThread::allocate_string(proc, state, "ByteArray or Array expected to File.read_bytes")));
         };
         let mut buffer = vec![0;size];
         let result = match this.as_cell().get_mut().value {
@@ -58,10 +57,10 @@ native_fn!(
                 let file: &mut File = file;
                 match file.take(size as _).read_to_end(&mut buffer) {
                     Ok(count) => count,
-                    Err(e) => return Err(Value::from(Process::allocate_string(proc, state, &e.to_string())))
+                    Err(e) => return Err(Value::from(WaffleThread::allocate_string(proc, state, &e.to_string())))
                 }
             }
-            _ => return Err(Value::from(Process::allocate_string(proc, state, "`this` is not an instance of File in File.read_bytes")))
+            _ => return Err(Value::from(WaffleThread::allocate_string(proc, state, "`this` is not an instance of File in File.read_bytes")))
         };
         match cell_buffer.get_mut().value {
             CellValue::Array(ref mut arr) => {
@@ -70,7 +69,7 @@ native_fn!(
             CellValue::ByteArray(ref mut arr) => {
                 arr.extend(buffer.into_iter())
             },
-            _ => return Err(Value::from(Process::allocate_string(proc, state, "ByteArray or Array expected to File.read_bytes")))
+            _ => return Err(Value::from(WaffleThread::allocate_string(proc, state, "ByteArray or Array expected to File.read_bytes")))
         }
         Ok(ReturnValue::Value(Value::new_int(result as i32)))
     }
@@ -78,7 +77,7 @@ native_fn!(
 
 native_fn!(
     w,s,p => try_read_bytes this(...args) {
-        match read_bytes(w,s,p,this,args) {
+        match read_bytes(s,p,this,args) {
             Ok(v) => Ok(v),
             Err(_)=> Ok(ReturnValue::Value(Value::from(false)))
         }

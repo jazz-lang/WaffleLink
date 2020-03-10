@@ -19,13 +19,16 @@ use crate::interpreter;
 use crate::runtime;
 use crate::util::arc::Arc;
 use interpreter::context::*;
-use process::Process;
 use runtime::cell::*;
-use runtime::scheduler::process_worker::ProcessWorker;
 use runtime::value::*;
 use runtime::*;
+use threads::WaffleThread;
 #[no_mangle]
-pub unsafe extern "C" fn value_slow_add(process: *const Arc<Process>, x: Value, y: Value) -> Value {
+pub unsafe extern "C" fn value_slow_add(
+    process: *const Arc<WaffleThread>,
+    x: Value,
+    y: Value,
+) -> Value {
     let process = &*process;
     if x.is_bool() && y.is_bool() {
         return Value::new_int(x.as_bool() as i32 + y.as_bool() as i32);
@@ -35,20 +38,20 @@ pub unsafe extern "C" fn value_slow_add(process: *const Arc<Process>, x: Value, 
         let lhs = x.as_cell();
         let rhs = y.as_cell();
         if lhs.is_string() {
-            return Value::from(Process::allocate_string(
+            return Value::from(WaffleThread::allocate_string(
                 process,
                 &RUNTIME.state,
                 &format!("{}{}", lhs.to_string(), rhs.to_string()),
             ));
         } else {
-            return Value::from(Process::allocate_string(
+            return Value::from(WaffleThread::allocate_string(
                 process,
                 &RUNTIME.state,
                 &format!("{}{}", lhs.to_string(), rhs.to_string()),
             ));
         }
     } else {
-        return Value::from(Process::allocate_string(
+        return Value::from(WaffleThread::allocate_string(
             process,
             &RUNTIME.state,
             &format!("{}{}", x.to_string(), y.to_string()),
@@ -58,7 +61,7 @@ pub unsafe extern "C" fn value_slow_add(process: *const Arc<Process>, x: Value, 
 
 #[no_mangle]
 pub unsafe extern "C" fn value_slow_gt(
-    _process: *const Arc<Process>,
+    _process: *const Arc<WaffleThread>,
     lhs: Value,
     rhs: Value,
 ) -> Value {
@@ -97,8 +100,7 @@ pub unsafe extern "C" fn stack_push(stack: *mut Vec<Value>, v: Value) {
 
 #[no_mangle]
 pub unsafe extern "C" fn value_call(
-    proc: *mut Arc<Process>,
-    worker: *mut ProcessWorker,
+    proc: *mut Arc<WaffleThread>,
     stack: *mut Vec<Value>,
     function: Value,
     argc: u32,
@@ -107,7 +109,7 @@ pub unsafe extern "C" fn value_call(
     if !function.is_cell() {
         RUNTIME.run_default_panic(
             &*proc,
-            &Process::allocate_string(
+            &WaffleThread::allocate_string(
                 proc,
                 &RUNTIME.state,
                 &format!("Cannot invoke '{}' value.", function.to_string()),
@@ -122,7 +124,7 @@ pub unsafe extern "C" fn value_call(
         Err(_) => {
             RUNTIME.run_default_panic(
                 &*proc,
-                &Process::allocate_string(
+                &WaffleThread::allocate_string(
                     proc,
                     &RUNTIME.state,
                     &format!("Cannot invoke '{}' value.", function.to_string()),
@@ -136,13 +138,7 @@ pub unsafe extern "C" fn value_call(
         args.push(stack_pop(stack));
     }
     if let Some(native_fn) = function.native {
-        let result = native_fn(
-            &mut *worker,
-            &RUNTIME.state,
-            proc,
-            Value::from(VTag::Undefined),
-            &args,
-        );
+        let result = native_fn(&RUNTIME.state, proc, Value::from(VTag::Undefined), &args);
         if let Err(err) = result {
             panic!("{}", err.to_string());
             //throw!(self, process, err, context, index, bindex);
@@ -150,8 +146,8 @@ pub unsafe extern "C" fn value_call(
         let result = result.unwrap();
         match result {
             ReturnValue::Value(value) => return value,
-            ReturnValue::SuspendProcess => unimplemented!(),
-            ReturnValue::YieldProcess => unimplemented!(),
+            ReturnValue::SuspendWaffleThread => unimplemented!(),
+            ReturnValue::YieldWaffleThread => unimplemented!(),
         }
     } else {
         let mut new_context = Context::new();
@@ -167,7 +163,7 @@ pub unsafe extern "C" fn value_call(
         new_context.code = function.code.clone();
         new_context.terminate_upon_return = true;
         proc.push_context(new_context);
-        RUNTIME.run(&mut *worker, proc).unwrap()
+        RUNTIME.run(proc).unwrap()
         //enter_context!(process, context, index, bindex);
     }
 }

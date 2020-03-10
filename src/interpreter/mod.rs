@@ -19,14 +19,12 @@ pub mod context;
 
 pub mod tracing_interpreter;
 use crate::bytecode::instruction::*;
-use crate::heap::gc_pool::*;
 use crate::runtime::*;
 use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
 use cell::*;
 use context::*;
-use process::*;
-use scheduler::process_worker::ProcessWorker;
+use threads::*;
 use value::*;
 
 macro_rules! reset_context {
@@ -59,7 +57,7 @@ macro_rules! throw {
 
 macro_rules! throw_error_message {
     ($rt: expr,$proc: expr,$msg: expr,$context: ident,$index: ident,$bindex: ident) => {
-        let value = Process::allocate_string($proc, &$rt.state, $msg);
+        let value = WaffleThread::allocate_string($proc, &$rt.state, $msg);
         throw!($rt, $proc, value, $context, $index, $bindex)
     };
 }
@@ -78,18 +76,18 @@ macro_rules! safepoint_and_reduce {
             return Ok(Value::from(VTag::Null));
         }
 
-        if $reductions > 0 {
+        /*if $reductions > 0 {
             $reductions -= 1;
         } else {
             $rt.state.scheduler.schedule($process.clone());
             return Ok(Value::from(VTag::Null));
-        }
+        }*/
     };
 }
 
 impl Runtime {
     #[cfg(not(all(feature = "nightly", feature = "threaded")))]
-    pub fn run(&self, worker: &mut ProcessWorker, process: &Arc<Process>) -> Result<Value, Value> {
+    pub fn run(&self, process: &Arc<WaffleThread>) -> Result<Value, Value> {
         let mut reductions = 1000;
         let mut index;
         let mut bindex;
@@ -302,14 +300,14 @@ impl Runtime {
                                         array.push(Value::from(VTag::Undefined))
                                     }
                                 }
-                                process
+                                /*process
                                     .local_data_mut()
                                     .heap
                                     .field_write_barrier(object.as_cell(), value);
                                 process
                                     .local_data_mut()
                                     .heap
-                                    .write_barrier(object.as_cell());
+                                    .write_barrier(object.as_cell());*/
                                 array[idx] = value;
                                 continue;
                             }
@@ -323,14 +321,14 @@ impl Runtime {
                                         array.push(0);
                                     }
                                 }
-                                process
+                                /*process
                                     .local_data_mut()
                                     .heap
                                     .field_write_barrier(object.as_cell(), value);
                                 process
                                     .local_data_mut()
                                     .heap
-                                    .write_barrier(object.as_cell());
+                                    .write_barrier(object.as_cell());*/
                                 array[idx] = value.to_number().ceil() as usize as u8;
                                 continue;
                             }
@@ -394,10 +392,10 @@ impl Runtime {
                             CellValue::Function(ref mut f) => {
                                 let fun = function.as_cell();
                                 for upvalue in upvalues.iter() {
-                                    process
-                                        .local_data_mut()
-                                        .heap
-                                        .field_write_barrier(fun, *upvalue);
+                                    /*process
+                                    .local_data_mut()
+                                    .heap
+                                    .field_write_barrier(fun, *upvalue);*/
                                 }
                                 f.upvalues = upvalues;
                             }
@@ -484,20 +482,15 @@ impl Runtime {
                     }
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(
-                            worker,
-                            &self.state,
-                            process,
-                            Value::from(VTag::Undefined),
-                            &args,
-                        );
+                        let result =
+                            native_fn(&self.state, process, Value::from(VTag::Undefined), &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
                         let result = result.unwrap();
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
-                            ReturnValue::SuspendProcess => {
+                            ReturnValue::SuspendWaffleThread => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -506,13 +499,12 @@ impl Runtime {
                                 log::debug!("Suspend...");
                                 return Ok(Value::from(VTag::Null));
                             }
-                            ReturnValue::YieldProcess => {
+                            ReturnValue::YieldWaffleThread => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
                                 }
-                                self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
                         }
@@ -623,14 +615,14 @@ impl Runtime {
                     let this = context.get_register(this);
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(worker, &self.state, process, this, &args);
+                        let result = native_fn(&self.state, process, this, &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
                         let result = result.unwrap();
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
-                            ReturnValue::SuspendProcess => {
+                            ReturnValue::SuspendWaffleThread => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -638,13 +630,12 @@ impl Runtime {
                                 }
                                 return Ok(Value::from(VTag::Null));
                             }
-                            ReturnValue::YieldProcess => {
+                            ReturnValue::YieldWaffleThread => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
                                 }
-                                self.state.scheduler.schedule(process.clone());
                                 return Ok(Value::from(VTag::Null));
                             }
                         }
@@ -674,10 +665,10 @@ impl Runtime {
                         .unwrap();
                     context.set_register(r, value);
                 }
-                Instruction::Gc => match process.local_data_mut().heap.collect_garbage(process) {
+                /*Instruction::Gc => match process.local_data_mut().heap.collect_garbage(process) {
                     Ok(_) => (),
                     Err(_) => return Ok(Value::from(VTag::Null)),
-                },
+                },*/
                 Instruction::GcSafepoint => match self.gc_safepoint(process) {
                     true => return Ok(Value::from(VTag::Null)),
                     _ => (),
@@ -780,20 +771,20 @@ impl Runtime {
                     for _ in 0..argc {
                         args.push(context.stack.pop().unwrap());
                     }
-                    let this = Process::allocate(
+                    let this = WaffleThread::allocate(
                         process,
                         Cell::with_prototype(CellValue::None, prototype),
                     );
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(worker, &self.state, process, this, &args);
+                        let result = native_fn(&self.state, process, this, &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
                         let result = result.unwrap();
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
-                            ReturnValue::SuspendProcess => {
+                            ReturnValue::SuspendWaffleThread => {
                                 context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
@@ -801,8 +792,7 @@ impl Runtime {
                                 }
                                 return Ok(Value::from(VTag::Null));
                             }
-                            ReturnValue::YieldProcess => {
-                                self.state.scheduler.schedule(process.clone());
+                            ReturnValue::YieldWaffleThread => {
                                 return Ok(Value::from(VTag::Null));
                             }
                         }
@@ -884,7 +874,7 @@ impl Runtime {
                                 BinOp::Add => {
                                     context.set_register(
                                         dest,
-                                        Process::allocate_string(
+                                        WaffleThread::allocate_string(
                                             process,
                                             &self.state,
                                             &format!("{}{}", lhs, rhs),
@@ -916,7 +906,7 @@ impl Runtime {
                                 BinOp::Add => {
                                     context.set_register(
                                         dest,
-                                        Process::allocate_string(
+                                        WaffleThread::allocate_string(
                                             process,
                                             &self.state,
                                             &format!("{}{}", lhs, rhs),
@@ -935,7 +925,7 @@ impl Runtime {
                                         new_array.extend(array.iter().copied());
                                         context.set_register(
                                             dest,
-                                            Process::allocate(
+                                            WaffleThread::allocate(
                                                 process,
                                                 Cell::with_prototype(
                                                     CellValue::Array(new_array),
@@ -948,7 +938,7 @@ impl Runtime {
                                     _ => {
                                         context.set_register(
                                             dest,
-                                            Process::allocate_string(
+                                            WaffleThread::allocate_string(
                                                 process,
                                                 &self.state,
                                                 &format!("{}{}", lhs, rhs),
@@ -967,7 +957,7 @@ impl Runtime {
                         let result = match op {
                             BinOp::Equal => Value::from(lhs == rhs),
                             BinOp::NotEqual => Value::from(lhs != rhs),
-                            BinOp::Add => Process::allocate_string(
+                            BinOp::Add => WaffleThread::allocate_string(
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
@@ -979,7 +969,7 @@ impl Runtime {
                         let result = match op {
                             BinOp::Equal => Value::from(lhs == rhs),
                             BinOp::NotEqual => Value::from(lhs != rhs),
-                            BinOp::Add => Process::allocate_string(
+                            BinOp::Add => WaffleThread::allocate_string(
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
@@ -991,7 +981,7 @@ impl Runtime {
                         let result = match op {
                             BinOp::Equal => Value::from(lhs == rhs),
                             BinOp::NotEqual => Value::from(lhs != rhs),
-                            BinOp::Add => Process::allocate_string(
+                            BinOp::Add => WaffleThread::allocate_string(
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
@@ -1030,7 +1020,7 @@ impl Runtime {
                     context.set_register(dest, result);
                 }
                 Instruction::LoadCurrentModule(to) => {
-                    let module = Value::from(Process::allocate(
+                    let module = Value::from(WaffleThread::allocate(
                         process,
                         Cell::with_prototype(
                             CellValue::Module(context.module.clone()),
@@ -1053,41 +1043,28 @@ impl Runtime {
         };
         let ret = return_value?;
         if top_context {
-            if process.is_pinned() {
+            /*if process.is_pinned() {
                 worker.leave_exclusive_mode();
             }
             process.terminate(&self.state);
 
             if process.is_main() {
                 self.terminate();
-            }
+            }*/
         }
 
         Ok(ret)
     }
     /// Returns true if a process is garbage collected.
     /// Returns true if a process should be suspended for garbage collection.
-    pub fn gc_safepoint(&self, process: &Arc<Process>) -> bool {
-        if !process.local_data().heap.should_collect() {
+    pub fn gc_safepoint(&self, process: &Arc<WaffleThread>) -> bool {
+        /*if !process.local_data().heap.should_collect() {
             return false;
-        }
-        self.state
-            .gc_pool
-            .schedule(Collection::new(process.clone()));
+        }*/
         true
     }
 
-    pub fn schedule_main_process(&self, proc: Arc<Process>) {
-        proc.set_main();
-        self.state.scheduler.schedule_on_main_thread(proc);
-    }
-    pub fn schedule_main_queue(&self, proc: Arc<Process>) {
-        self.state.scheduler.schedule_on_main_thread(proc);
-    }
-    pub fn schedule(&self, proc: Arc<Process>) {
-        self.state.scheduler.schedule(proc);
-    }
-    pub fn throw(&self, process: &Arc<Process>, value: Value) -> Result<Value, Value> {
+    pub fn throw(&self, process: &Arc<WaffleThread>, value: Value) -> Result<Value, Value> {
         if let Some(table) = process.local_data_mut().catch_tables.pop() {
             let mut catch_ctx = table.context.replace(Context::new());
             catch_ctx.set_register(table.register, value);
@@ -1100,9 +1077,9 @@ impl Runtime {
         }
     }
 
-    pub fn run_with_error_handling(&self, worker: &mut ProcessWorker, process: &Arc<Process>) {
+    pub fn run_with_error_handling(&self, process: &Arc<WaffleThread>) {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            if let Err(error) = self.run(worker, process) {
+            if let Err(error) = self.run(process) {
                 self.run_default_panic(process, &error);
             }
         }));
@@ -1113,7 +1090,7 @@ impl Runtime {
             } else if error.is::<String>() {
                 self.run_default_panic(
                     process,
-                    &Value::from(Process::allocate_string(
+                    &Value::from(WaffleThread::allocate_string(
                         process,
                         &self.state,
                         &error.downcast::<String>().unwrap(),
@@ -1122,7 +1099,7 @@ impl Runtime {
             } else {
                 self.run_default_panic(
                     process,
-                    &Value::from(Process::allocate_string(
+                    &Value::from(WaffleThread::allocate_string(
                         process,
                         &self.state,
                         "Unknown error",
@@ -1131,24 +1108,20 @@ impl Runtime {
             };
         }
     }
-    pub fn clear_catch_tables(&self, exiting: &Ptr<Context>, proc: &Arc<Process>) {
+    pub fn clear_catch_tables(&self, exiting: &Ptr<Context>, proc: &Arc<WaffleThread>) {
         proc.local_data_mut()
             .catch_tables
             .retain(|ctx| ctx.context.n < exiting.n);
     }
-    pub fn run_default_panic(&self, proc: &Arc<Process>, message: &Value) {
+    pub fn run_default_panic(&self, proc: &Arc<WaffleThread>, message: &Value) {
         runtime_panic(proc, message);
         self.terminate();
     }
 
-    pub fn terminate(&self) {
-        self.state.scheduler.terminate();
-        self.state.timeout_worker.terminate();
-        self.state.gc_pool.terminate();
-    }
+    pub fn terminate(&self) {}
 }
 
-pub fn runtime_panic(process: &Arc<Process>, message: &Value) {
+pub fn runtime_panic(process: &Arc<WaffleThread>, message: &Value) {
     let mut frames = vec![];
     let mut buffer = String::new();
     for ctx in process.local_data().context.contexts() {

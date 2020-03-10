@@ -1,7 +1,23 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 
@@ -32,30 +48,30 @@ native_fn!(
             this.as_cell().get_mut().value = CellValue::String(Arc::new(arg.to_string()));
             Ok(ReturnValue::Value(this))
         } else {
-            return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,&arg.to_string()))))
+            return Ok(ReturnValue::Value(Value::from(WaffleThread::allocate_string(proc,state,&arg.to_string()))))
         }
 
 );
 
 native_fn!(
     _worker,state,proc => char_at this (index)
-        Ok(ReturnValue::Value(this.to_string().chars().nth(index.to_number().floor() as usize).map(|val| Value::from(Process::allocate_string(proc,state,&(val.to_string())))).unwrap_or(Value::from(VTag::Undefined))))
+        Ok(ReturnValue::Value(this.to_string().chars().nth(index.to_number().floor() as usize).map(|val| Value::from(WaffleThread::allocate_string(proc,state,&(val.to_string())))).unwrap_or(Value::from(VTag::Undefined))))
 
 );
 native_fn!(
     _worker,state,proc => split this(...args) {
         let string = this.to_string();
         if args.is_empty() {
-            let array = string.split("").map(|x| Value::from(Process::allocate_string(proc,state,x))).collect::<Vec<_>>();
-            let array = Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
+            let array = string.split("").map(|x| Value::from(WaffleThread::allocate_string(proc,state,x))).collect::<Vec<_>>();
+            let array = WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
             return Ok(
                 ReturnValue::Value(
                     Value::from(array)
                 )
             )
         } else {
-            let array = string.split(&args[0].to_string()).map(|x| Value::from(Process::allocate_string(proc,state,x))).collect::<Vec<_>>();
-            let array = Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
+            let array = string.split(&args[0].to_string()).map(|x| Value::from(WaffleThread::allocate_string(proc,state,x))).collect::<Vec<_>>();
+            let array = WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell()));
             return Ok(
                 ReturnValue::Value(
                     Value::from(array)
@@ -96,8 +112,8 @@ native_fn!(_worker,_state,_proc => string_is_space this (..._args) {
 });
 
 native_fn!(_worker,state,proc => string_chars this (..._args) {
-    let array = this.to_string().chars().map(|ch| Value::from(Process::allocate_string(proc,state,&ch.to_string()))).collect::<Vec<_>>();
-    return Ok(ReturnValue::Value(Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell())))));
+    let array = this.to_string().chars().map(|ch| Value::from(WaffleThread::allocate_string(proc,state,&ch.to_string()))).collect::<Vec<_>>();
+    return Ok(ReturnValue::Value(Value::from(WaffleThread::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(array)),state.array_prototype.as_cell())))));
 });
 
 native_fn!(_worker,_state,_proc => string_length this(..._args) {
@@ -112,7 +128,7 @@ native_fn!(_worker,state,proc => replace this(...args) {
         let from = args[0].to_string();
         let to = args[1].to_string();
         let replaced = this.replace(&from,&to);
-        Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc, state, &replaced))))
+        Ok(ReturnValue::Value(Value::from(WaffleThread::allocate_string(proc, state, &replaced))))
     }
 });
 

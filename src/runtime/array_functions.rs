@@ -16,15 +16,13 @@
 */
 
 use super::cell::*;
-use super::process::*;
-use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
+use super::threads::*;
 use super::value::*;
 use crate::util::arc::Arc;
 pub extern "C" fn array_new(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
@@ -35,7 +33,7 @@ pub extern "C" fn array_new(
             .set_prototype(state.array_prototype.as_cell());
         return Ok(ReturnValue::Value(this));
     } else {
-        let value = Process::allocate(
+        let value = WaffleThread::allocate(
             process,
             Cell::with_prototype(CellValue::Array(array), state.array_prototype.as_cell()),
         );
@@ -44,14 +42,13 @@ pub extern "C" fn array_new(
 }
 
 pub extern "C" fn array_pop(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     if !this.is_cell() {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -66,7 +63,7 @@ pub extern "C" fn array_pop(
                 .unwrap_or(Value::from(VTag::Undefined)),
         ))
     } else {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -75,14 +72,13 @@ pub extern "C" fn array_pop(
 }
 
 pub extern "C" fn array_push(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
     if !this.is_cell() {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -98,7 +94,7 @@ pub extern "C" fn array_push(
         );
         Ok(ReturnValue::Value(Value::from(VTag::Null)))
     } else {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -107,14 +103,13 @@ pub extern "C" fn array_push(
 }
 
 pub extern "C" fn array_length(
-    _: &mut ProcessWorker,
     state: &RcState,
-    process: &Arc<Process>,
+    process: &Arc<WaffleThread>,
     this: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
     if !this.is_cell() {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -126,7 +121,7 @@ pub extern "C" fn array_length(
             cell.array_value().unwrap().len() as _,
         )))
     } else {
-        return Err(Value::from(Process::allocate_string(
+        return Err(Value::from(WaffleThread::allocate_string(
             process,
             state,
             "not an array",
@@ -135,9 +130,8 @@ pub extern "C" fn array_length(
 }
 
 pub extern "C" fn array_remove(
-    _: &mut ProcessWorker,
     _state: &RcState,
-    _process: &Arc<Process>,
+    _process: &Arc<WaffleThread>,
     this: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
