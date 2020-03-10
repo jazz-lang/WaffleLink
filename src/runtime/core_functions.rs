@@ -59,7 +59,7 @@ pub extern "C" fn require(
                 index: 0,
                 bindex: 0,
                 parent: None,
-                function: main_fn.as_cell(),
+                function: main_fn,
                 code: function.code.clone(),
                 module: function.module.clone(),
                 registers: [Value::from(VTag::Undefined); 32],
@@ -154,7 +154,7 @@ pub extern "C" fn force_collect(
 }
 
 native_fn!(
-    _worker,_state,_proc => isNullOrUndef(arg) {
+    _worker,_state,_proc => is_null_or_undefined(arg) {
         Ok(ReturnValue::Value(Value::from(arg.is_null_or_undefined())))
     }
 );
@@ -162,7 +162,7 @@ native_fn!(
 pub fn initialize_core(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let require = state.allocate_native_fn(require, "require", 1);
-    let to_bool = state.allocate_native_fn(isNullOrUndef, "isNull", 1);
+    let to_bool = state.allocate_native_fn(is_null_or_undefined, "isNull", 1);
     let start = state.allocate_native_fn(__start, "__start__", 0);
     let instanceof = state.allocate_native_fn(instanceof, "instanceof", 2);
     let force_collect = state.allocate_native_fn(force_collect, "forceCollect", 0);

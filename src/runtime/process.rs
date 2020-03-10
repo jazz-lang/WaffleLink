@@ -157,7 +157,7 @@ impl Process {
                     in_tail: false,
                     index: 0,
                     code: function.code.clone(),
-                    function: value,
+                    function: Value::from(value),
                     parent: None,
                     module: function.module.clone(),
                     registers: [Value::from(VTag::Undefined); 32],
@@ -288,7 +288,7 @@ impl Process {
                     unsafe { cb(&x.u.ptr) }
                 }
             });
-            cb(&context.function);
+            cb(&context.function.as_cell());
             current = context.parent.as_ref().map(|c| &**c);
         }
     }

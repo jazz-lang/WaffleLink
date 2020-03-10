@@ -34,7 +34,7 @@ pub struct Context {
     pub bindex: usize,
     pub code: Arc<Vec<BasicBlock>>,
     pub this: Value,
-    pub function: CellPointer,
+    pub function: Value,
     pub terminate_upon_return: bool,
     pub return_register: Option<u16>,
     pub n: usize,
@@ -65,9 +65,7 @@ impl Context {
             return_register: None,
             code: Arc::new(vec![]),
             terminate_upon_return: false,
-            function: CellPointer {
-                raw: crate::util::tagged::TaggedPointer::null(),
-            },
+            function: Value::empty(),
             in_tail: false,
             n: 0,
         }
@@ -109,7 +107,7 @@ impl Context {
                     unsafe { cb(&x.u.ptr) }
                 }
             });
-            cb(&context.function);
+            cb(unsafe { &context.function.u.ptr });
             current = context.parent.as_ref().map(|c| &**c);
         }
     }

@@ -157,7 +157,7 @@ pub unsafe extern "C" fn value_call(
         let mut new_context = Context::new();
         new_context.return_register = None;
         new_context.stack = args;
-        new_context.function = cell;
+        new_context.function = Value::from(cell);
         new_context.module = function.module.clone();
         new_context.n = if proc.context_ptr().is_null() == false {
             proc.context_ptr().n

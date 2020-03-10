@@ -348,7 +348,12 @@ impl Value {
             if prototype.is_null_or_undefined() {
                 return false;
             }
-            return prototype.is_kind_of(value.prototype());
+            let proto = if value.is_cell() {
+                value.as_cell()
+            } else {
+                value.prototype().as_cell()
+            };
+            return prototype.is_kind_of(Value::from(proto));
         }
     }
     pub fn set_prototype(&self, value: Value) {
@@ -477,7 +482,7 @@ impl Value {
     }
     pub fn process_value(&self) -> Result<Arc<Process>, String> {
         if !self.is_cell() {
-            panic!();
+            panic!("{}", self);
             //return Err(format!("Value '{}' not a process", self.to_string()).to_owned());
         }
         let cell = self.as_cell();
@@ -490,7 +495,9 @@ impl Value {
             }
         }
     }
-
+    pub fn function_value(&self) -> Result<Arc<Function>, String> {
+        self.as_cell().function_value().map(|x| x.clone())
+    }
     pub fn to_string(&self) -> String {
         if self.is_bool() {
             if self.is_true() {

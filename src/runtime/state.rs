@@ -36,6 +36,7 @@ pub struct State {
     pub function_prototype: Value,
     pub generator_prototype: Value,
     pub process_prototype: Value,
+    pub file_prototype: Value,
     pub module_prototype: Value,
     pub boolean_prototype: Value,
     pub byte_array_prototype: Value,
@@ -68,6 +69,7 @@ impl State {
         let generator_prototype = perm.allocate_empty();
         let process_prototype = perm.allocate_empty();
         let module_prototype = perm.allocate_empty();
+        let file_prototype = perm.allocate_empty();
         let boolean_prototype = perm.allocate_empty();
         let byte_array_prototype = perm.allocate_empty();
         string_prototype.set_prototype(object_prototype);
@@ -78,6 +80,7 @@ impl State {
         process_prototype.set_prototype(object_prototype);
         module_prototype.set_prototype(object_prototype);
         boolean_prototype.set_prototype(object_prototype);
+        file_prototype.set_prototype(object_prototype);
         byte_array_prototype.set_prototype(object_prototype);
         let map = Default::default();
         /*{
@@ -109,6 +112,7 @@ impl State {
             timeout_worker,
             perm_heap: Mutex::new(perm),
             object_prototype,
+            file_prototype,
             string_prototype,
             array_prototype,
             number_prototype,
@@ -117,6 +121,7 @@ impl State {
             process_prototype,
             module_prototype,
             function_prototype,
+
             generator_prototype,
             static_variables: Mutex::new(map),
             config,

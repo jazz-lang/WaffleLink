@@ -214,6 +214,20 @@ impl Runtime {
                                 context.set_register(dest, array[x]);
                                 continue;
                             }
+                        } else if let CellValue::ByteArray(ref mut array) =
+                            object.as_cell().get_mut().value
+                        {
+                            if value.is_number() {
+                                let x = value.to_number().floor() as usize;
+                                if x >= array.len() {
+                                    for _ in x..=array.len() {
+                                        array.push(0);
+                                    }
+                                }
+
+                                context.set_register(dest, Value::new_int(array[x] as i32));
+                                continue;
+                            }
                         }
                     }
                     let id = value.to_string();
@@ -297,6 +311,27 @@ impl Runtime {
                                     .heap
                                     .write_barrier(object.as_cell());
                                 array[idx] = value;
+                                continue;
+                            }
+                        } else if let CellValue::ByteArray(ref mut array) =
+                            object.as_cell().get_mut().value
+                        {
+                            if key.is_number() {
+                                let idx = key.to_number().floor() as usize;
+                                if idx >= array.len() {
+                                    for _ in idx..=array.len() {
+                                        array.push(0);
+                                    }
+                                }
+                                process
+                                    .local_data_mut()
+                                    .heap
+                                    .field_write_barrier(object.as_cell(), value);
+                                process
+                                    .local_data_mut()
+                                    .heap
+                                    .write_barrier(object.as_cell());
+                                array[idx] = value.to_number().ceil() as usize as u8;
                                 continue;
                             }
                         }
@@ -463,7 +498,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -487,7 +522,7 @@ impl Runtime {
                             new_context.return_register = Some(dest);
                             new_context.stack = args.clone();
                             new_context.arguments = args;
-                            new_context.function = cell;
+                            new_context.function = Value::from(cell);
                             new_context.module = function.module.clone();
                             new_context.n = context.n + 1;
                             new_context.code = function.code.clone();
@@ -512,7 +547,7 @@ impl Runtime {
                             new_context.return_register = Some(dest);
                             new_context.stack = args.clone();
                             new_context.arguments = args;
-                            new_context.function = cell;
+                            new_context.function = Value::from(cell);
                             new_context.module = function.module.clone();
                             //new_context.n = context.n + 1;
                             new_context.code = function.code.clone();
@@ -596,7 +631,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -618,7 +653,7 @@ impl Runtime {
                         new_context.return_register = Some(dest);
                         new_context.stack = args.clone();
                         new_context.arguments = args;
-                        new_context.function = cell;
+                        new_context.function = Value::from(cell);
                         new_context.module = function.module.clone();
                         new_context.n = context.n + 1;
                         new_context.this = this;
@@ -665,24 +700,40 @@ impl Runtime {
                     }
                     let cell = function.as_cell();
                     let maybe_function = cell.function_value();
-                    let (function, prototype): (Arc<Function>, CellPointer) = match maybe_function {
-                        Ok(function) => (
-                            function.clone(),
-                            cell.lookup_attribute_in_self(
-                                &self.state,
-                                &Arc::new("prototype".to_owned()),
-                            )
-                            .unwrap()
-                            .as_cell(),
-                        ),
-                        Err(_) => {
-                            let ctor = Arc::new("constructor".to_owned());
-                            if let Some(ctor) =
-                                function.lookup_attribute_in_self(&self.state, &ctor)
-                            {
-                                if ctor.is_cell() {
-                                    if let Ok(ctor) = ctor.as_cell().function_value() {
-                                        (ctor.clone(), cell)
+                    let (function, real_func, prototype): (Arc<Function>, Value, CellPointer) =
+                        match maybe_function {
+                            Ok(function) => (
+                                function.clone(),
+                                Value::from(cell),
+                                cell.lookup_attribute_in_self(
+                                    &self.state,
+                                    &Arc::new("prototype".to_owned()),
+                                )
+                                .unwrap()
+                                .as_cell(),
+                            ),
+                            Err(_) => {
+                                let ctor = Arc::new("constructor".to_owned());
+                                if let Some(ctor) =
+                                    function.lookup_attribute_in_self(&self.state, &ctor)
+                                {
+                                    let ctor_cell = ctor;
+                                    if ctor.is_cell() {
+                                        if let Ok(ctor) = ctor.as_cell().function_value() {
+                                            (ctor.clone(), ctor_cell, cell)
+                                        } else {
+                                            throw_error_message!(
+                                                self,
+                                                process,
+                                                &format!(
+                                                    "Cannot invoke constructor on '{}' value.",
+                                                    function.to_string()
+                                                ),
+                                                context,
+                                                index,
+                                                bindex
+                                            );
+                                        }
                                     } else {
                                         throw_error_message!(
                                             self,
@@ -709,21 +760,8 @@ impl Runtime {
                                         bindex
                                     );
                                 }
-                            } else {
-                                throw_error_message!(
-                                    self,
-                                    process,
-                                    &format!(
-                                        "Cannot invoke constructor on '{}' value.",
-                                        function.to_string()
-                                    ),
-                                    context,
-                                    index,
-                                    bindex
-                                );
                             }
-                        }
-                    };
+                        };
                     if argc as i32 != function.argc && function.argc != -1 {
                         throw_error_message!(
                             self,
@@ -756,7 +794,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index;
+                                context.index = index - 1;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -773,7 +811,7 @@ impl Runtime {
                         new_context.return_register = Some(dest);
                         new_context.stack = args.clone();
                         new_context.arguments = args;
-                        new_context.function = cell;
+                        new_context.function = Value::from(real_func);
                         new_context.module = function.module.clone();
                         new_context.n = context.n + 1;
                         new_context.this = this;
