@@ -50,6 +50,9 @@ impl MarkingJob {
         }
         let mut marked = 0;
         while let Some(pointer) = self.pop_job() {
+            if pointer.raw.raw.is_null() {
+                continue;
+            }
             if (pointer.get().forward.atomic_load() as u8 == CELL_BLACK)
                 || (pointer.is_permanent()
                     && self
@@ -64,7 +67,7 @@ impl MarkingJob {
                 pointer.get().forward.atomic_store(CELL_BLACK as *mut u8);
             }
             marked += 1;
-            log::debug!("Trace {:p} '{}'", pointer.raw.raw, pointer);
+            log::debug!("Trace {:p}", pointer.raw.raw);
             pointer.get().trace(|ptr| {
                 let ptr = unsafe { *ptr };
                 self.queue.push(ptr);

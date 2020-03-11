@@ -156,7 +156,7 @@ impl OnTheFlyHeap {
                 log::debug!("Concurrent collection finished");
                 assert!(self.sweep_recv.is_some());
                 for recv in self.sweep_recv.take().unwrap() {
-                    let recv = recv.try_recv().unwrap();
+                    let recv = recv.recv().unwrap();
                     for (addr, size) in recv {
                         self.freelist.freelist.add(addr, size);
                     }
@@ -194,10 +194,18 @@ impl OnTheFlyHeap {
 impl HeapTrait for OnTheFlyHeap {
     fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
         let mut needs_gc = false;
-        let ptr = self
+        let mut ptr = self
             .freelist
             .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
+        if ptr.is_null() {
+            log::debug!("No memory in current page, create new memory page");
+            self.freelist.space.add_page(self.freelist.space.page_size);
+            ptr = self
+                .freelist
+                .allocate(std::mem::size_of::<Cell>(), &mut false)
+                .to_mut_ptr::<Cell>();
+        }
         let state = self.state.load(Ordering::Acquire);
         self.needs_gc = needs_gc && (state == NONE || state == FINISH);
         unsafe {

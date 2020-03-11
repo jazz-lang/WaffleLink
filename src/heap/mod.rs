@@ -23,6 +23,7 @@ pub mod gc_pool;
 pub mod generational;
 pub mod incremental;
 pub mod onthefly;
+pub mod serial;
 use crate::runtime::cell::*;
 use crate::runtime::config::*;
 use crate::runtime::process::*;
@@ -57,6 +58,8 @@ pub enum GCVariant {
     Copying,
     #[structopt(name = "onthefly", help = "Concurrent GC")]
     OnTheFly,
+    #[structopt(name = "serial", help = "Very simple mark&sweep GC")]
+    Serial,
 }
 
 impl std::str::FromStr for GCVariant {
@@ -66,7 +69,7 @@ impl std::str::FromStr for GCVariant {
         let s_: &str = &s;
         Ok(match s_ {
             "mark-compact" | "mark compact" => Self::MarkCompact,
-            "mark-sweep" | "mark and sweep" | "mark&sweep" => Self::MarkAndSweep,
+            "mark-sweep" | "mark and sweep" | "mark&sweep" | "serial" => Self::MarkAndSweep,
             "incremental mark-sweep" | "incremental-mark-sweep" => Self::IncrementalMarkSweep,
             "generational mark-sweep" => Self::GenIncMarkSweep,
             "generational" | "ieiunium" => Self::Generational,
@@ -95,6 +98,9 @@ pub fn initialize_process_heap(variant: GCVariant, config: &Config) -> Box<dyn H
             config.heap_size,
             page_size(),
         ))),
+        GCVariant::Serial | GCVariant::MarkAndSweep => {
+            Box::new(serial::SerialCollector::new(config.young_threshold))
+        }
         GCVariant::OnTheFly => Box::new(onthefly::OnTheFlyHeap::new(config.heap_size)),
         _ => unimplemented!(),
     }

@@ -19,7 +19,7 @@ use super::cell::*;
 use super::value::*;
 use std::collections::VecDeque;
 pub struct Channel {
-    messages: VecDeque<Value>,
+    pub messages: VecDeque<Value>,
 }
 impl Channel {
     pub fn new() -> Self {

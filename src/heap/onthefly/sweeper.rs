@@ -123,6 +123,7 @@ impl SweeperJob {
             scan = scan.offset(std::mem::size_of::<Cell>());
         }
         add_freelist!(garbage_start, page.limit);
+        let _ = self.freelist.send(freelist);
         let count = self.sweeping.fetch_sub(1, Ordering::Relaxed);
         log::debug!(
             "Worker '{}': sweeping task finished, tasks left {}",
@@ -136,7 +137,7 @@ impl SweeperJob {
             );
             self.state.store(FINISH, Ordering::Release);
         }
-        let _ = self.freelist.send(freelist);
+
         log::debug!("Concurrent sweep finished.");
     }
 }

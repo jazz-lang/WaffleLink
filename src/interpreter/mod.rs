@@ -73,7 +73,9 @@ macro_rules! enter_context {
 }
 
 macro_rules! safepoint_and_reduce {
-    ($rt: expr,$process: expr,$reductions: expr) => {
+    ($rt: expr,$process: expr,$reductions: expr,$i: expr,$b: expr,$c: expr) => {
+        $c.index = $i;
+        $c.bindex = $b;
         if $rt.gc_safepoint($process) {
             return Ok(Value::from(VTag::Null));
         }
@@ -152,7 +154,7 @@ impl Runtime {
                         break (Ok(value), true);
                     }
                     reset_context!(process, context, index, bindex);
-                    safepoint_and_reduce!(self, process, reductions);
+                    safepoint_and_reduce!(self, process, reductions,index,bindex,context);
                 }
                 Instruction::LoadNull(r) => context.set_register(r, Value::from(VTag::Null)),
                 Instruction::LoadUndefined(r) => {
@@ -498,7 +500,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -557,7 +559,7 @@ impl Runtime {
                             new_context.terminate_upon_return = false;
                             //process.push_context(new_context);
                             reset_context!(process, context, index, bindex);
-                            safepoint_and_reduce!(self, process, reductions);
+                            safepoint_and_reduce!(self, process, reductions,index,bindex,context);
                             //enter_context!(process, context, index, bindex);
                         }
                     }
@@ -631,7 +633,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);
@@ -678,10 +680,16 @@ impl Runtime {
                     Ok(_) => (),
                     Err(_) => return Ok(Value::from(VTag::Null)),
                 },
-                Instruction::GcSafepoint => match self.gc_safepoint(process) {
-                    true => return Ok(Value::from(VTag::Null)),
-                    _ => (),
-                },
+                Instruction::GcSafepoint => {
+                    match self.gc_safepoint(process) {
+                        true => {
+                                context.index = index;
+                                context.bindex = bindex;
+                                return Ok(Value::from(VTag::Null))
+                            },
+                        _ => (),
+                    };
+                }
                 Instruction::New(dest, function, argc) => {
                     let function = context.get_register(function);
                     if !function.is_cell() {
@@ -794,7 +802,7 @@ impl Runtime {
                         match result {
                             ReturnValue::Value(value) => context.set_register(dest, value),
                             ReturnValue::SuspendProcess => {
-                                context.index = index - 1;
+                                context.index = index;
                                 context.bindex = bindex;
                                 for arg in args.iter().rev() {
                                     context.stack.push(*arg);

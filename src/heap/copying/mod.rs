@@ -60,8 +60,7 @@ impl CopyingCollector {
         log::debug!("--Copying GC started--");
         let mut new_space = Space::new(self.space.page_size);
         while let Some(slot) = self.stack.pop() {
-            let ptr = self.copy_object(&slot.value, &mut new_space);
-            slot.set(ptr);
+            let ptr = self.copy_object(&slot, &mut new_space);
             if slot.value.get().color != CELL_BLACK
                 && !self
                     .remembered_permanent
@@ -110,18 +109,24 @@ impl CopyingCollector {
         self.space = new_space;
     }
 
-    fn copy_object(&mut self, slot: &CellPointer, to_space: &mut Space) -> CellPointer {
-        if slot.is_permanent() {
-            return *slot;
+    fn copy_object(&mut self, slot: &Slot, to_space: &mut Space) -> CellPointer {
+        if slot.value.is_permanent() {
+            return slot.value;
         }
-        if to_space.contains(slot.get().forward) {
-            return slot.get().forward.to_cell();
+        if to_space.contains(slot.value.get().forward) {
+            return slot.value.get().forward.to_cell();
         } else {
             let new_ptr = to_space.allocate(std::mem::size_of::<Cell>(), &mut false);
-            log::trace!("Copy {:p}->{:p}", slot.raw.raw, new_ptr.to_ptr::<u8>());
-            slot.get().copy_to_addr(new_ptr);
-            slot.get_mut().forward = new_ptr;
+            log::trace!(
+                "Copy {:p}->{:p}",
+                slot.value.raw.raw,
+                new_ptr.to_ptr::<u8>(),
+            );
+            slot.value.get().copy_to_addr(new_ptr);
+            slot.value.get_mut().forward = new_ptr;
+
             let cell = new_ptr.to_cell();
+            slot.set(cell);
             cell.get_mut().color = CELL_WHITE_A;
             return cell;
         }
@@ -158,7 +163,7 @@ impl HeapTrait for CopyingCollector {
         unsafe {
             ptr.write(cell);
         }
-
+        self.needs_gc = needs_gc;
         CellPointer {
             raw: crate::util::tagged::TaggedPointer::new(ptr),
         }
