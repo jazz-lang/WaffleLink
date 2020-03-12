@@ -1,3 +1,20 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 //! Serial mark&sweep collector.
 //!
 //! This collector implements mark-sweep scheme and allocates memory by
@@ -5,13 +22,14 @@
 
 use super::*;
 use std::alloc::{alloc, dealloc, Layout};
-
+use std::collections::HashSet;
 pub struct SerialCollector {
     heap: Vec<CellPointer>,
     bytes_allocated: usize,
     threshold: usize,
     stack: Vec<CellPointer>,
     enabled: bool,
+    traced_perm: HashSet<CellPointer>,
 }
 
 impl SerialCollector {
@@ -22,6 +40,7 @@ impl SerialCollector {
             threshold,
             stack: vec![],
             enabled: true,
+            traced_perm: HashSet::new(),
         }
     }
     pub fn alloc(&mut self, cell: Cell) -> CellPointer {
@@ -48,7 +67,7 @@ impl SerialCollector {
     pub fn collect(&mut self, process: &Arc<Process>) {
         let chan_lock = process.local_data().channel.lock();
         while let Some(value) = self.stack.pop() {
-            if !value.is_marked() {
+            if !value.is_marked() || !self.traced_perm.contains(&value) {
                 log::debug!("Mark {:p} '{}'", value.raw.raw, value);
                 value.mark(true);
                 value.get().trace(|elem| {

@@ -149,7 +149,7 @@ pub extern "C" fn receive_or_wait(
     if process.has_messages() {
         attempt_to_reschedule_process(state, &process);
     }
-    Ok(ReturnValue::Yieldrocess)
+    Ok(ReturnValue::YieldProcess)
 }
 pub extern "C" fn wait_for_message(
     _: &mut ProcessWorker,

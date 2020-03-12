@@ -84,6 +84,21 @@ native_fn!(
         }
     }
 );
+
+native_fn!(
+    _w,state,proc => read_str this (..._args) {
+        let result = match this.as_cell().get_mut().value {
+            CellValue::File(ref mut file) => {
+                let file: &mut File = file;
+                let mut buf = String::new();
+                file.read_to_string(&mut buf).map_err(|err| Value::from(Process::allocate_string(proc, state, &err.to_string())))?;
+                buf
+            }
+            _ => return Err(Value::from(Process::allocate_string(proc, state, "`this` is not an instance of File in File.readToString")))
+        };
+        Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc, state, &result))))
+    }
+);
 pub fn initialize_file(state: &RcState) {
     let file = state.file_prototype.as_cell();
     let mut lock = state.static_variables.lock();
@@ -98,6 +113,10 @@ pub fn initialize_file(state: &RcState) {
     file.add_attribute_without_barrier(
         &Arc::new("tryReadBytes".to_owned()),
         Value::from(state.allocate_native_fn(try_read_bytes, "tryReadBytes", -1)),
+    );
+    file.add_attribute_without_barrier(
+        &Arc::new("readToString".to_owned()),
+        Value::from(state.allocate_native_fn(read_str, "readToString", 0)),
     );
     lock.insert("File".to_owned(), Value::from(file));
 }

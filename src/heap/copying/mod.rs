@@ -43,7 +43,7 @@ pub struct CopyingCollector {
     pub space: Space,
     pub needs_gc: bool,
     pub stack: Vec<Slot>,
-    pub remembered_permanent: std::collections::HashSet<usize>,
+    pub remembered_permanent: std::collections::HashSet<CellPointer>,
 }
 
 impl CopyingCollector {
@@ -59,7 +59,7 @@ impl CopyingCollector {
     pub fn copy(&mut self) {
         log::debug!("--Copying GC started--");
         let mut new_space = Space::new(self.space.page_size);
-        while let Some(slot) = self.stack.pop() {
+        /*while let Some(slot) = self.stack.pop() {
             let ptr = self.copy_object(&slot, &mut new_space);
             if slot.value.get().color != CELL_BLACK
                 && !self
@@ -78,15 +78,29 @@ impl CopyingCollector {
                     self.stack.push(slot);
                 });
             }
+        }*/
+        while let Some(slot) = self.stack.pop() {
+            if slot.value.is_permanent() && self.remembered_permanent.contains(&slot.value) {
+                continue;
+            } else if slot.value.is_permanent() {
+                slot.value.get().trace(|cb| {
+                    self.stack.push(Slot::from_ptr(cb));
+                });
+                self.remembered_permanent.insert(slot.value);
+            } else if !slot.value.is_marked() {
+                slot.value.mark(true);
+                self.copy_object(&slot, &mut new_space);
+            }
         }
+
         // finalization:
         for page in self.space.pages.iter() {
-            log::trace!(
+            /*log::trace!(
                 "Sweeping memory page from {:p} to {:p} (memory page limit is {:p})",
                 page.data.to_ptr::<u8>(),
                 page.top.to_ptr::<u8>(),
                 page.limit.to_ptr::<u8>()
-            );
+            );*/
             let end = page.top;
             let mut scan = page.data;
             while scan < end {
@@ -105,7 +119,8 @@ impl CopyingCollector {
             }
         }
         log::debug!("--Copying GC finished--");
-
+        self.needs_gc = false;
+        self.space.clear();
         self.space = new_space;
     }
 
@@ -114,6 +129,7 @@ impl CopyingCollector {
             return slot.value;
         }
         if to_space.contains(slot.value.get().forward) {
+            slot.set(slot.value.get().forward.to_cell());
             return slot.value.get().forward.to_cell();
         } else {
             let new_ptr = to_space.allocate(std::mem::size_of::<Cell>(), &mut false);
@@ -155,13 +171,17 @@ impl HeapTrait for CopyingCollector {
     }
 
     fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
+        log::debug!("Allocate cell");
         let mut needs_gc = false;
         let ptr = self
             .space
-            .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
+            .fast_allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
             .to_mut_ptr::<Cell>();
         unsafe {
             ptr.write(cell);
+        }
+        if needs_gc {
+            log::debug!("gc needed");
         }
         self.needs_gc = needs_gc;
         CellPointer {

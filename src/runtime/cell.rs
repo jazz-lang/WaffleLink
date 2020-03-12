@@ -707,3 +707,12 @@ impl Drop for Cell {
 }
 
 unsafe impl Send for CellPointer {}
+
+use std::hash::{Hash, Hasher};
+impl Hash for CellPointer {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        (self.raw.raw as usize).hash(h);
+    }
+}
+
+impl Eq for CellPointer {}

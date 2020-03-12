@@ -110,7 +110,7 @@ pub fn get_constant_functions(
 
 fn copy_inline_blocks(
     caller: &mut Vec<BasicBlock>,
-    mut ret_block: usize,
+    ret_block: usize,
     callee: &Arc<Function>,
     entry_block: usize,
     id: &mut usize,

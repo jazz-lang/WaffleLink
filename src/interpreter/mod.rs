@@ -154,7 +154,7 @@ impl Runtime {
                         break (Ok(value), true);
                     }
                     reset_context!(process, context, index, bindex);
-                    safepoint_and_reduce!(self, process, reductions,index,bindex,context);
+                    safepoint_and_reduce!(self, process, reductions, index, bindex, context);
                 }
                 Instruction::LoadNull(r) => context.set_register(r, Value::from(VTag::Null)),
                 Instruction::LoadUndefined(r) => {
@@ -559,7 +559,9 @@ impl Runtime {
                             new_context.terminate_upon_return = false;
                             //process.push_context(new_context);
                             reset_context!(process, context, index, bindex);
-                            safepoint_and_reduce!(self, process, reductions,index,bindex,context);
+                            safepoint_and_reduce!(
+                                self, process, reductions, index, bindex, context
+                            );
                             //enter_context!(process, context, index, bindex);
                         }
                     }
@@ -683,10 +685,10 @@ impl Runtime {
                 Instruction::GcSafepoint => {
                     match self.gc_safepoint(process) {
                         true => {
-                                context.index = index;
-                                context.bindex = bindex;
-                                return Ok(Value::from(VTag::Null))
-                            },
+                            context.index = index;
+                            context.bindex = bindex;
+                            return Ok(Value::from(VTag::Null));
+                        }
                         _ => (),
                     };
                 }
