@@ -405,6 +405,7 @@ impl GenerationalHeap {
             i -= 1;
             page.uncommit();
         }
+        self.nursery_space.pages_count = i;
         log::trace!("Scavenging finished");
         if self.needs_gc != GenerationalGCType::Intermediate {
             self.needs_gc = GenerationalGCType::None;
