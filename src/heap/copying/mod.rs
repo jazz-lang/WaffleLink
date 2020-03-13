@@ -131,7 +131,7 @@ impl CopyingCollector {
         if slot.value.is_permanent() {
             return slot.value;
         }
-        if to_space.contains(slot.value.get().forward) {
+        if slot.value.is_marked() && to_space.contains(slot.value.get().forward) {
             slot.set(slot.value.get().forward.to_cell());
             return slot.value.get().forward.to_cell();
         } else {

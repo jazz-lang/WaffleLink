@@ -24,6 +24,7 @@ pub struct Space {
     pub size: usize,
     pub size_limit: usize,
     pub page_size: usize,
+    pub pages_count: usize,
     pub allocated_size: usize,
 }
 
@@ -36,6 +37,7 @@ impl Space {
             size: 0,
             allocated_size: 0,
             page_size: 0,
+            pages_count: 0,
             size_limit: 0,
         }
     }
@@ -52,6 +54,7 @@ impl Space {
             size: 0,
             page_size,
             size_limit: 0,
+            pages_count: 1,
             allocated_size: 0,
         };
         space.compute_size_limit();
@@ -70,6 +73,7 @@ impl Space {
         let real_size = align_usize(size, page_size());
         let page = Page::new(real_size);
         self.pages.push_back(page);
+        self.pages_count += 1;
         let page = self.pages.back().unwrap();
         self.size += real_size;
         self.top = Address::from_ptr(&page.top);
@@ -178,7 +182,7 @@ impl Page {
         }
     }
 
-    fn uncommit(&self) {
+    pub fn uncommit(&self) {
         uncommit(self.data, self.size)
     }
 }

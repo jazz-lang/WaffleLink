@@ -394,8 +394,16 @@ impl GenerationalHeap {
             self.nursery_space.add_page(self.nursery_space.page_size);
             self.young_threshold = (self.young_threshold as f64 / 0.5) as usize;
         }
-        for page in self.nursery_space.pages.iter_mut() {
+        /*for page in self.nursery_space.pages.iter_mut() {
             page.top = page.data;
+        }*/
+        // We keep only 2 * YOUNG_PAGE_SIZE bytes allocated, and try
+        // to free old memory to OS (pop_front should pop "oldest" pages).
+        let mut i = self.nursery_space.pages_count;
+        while i > 2 {
+            let page = self.nursery_space.pages.pop_front().unwrap();
+            i -= 1;
+            page.uncommit();
         }
         log::trace!("Scavenging finished");
         if self.needs_gc != GenerationalGCType::Intermediate {
@@ -509,7 +517,11 @@ impl GenerationalHeap {
             return;
         }
         let cell = child.as_cell();
-        if self.is_old(parent) && self.is_intermediate(cell) {
+        if parent.is_permanent() && self.is_intermediate(cell) {
+            self.old2intermediate_set.remember(parent);
+        } else if parent.is_permanent() && self.in_nursery(cell) {
+            self.old_set.remember(cell);
+        } else if self.is_old(parent) && self.is_intermediate(cell) {
             self.old2intermediate_set.remember(parent);
         } else if self.is_old(parent) && self.in_nursery(cell) {
             self.old_set.remember(parent);
