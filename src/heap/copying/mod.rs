@@ -17,6 +17,7 @@
 
 use super::space::*;
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Copy, Clone)]
 pub struct Slot {
     value: CellPointer,
@@ -44,6 +45,7 @@ pub struct CopyingCollector {
     pub needs_gc: bool,
     pub stack: Vec<Slot>,
     pub remembered_permanent: std::collections::HashSet<CellPointer>,
+    pub rootset: Vec<*mut RootedInner>,
 }
 
 impl CopyingCollector {
@@ -53,6 +55,7 @@ impl CopyingCollector {
             needs_gc: false,
             stack: vec![],
             remembered_permanent: Default::default(),
+            rootset: vec![],
         }
     }
 
@@ -168,10 +171,22 @@ impl HeapTrait for CopyingCollector {
         proc.trace(|pointer| {
             self.stack.push(Slot::from_ptr(pointer));
         });
+        let mut stack = vec![];
+        self.rootset.retain(|elem_raw| unsafe {
+            let elem = &**elem_raw;
+            if elem.rooted.load(Ordering::Acquire) {
+                stack.push(Slot::from_ptr(&elem.inner));
+                true
+            } else {
+                let _ = Box::from_raw(*elem_raw);
+                false
+            }
+        });
+        self.stack.extend(&stack);
     }
 
-    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
-        log::debug!("Allocate cell");
+    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> RootedCell {
+        //log::debug!("Allocate cell");
         let mut needs_gc = false;
         let ptr = self
             .space
@@ -184,9 +199,16 @@ impl HeapTrait for CopyingCollector {
             log::debug!("gc needed");
         }
         self.needs_gc = needs_gc;
-        CellPointer {
+        let ptr = CellPointer {
             raw: crate::util::tagged::TaggedPointer::new(ptr),
-        }
+        };
+        let raw = Box::into_raw(Box::new(RootedInner {
+            inner: ptr,
+            rooted: AtomicBool::new(true),
+        }));
+
+        self.rootset.push(raw);
+        RootedCell { inner: raw }
     }
 
     fn collect_garbage(

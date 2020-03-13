@@ -69,18 +69,20 @@ impl Space {
     pub fn add_page(&mut self, size: usize) {
         let real_size = align_usize(size, page_size());
         let page = Page::new(real_size);
+        self.pages.push_back(page);
+        let page = self.pages.back().unwrap();
         self.size += real_size;
         self.top = Address::from_ptr(&page.top);
         self.limit = Address::from_ptr(&page.limit);
-        self.pages.push_back(page);
     }
 
     pub fn fast_allocate(&mut self, bytes: usize, needs_gc: &mut bool) -> Address {
         let even_bytes = bytes + (bytes & 0x01);
-        let place_in_current = self.top.deref().offset(even_bytes) <= self.limit.deref();
+        let place_in_current = self.top.deref().offset(even_bytes) < self.limit.deref();
 
         if !place_in_current {
             *needs_gc = true;
+            log::debug!("Add new page");
             self.add_page(even_bytes);
         }
         self.allocated_size += even_bytes;
@@ -94,7 +96,7 @@ impl Space {
 
     pub fn allocate(&mut self, bytes: usize, needs_gc: &mut bool) -> Address {
         let even_bytes = bytes + (bytes & 0x01);
-        let place_in_current = self.top.deref().offset(even_bytes) <= self.limit.deref();
+        let place_in_current = self.top.deref().offset(even_bytes) < self.limit.deref();
 
         if !place_in_current {
             let mut iter = self.pages.iter();

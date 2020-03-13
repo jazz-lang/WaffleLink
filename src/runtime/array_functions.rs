@@ -39,7 +39,7 @@ pub extern "C" fn array_new(
             process,
             Cell::with_prototype(CellValue::Array(array), state.array_prototype.as_cell()),
         );
-        return Ok(ReturnValue::Value(value));
+        return Ok(ReturnValue::Value(value.into()));
     }
 }
 

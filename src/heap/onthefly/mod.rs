@@ -30,17 +30,15 @@ use parking_lot::Mutex;
 use runtime::cell::*;
 use runtime::process::*;
 use space::*;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 lazy_static::lazy_static!(
     pub static ref GC: Mutex<OnTheFlyCollector> = Mutex::new(OnTheFlyCollector {
         mark_pool: marking::MarkingPool::new(num_cpus::get()),
-        sweeper: sweeper::SweepPool::new(num_cpus::get())
     });
 );
 
 pub struct OnTheFlyCollector {
     pub mark_pool: marking::MarkingPool,
-    pub sweeper: sweeper::SweepPool,
 }
 
 impl OnTheFlyCollector {}
@@ -52,30 +50,25 @@ pub const SATB: u8 = 1;
 pub const NONE: u8 = 0;
 
 pub struct OnTheFlyHeap {
-    freelist: FreeListAllocator,
     state: Arc<AtomicU8>,
     injector: Option<Arc<Injector<CellPointer>>>,
     rootset: Vec<CellPointer>,
-    sweep_recv: Option<Vec<Receiver<Vec<(Address, usize)>>>>,
-    sweeping: Arc<AtomicU8>,
+    native_roots: Vec<*mut RootedInner>,
     white: u8,
-    needs_gc: bool,
+    threshold: usize,
+    pub all: Vec<CellPointer>,
 }
 
 impl OnTheFlyHeap {
     pub fn new(heap: usize) -> Self {
         Self {
-            freelist: FreeListAllocator::new(Space::new(align_usize(
-                heap,
-                crate::util::mem::page_size(),
-            ))),
             state: Arc::new(AtomicU8::new(0)),
             injector: None,
             rootset: vec![],
             white: CELL_WHITE_A,
-            sweep_recv: None,
-            sweeping: Arc::new(AtomicU8::new(0)),
-            needs_gc: false,
+            threshold: 256,
+            all: vec![],
+            native_roots: vec![],
         }
     }
     pub fn trace_proc(&mut self, proc: &Arc<Process>) {
@@ -86,6 +79,18 @@ impl OnTheFlyHeap {
         proc.trace(|pointer| unsafe {
             self.rootset.push(*pointer);
         });
+        let mut rootset = vec![];
+        self.native_roots.retain(|elem_raw| unsafe {
+            let elem = { &**elem_raw };
+            if elem.rooted.load(Ordering::Acquire) {
+                rootset.push(elem.inner);
+                true
+            } else {
+                let _ = Box::from_raw(*elem_raw);
+                false
+            }
+        });
+        self.rootset.extend(&rootset);
     }
 
     fn flip_white(&mut self) {
@@ -107,9 +112,9 @@ impl OnTheFlyHeap {
         match state {
             NONE => {
                 log::debug!("Initializing concurrent marking...");
+                self.flip_white();
                 self.state.store(MARKING, Ordering::Relaxed); // no threads try to access 'state' so use relaxed order.
                 self.rootset.clear();
-                self.flip_white();
                 self.trace_proc(proc);
                 let gc: parking_lot::MutexGuard<'_, OnTheFlyCollector> = GC.lock();
                 let injector = Arc::new(Injector::new());
@@ -127,40 +132,42 @@ impl OnTheFlyHeap {
                     remembered_permanent: Default::default(),
                     snd: snd,
                 });
-                self.needs_gc = false;
                 log::debug!("Concurrent marking is initialized");
                 return;
             }
             INIT_SWEEP => {
-                log::debug!("Initializing concurrent sweep...");
-                let mut recvs = vec![];
-                let gc: parking_lot::MutexGuard<'_, OnTheFlyCollector> = GC.lock();
-                let mut jobs_count = 0;
-                for page in self.freelist.space.pages.iter() {
-                    jobs_count += 1;
-                    let (job, recv) = sweeper::SweeperJob::new(
-                        crate::util::ptr::DerefPointer::new(page),
-                        self.white,
-                        self.live_white(),
-                        self.state.clone(),
-                        self.sweeping.clone(),
-                    );
-                    recvs.push(recv);
-                    gc.sweeper.schedule(job);
+                log::debug!("--sweeping--");
+                let white = self.white;
+                self.all.retain(|element| {
+                    if element.get().forward.atomic_load() as u8 == white {
+                        log::trace!("Sweep {:p} '{}'", element.raw.raw, element);
+                        unsafe {
+                            std::alloc::dealloc(
+                                element.raw.raw as *mut u8,
+                                std::alloc::Layout::new::<Cell>(),
+                            );
+                        }
+                        return false;
+                    } else {
+                        return true;
+                    }
+                });
+                if self.all.len() > self.threshold {
+                    self.threshold = (self.all.len() as f64 * 0.7) as usize;
                 }
-                self.sweep_recv = Some(recvs);
-                self.state.store(SWEEPING, Ordering::Relaxed);
-                log::debug!("Concurrent sweep initialized");
+                self.state.store(NONE, Ordering::Relaxed);
+                log::debug!("Collection finished");
+                return;
             }
             FINISH => {
                 log::debug!("Concurrent collection finished");
-                assert!(self.sweep_recv.is_some());
+                /*assert!(self.sweep_recv.is_some());
                 for recv in self.sweep_recv.take().unwrap() {
                     let recv = recv.recv().unwrap();
                     for (addr, size) in recv {
                         self.freelist.freelist.add(addr, size);
                     }
-                }
+                }*/
                 self.state.store(NONE, Ordering::Relaxed);
             }
             SWEEPING => {}
@@ -186,28 +193,12 @@ impl OnTheFlyHeap {
             //println!("{}", state);
             std::thread::yield_now();
         }
-
-        self.freelist.space.clear();
     }
 }
 
 impl HeapTrait for OnTheFlyHeap {
-    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
-        let mut needs_gc = false;
-        let mut ptr = self
-            .freelist
-            .allocate(std::mem::size_of::<Cell>(), &mut needs_gc)
-            .to_mut_ptr::<Cell>();
-        if ptr.is_null() {
-            log::debug!("No memory in current page, create new memory page");
-            self.freelist.space.add_page(self.freelist.space.page_size);
-            ptr = self
-                .freelist
-                .allocate(std::mem::size_of::<Cell>(), &mut false)
-                .to_mut_ptr::<Cell>();
-        }
-        let state = self.state.load(Ordering::Acquire);
-        self.needs_gc = needs_gc && (state == NONE || state == FINISH);
+    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> RootedCell {
+        let ptr = unsafe { std::alloc::alloc(std::alloc::Layout::new::<Cell>()) as *mut Cell };
         unsafe {
             ptr.write(cell);
         }
@@ -218,7 +209,13 @@ impl HeapTrait for OnTheFlyHeap {
         ptr.get_mut()
             .forward
             .atomic_store(self.live_white() as *mut u8);
-        ptr
+        self.all.push(ptr);
+        let raw = Box::into_raw(Box::new(RootedInner {
+            inner: ptr,
+            rooted: AtomicBool::new(true),
+        }));
+        self.native_roots.push(raw);
+        RootedCell { inner: raw }
     }
 
     fn trace_process(&mut self, proc: &Arc<crate::runtime::process::Process>) {
@@ -234,7 +231,7 @@ impl HeapTrait for OnTheFlyHeap {
 
     fn should_collect(&self) -> bool {
         let state = self.state.load(Ordering::Acquire);
-        self.needs_gc || state == INIT_SWEEP || state == FINISH
+        state == INIT_SWEEP || state == FINISH || self.all.len() > self.threshold
     }
 
     fn enable(&mut self) {}

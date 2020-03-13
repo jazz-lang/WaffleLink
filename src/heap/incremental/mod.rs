@@ -29,6 +29,7 @@ use crate::runtime::process::*;
 use crate::runtime::value::*;
 use crate::util::arc::Arc;
 use crate::util::mem::{Address, Region};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn paint_grey(o: CellPointer) {
     o.get_mut().color = CELL_GREY;
@@ -90,6 +91,7 @@ pub struct IncrementalCollector {
     interval_ratio: usize,
     major_old_threshold: usize,
     process: Option<Arc<Process>>,
+    native_roots: Vec<*mut RootedInner>,
     disabled: bool,
     permanent_scanned: std::collections::HashSet<usize>,
 }
@@ -400,6 +402,7 @@ impl IncrementalCollector {
             process: None,
             atomic_grey: LinkedList::new(),
             disabled: false,
+            native_roots: vec![],
         }
     }
 }
@@ -420,7 +423,7 @@ impl HeapTrait for IncrementalCollector {
             self.grey.push_front(*pointer);
         });
     }
-    fn allocate(&mut self, proc: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
+    fn allocate(&mut self, proc: &Arc<Process>, _: GCType, cell: Cell) -> RootedCell {
         if let None = self.process {
             self.process = Some(proc.clone());
         }
@@ -484,7 +487,13 @@ impl HeapTrait for IncrementalCollector {
         };
         paint_partial_white(self, ptr);
 
-        ptr
+        let raw = Box::into_raw(Box::new(RootedInner {
+            inner: ptr,
+            rooted: AtomicBool::new(true),
+        }));
+
+        self.native_roots.push(raw);
+        RootedCell { inner: raw }
     }
 
     fn should_collect(&self) -> bool {

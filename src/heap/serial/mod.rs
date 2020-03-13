@@ -23,8 +23,10 @@
 use super::*;
 use std::alloc::{alloc, dealloc, Layout};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 pub struct SerialCollector {
     heap: Vec<CellPointer>,
+    rootset: Vec<*mut RootedInner>,
     bytes_allocated: usize,
     threshold: usize,
     stack: Vec<CellPointer>,
@@ -37,6 +39,7 @@ impl SerialCollector {
         Self {
             heap: vec![],
             bytes_allocated: 0,
+            rootset: vec![],
             threshold,
             stack: vec![],
             enabled: true,
@@ -125,8 +128,14 @@ impl HeapTrait for SerialCollector {
         Ok(())
     }
 
-    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> CellPointer {
-        self.alloc(cell)
+    fn allocate(&mut self, _: &Arc<Process>, _: GCType, cell: Cell) -> RootedCell {
+        let ptr = self.alloc(cell);
+        let raw = Box::into_raw(Box::new(RootedInner {
+            inner: ptr,
+            rooted: AtomicBool::new(true),
+        }));
+        self.rootset.push(raw);
+        RootedCell { inner: raw }
     }
 
     fn trace_process(&mut self, proc: &Arc<crate::runtime::process::Process>) {
@@ -140,6 +149,17 @@ impl HeapTrait for SerialCollector {
 
         proc.trace(|elem| unsafe {
             self.stack.push(*elem);
-        })
+        });
+        let mut stack = vec![];
+        self.rootset.retain(|elem| unsafe {
+            if (**elem).rooted.load(Ordering::Acquire) {
+                stack.push((**elem).inner);
+                true
+            } else {
+                let _ = Box::from_raw(*elem); /* cleanup memory */
+                false
+            }
+        });
+        self.stack.extend(&stack);
     }
 }

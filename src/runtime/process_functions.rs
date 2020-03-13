@@ -38,7 +38,7 @@ pub extern "C" fn spawn(
             state.process_prototype.as_cell(),
         ),
     );
-    Ok(ReturnValue::Value(new_proc_ptr))
+    Ok(ReturnValue::Value(new_proc_ptr.into()))
 }
 
 pub extern "C" fn send(
@@ -123,7 +123,8 @@ pub extern "C" fn receive_or_wait(
                     &process,
                     state,
                     "Trying to sleep for +-inf or NAN time",
-                ));
+                )
+                .into());
             }
             state
                 .timeout_worker
@@ -138,7 +139,8 @@ pub extern "C" fn receive_or_wait(
                         &process,
                         state,
                         "Expected duration in `wait_for_message`",
-                    ))
+                    )
+                    .into())
                 }
             }
         }
@@ -173,7 +175,8 @@ pub extern "C" fn wait_for_message(
                     &process,
                     state,
                     "Trying to sleep for +-inf or NAN time",
-                ));
+                )
+                .into());
             }
             state
                 .timeout_worker
@@ -188,7 +191,8 @@ pub extern "C" fn wait_for_message(
                         &process,
                         state,
                         "Expected duration in `wait_for_message`",
-                    ))
+                    )
+                    .into())
                 }
             }
         }

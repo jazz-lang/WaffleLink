@@ -16,8 +16,10 @@
 */
 
 use super::space::*;
+use super::*;
 use crate::runtime;
 use crate::util;
+use std::sync::atomic::{AtomicBool, Ordering};
 pub mod remember_set;
 use super::freelist::FreeList;
 use super::freelist_alloc::FreeListAllocator;
@@ -73,6 +75,7 @@ pub struct GenerationalHeap {
     old2intermediate_set: remember_set::RemembrSet,
     disabled: bool,
     young_threshold: usize,
+    native_roots: Vec<*mut RootedInner>,
     intermediate_threshold: usize,
 }
 
@@ -92,6 +95,7 @@ impl GenerationalHeap {
             disabled: false,
             young_threshold: 128,
             intermediate_threshold: 256,
+            native_roots: vec![],
         }
     }
 
@@ -548,7 +552,7 @@ impl GenerationalHeap {
 use super::HeapTrait;
 
 impl HeapTrait for GenerationalHeap {
-    fn allocate(&mut self, proc: &Arc<Process>, _: super::GCType, cell: Cell) -> CellPointer {
+    fn allocate(&mut self, proc: &Arc<Process>, _: super::GCType, cell: Cell) -> RootedCell {
         let cell = self.allocate_young(cell);
         /*if self.needs_gc == GenerationalGCType::Young {
             self.trace_process(proc);
@@ -559,7 +563,12 @@ impl HeapTrait for GenerationalHeap {
                 }
             }
         }*/
-        cell
+        let raw = Box::into_raw(Box::new(RootedInner {
+            rooted: AtomicBool::new(false),
+            inner: cell,
+        }));
+        self.native_roots.push(raw);
+        RootedCell { inner: raw }
     }
 
     fn should_collect(&self) -> bool {
@@ -591,6 +600,19 @@ impl HeapTrait for GenerationalHeap {
         proc.trace(|pointer| {
             self.rootset.push(Slot::from_ptr(pointer));
         });
+        let mut rootset = vec![];
+        self.native_roots.retain(|elem_raw| unsafe {
+            let elem = &**elem_raw;
+
+            if elem.rooted.load(Ordering::Acquire) {
+                rootset.push(Slot::from_ptr(&elem.inner));
+                true
+            } else {
+                let _ = Box::from_raw(*elem_raw);
+                false
+            }
+        });
+        self.rootset.extend(&rootset);
     }
 
     fn field_write_barrier(&mut self, parent: CellPointer, child: Value) {

@@ -19,6 +19,7 @@ use super::cell::*;
 use super::process::*;
 use super::state::*;
 use super::RUNTIME;
+use crate::heap::rooting::*;
 use crate::util::arc::Arc;
 pub type EncodedValue = i64;
 
@@ -648,3 +649,9 @@ impl From<CellPointer> for Value {
 
 unsafe impl Send for Value {}
 unsafe impl Sync for Value {}
+
+impl From<RootedCell> for Value {
+    fn from(c: RootedCell) -> Self {
+        Self::from(c.as_cell())
+    }
+}

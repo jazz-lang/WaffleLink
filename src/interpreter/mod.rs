@@ -60,7 +60,7 @@ macro_rules! throw {
 macro_rules! throw_error_message {
     ($rt: expr,$proc: expr,$msg: expr,$context: ident,$index: ident,$bindex: ident) => {
         let value = Process::allocate_string($proc, &$rt.state, $msg);
-        throw!($rt, $proc, value, $context, $index, $bindex)
+        throw!($rt, $proc, Value::from(value), $context, $index, $bindex)
     };
 }
 
@@ -796,7 +796,7 @@ impl Runtime {
                     );
 
                     if let Some(native_fn) = function.native {
-                        let result = native_fn(worker, &self.state, process, this, &args);
+                        let result = native_fn(worker, &self.state, process, this.into(), &args);
                         if let Err(err) = result {
                             throw!(self, process, err, context, index, bindex);
                         }
@@ -824,7 +824,7 @@ impl Runtime {
                         new_context.function = Value::from(real_func);
                         new_context.module = function.module.clone();
                         new_context.n = context.n + 1;
-                        new_context.this = this;
+                        new_context.this = this.into();
                         new_context.code = function.code.clone();
                         new_context.terminate_upon_return = false;
                         process.push_context(new_context);
@@ -898,7 +898,8 @@ impl Runtime {
                                             process,
                                             &self.state,
                                             &format!("{}{}", lhs, rhs),
-                                        ),
+                                        )
+                                        .into(),
                                     );
                                 }
                                 BinOp::Equal => context.set_register(
@@ -930,7 +931,8 @@ impl Runtime {
                                             process,
                                             &self.state,
                                             &format!("{}{}", lhs, rhs),
-                                        ),
+                                        )
+                                        .into(),
                                     );
                                 }
                                 _ => context.set_register(dest, Value::from(false)),
@@ -951,7 +953,8 @@ impl Runtime {
                                                     CellValue::Array(new_array),
                                                     self.state.array_prototype.as_cell(),
                                                 ),
-                                            ),
+                                            )
+                                            .into(),
                                         );
                                         continue;
                                     }
@@ -962,7 +965,8 @@ impl Runtime {
                                                 process,
                                                 &self.state,
                                                 &format!("{}{}", lhs, rhs),
-                                            ),
+                                            )
+                                            .into(),
                                         );
                                         continue;
                                     }
@@ -981,7 +985,8 @@ impl Runtime {
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
-                            ),
+                            )
+                            .into(),
                             _ => Value::new_double(std::f64::NAN),
                         };
                         context.set_register(dest, result)
@@ -993,7 +998,8 @@ impl Runtime {
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
-                            ),
+                            )
+                            .into(),
                             _ => Value::new_double(std::f64::NAN), // TODO: Do we really need to use NaN if operation is not supported on current type?
                         };
                         context.set_register(dest, result);
@@ -1005,7 +1011,8 @@ impl Runtime {
                                 process,
                                 &self.state,
                                 &format!("{}{}", lhs, rhs),
-                            ),
+                            )
+                            .into(),
                             _ => Value::new_double(std::f64::NAN),
                         };
                         context.set_register(dest, result);

@@ -20,6 +20,7 @@ use super::channel::Channel;
 use super::scheduler::timeout::*;
 use super::state::*;
 use super::value::*;
+use crate::heap::*;
 use crate::heap::{initialize_process_heap, GCType, HeapTrait};
 use crate::interpreter::context::*;
 use crate::util;
@@ -423,7 +424,7 @@ impl Process {
         self.local_data().heap.is_enabled()
     }
 
-    pub fn allocate_string(this: &Arc<Process>, state: &RcState, string: &str) -> Value {
+    pub fn allocate_string(this: &Arc<Process>, state: &RcState, string: &str) -> RootedCell {
         let local_data = this.local_data_mut();
         let cell = local_data.heap.allocate(
             this,
@@ -433,17 +434,17 @@ impl Process {
                 state.string_prototype.as_cell(),
             ),
         );
-        Value::from(cell)
+        cell
     }
 
     pub fn has_messages(&self) -> bool {
         self.local_data().channel.lock().has_messages()
     }
 
-    pub fn allocate(this: &Arc<Process>, cell: Cell) -> Value {
+    pub fn allocate(this: &Arc<Process>, cell: Cell) -> RootedCell {
         let local_data = this.local_data_mut();
         let cell = local_data.heap.allocate(this, GCType::Young, cell);
-        Value::from(cell)
+        cell
     }
 }
 

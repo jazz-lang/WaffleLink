@@ -96,6 +96,7 @@ impl GcPool {
 
     /// Schedules a job onto the global queue.
     pub fn schedule(&self, job: Collection) {
+        log::trace!("Scheduled GC");
         self.state.push_global(job);
     }
 

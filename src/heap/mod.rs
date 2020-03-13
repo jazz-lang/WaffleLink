@@ -23,12 +23,14 @@ pub mod gc_pool;
 pub mod generational;
 pub mod incremental;
 pub mod onthefly;
+pub mod rooting;
 pub mod serial;
 use crate::runtime::cell::*;
 use crate::runtime::config::*;
 use crate::runtime::process::*;
 use crate::runtime::value::*;
 use crate::util::arc::*;
+pub use rooting::*;
 pub mod space;
 use crate::util::mem::{align_usize, page_size};
 use space::*;
@@ -161,7 +163,7 @@ pub trait HeapTrait {
     /// Returns true if GC should be triggered.
     fn should_collect(&self) -> bool;
     /// Allocate CellPointer
-    fn allocate(&mut self, proc: &Arc<Process>, tenure: GCType, cell: Cell) -> CellPointer;
+    fn allocate(&mut self, proc: &Arc<Process>, tenure: GCType, cell: Cell) -> RootedCell;
     /// Copy object from one heap to another heap.
     fn copy_object(&mut self, proc: &Arc<Process>, object: Value) -> Value {
         if !object.is_cell() {

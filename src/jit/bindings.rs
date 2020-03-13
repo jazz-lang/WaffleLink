@@ -107,11 +107,11 @@ pub unsafe extern "C" fn value_call(
     if !function.is_cell() {
         RUNTIME.run_default_panic(
             &*proc,
-            &Process::allocate_string(
+            &Value::from(Process::allocate_string(
                 proc,
                 &RUNTIME.state,
                 &format!("Cannot invoke '{}' value.", function.to_string()),
-            ),
+            )),
         );
         std::process::exit(1);
     }
@@ -122,11 +122,11 @@ pub unsafe extern "C" fn value_call(
         Err(_) => {
             RUNTIME.run_default_panic(
                 &*proc,
-                &Process::allocate_string(
+                &Value::from(Process::allocate_string(
                     proc,
                     &RUNTIME.state,
                     &format!("Cannot invoke '{}' value.", function.to_string()),
-                ),
+                )),
             );
             std::process::exit(1);
         }

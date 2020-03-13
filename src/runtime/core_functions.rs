@@ -69,7 +69,8 @@ pub extern "C" fn require(
             module.as_cell().module_value_mut().unwrap().exports = Process::allocate(
                 process,
                 Cell::with_prototype(CellValue::None, state.object_prototype.as_cell()),
-            );
+            )
+            .into();
             process.push_context(ctx);
             let _ = RUNTIME.run(worker, process)?;
             return Ok(ReturnValue::Value(
