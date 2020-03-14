@@ -162,7 +162,9 @@ impl Drop for PermanentHeap {
 pub trait HeapTrait {
     /// Returns true if GC should be triggered.
     fn should_collect(&self) -> bool;
-    /// Allocate CellPointer
+    /// Allocate cell in heap.
+    ///
+    /// Implementations of this trait should handle rooted objects properly and return valid RootedCell.
     fn allocate(&mut self, proc: &Arc<Process>, tenure: GCType, cell: Cell) -> RootedCell;
     /// Copy object from one heap to another heap.
     fn copy_object(&mut self, proc: &Arc<Process>, object: Value) -> Value {
@@ -258,7 +260,7 @@ pub trait HeapTrait {
     fn write_barrier(&mut self, _: CellPointer) {}
     /// Colours 'parent' as gray object if child is white and parent is black objects.
     fn field_write_barrier(&mut self, _: CellPointer, _: Value) {}
-    /// Read barrier is used when background GC is enabled.
+    /// Read barrier in case moving background GC is used.
     fn read_barrier(&mut self, _: *const CellPointer) {}
     /// Remember object so this object will not be collected even if it's not reachable.
     fn remember(&mut self, _: CellPointer) {}

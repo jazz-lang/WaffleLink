@@ -18,7 +18,7 @@
 //! Serial mark&sweep collector.
 //!
 //! This collector implements mark-sweep scheme and allocates memory by
-//! using default global allocator.
+//! using default Rust global allocator.
 
 use super::*;
 use std::alloc::{alloc, dealloc, Layout};

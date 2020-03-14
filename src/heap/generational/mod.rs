@@ -14,6 +14,16 @@
 *   See the License for the specific language governing permissions and
 *   limitations under the License.
 */
+//! Ieiunium Garbage Collector
+//!
+//! This GC implements generational GC scheme and has 3 memory spaces:
+//! a. Nursery - space for young objects, when collection triggered all survied objects
+//!    get copied into intermediate space.
+//! b. Intermediate - space for objects with generation 0..5. On collection objects copied into new space
+//!    and old space is just freed to OS. If some of live object is promoted to 5th generation then it copied
+//!    to old space.
+//! c. Old - space for old objects, this space is simple mark&sweep and does not get compacted or copied.
+//!    (Compaction maybe implemented in future).
 
 use super::space::*;
 use super::*;
@@ -384,7 +394,7 @@ impl GenerationalHeap {
         let survived = self.mark_live();
         self.compute_forward_scavenge();
         self.update_references();
-        let _survived = self.relocate();
+        let _ = self.relocate();
         if survived as f64 > self.young_threshold as f64 * 0.5 {
             self.nursery_space.clear();
             self.nursery_space.page_size = align_usize(

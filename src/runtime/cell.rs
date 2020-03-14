@@ -294,6 +294,9 @@ impl Cell {
 }
 #[repr(C)]
 pub struct CellPointer {
+    /// 'raw' points to permanent or GC heap.
+    ///
+    /// If cell is in permanent heap then one bit is set to 1.
     pub raw: TaggedPointer<Cell>,
 }
 
