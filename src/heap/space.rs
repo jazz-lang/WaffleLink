@@ -97,28 +97,28 @@ impl Space {
         }
         result
     }
+    pub fn try_find_page_for(&self, size: usize) -> Option<(Address, Address)> {
+        for page in self.pages.iter() {
+            if page.top.offset(size) > page.limit {
+                return Some((Address::from_ptr(&page.top), Address::from_ptr(&page.limit)));
+            }
+        }
 
+        return None;
+    }
     pub fn allocate(&mut self, bytes: usize, needs_gc: &mut bool) -> Address {
         let even_bytes = bytes + (bytes & 0x01);
         let place_in_current = self.top.deref().offset(even_bytes) < self.limit.deref();
 
         if !place_in_current {
-            let mut iter = self.pages.iter();
-            let mut head = iter.next_back();
-            loop {
-                if self.top.deref().offset(even_bytes) > self.limit.deref() && head.is_some() {
-                    let old_head = head;
-                    head = iter.next_back();
-                    self.top = Address::from_ptr(&old_head.unwrap().top);
-                    self.limit = Address::from_ptr(&old_head.unwrap().limit);
-                } else {
-                    break;
-                }
-            }
+            let head = self.try_find_page_for(even_bytes);
 
-            if head.is_none() {
+            if let None = head {
                 *needs_gc = true;
                 self.add_page(even_bytes);
+            } else if let Some((top, limit)) = head {
+                self.top = top;
+                self.limit = limit;
             }
         }
         self.allocated_size += even_bytes;
@@ -129,7 +129,17 @@ impl Space {
         }
         result
     }
-
+    pub fn pop_front(&mut self) -> Option<Page> {
+        if let Some(page) = self.pages.pop_front() {
+            let new_page = self.pages.front().unwrap();
+            self.top = Address::from_ptr(&new_page.top);
+            self.limit = Address::from_ptr(&new_page.limit);
+            self.pages_count -= 1;
+            return Some(page);
+        } else {
+            None
+        }
+    }
     pub fn swap(&mut self, space: &mut Space) {
         self.clear();
         while space.pages.is_empty() != true {
@@ -152,7 +162,6 @@ impl Space {
 
         false
     }
-
     pub fn clear(&mut self) {
         self.size = 0;
         while let Some(page) = self.pages.pop_back() {

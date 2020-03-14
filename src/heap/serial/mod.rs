@@ -72,7 +72,11 @@ impl SerialCollector {
         while let Some(value) = self.stack.pop() {
             if !value.is_marked() || !self.traced_perm.contains(&value) {
                 log::debug!("Mark {:p} '{}'", value.raw.raw, value);
-                value.mark(true);
+                if value.is_permanent() {
+                    self.traced_perm.insert(value);
+                } else {
+                    value.mark(true);
+                }
                 value.get().trace(|elem| {
                     unsafe { self.stack.push(*elem) };
                 })

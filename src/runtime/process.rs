@@ -354,7 +354,7 @@ impl Process {
     }
 
     pub fn send_message_from_self(&self, message: Value) {
-        self.local_data_mut().channel.lock().send(message);
+        self.local_data_mut().channel.get_mut().send(message);
     }
 
     pub fn waiting_for_message(&self) {

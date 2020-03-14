@@ -16,34 +16,58 @@
 */
 
 use super::cell::*;
+use super::function_functions::invoke_value;
 use super::process::*;
 use super::scheduler::process_worker::ProcessWorker;
 use super::state::*;
 use super::value::*;
 use crate::util::arc::Arc;
 pub extern "C" fn writeln(
-    _: &mut ProcessWorker,
-    _: &RcState,
-    _: &Arc<Process>,
+    w: &mut ProcessWorker,
+    s: &RcState,
+    p: &Arc<Process>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
-    for value in arguments.iter() {
+    /*for value in arguments.iter() {
         print!("{}", value);
+    }*/
+    for value in arguments.iter() {
+        let value: &Value = value;
+        let string =
+            if let Some(to_string) = value.lookup_attribute(s, &Arc::new("toString".to_owned())) {
+                match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
+                    ReturnValue::Value(value) => format!("{}", value),
+                    _ => unimplemented!(),
+                }
+            } else {
+                format!("{}", value)
+            };
+        print!("{}", string);
     }
     println!();
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }
 
 pub extern "C" fn write(
-    _: &mut ProcessWorker,
-    _: &RcState,
-    _: &Arc<Process>,
+    w: &mut ProcessWorker,
+    s: &RcState,
+    p: &Arc<Process>,
     _: Value,
     arguments: &[Value],
 ) -> Result<ReturnValue, Value> {
     for value in arguments.iter() {
-        print!("{}", value);
+        let value: &Value = value;
+        let string =
+            if let Some(to_string) = value.lookup_attribute(s, &Arc::new("toString".to_owned())) {
+                match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
+                    ReturnValue::Value(value) => format!("{}", value),
+                    _ => unimplemented!(),
+                }
+            } else {
+                format!("{}", value)
+            };
+        print!("{}", string);
     }
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
 }

@@ -193,7 +193,7 @@ impl Runtime {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Attribute '{}' not found", id),
+                            &format!("Attribute '{}' not found in '{}'", id, object),
                             context,
                             index,
                             bindex
@@ -238,20 +238,20 @@ impl Runtime {
                     if let Some(value) = attr {
                         context.set_register(dest, value);
                     } else {
-                        /* throw_error_message!(
+                        throw_error_message!(
                             self,
                             process,
-                            &format!("Attribute '{}' not found", id),
+                            &format!("Attribute '{}' not found in '{}'", id, object),
                             context,
                             index,
                             bindex
-                        );*/
-                        object.add_attribute_without_barrier(
+                        );
+                        /*object.add_attribute_without_barrier(
                             &self.state,
                             id,
                             Value::from(VTag::Undefined),
                         );
-                        context.set_register(dest, Value::from(VTag::Undefined))
+                        context.set_register(dest, Value::from(VTag::Undefined))*/
                     }
                 }
                 Instruction::LoadStaticById(r0, id) => {

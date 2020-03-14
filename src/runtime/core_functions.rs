@@ -145,26 +145,70 @@ pub extern "C" fn type_of(
     state: &RcState,
     proc: &Arc<Process>,
     _: Value,
-    args: &[Value]
-) -> Result<ReturnValue,Value> {
+    args: &[Value],
+) -> Result<ReturnValue, Value> {
     let value = args[0];
     if value.is_null_or_undefined() {
-        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"null"))));
+        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+            proc, state, "null",
+        ))));
     } else if value.is_number() {
-        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"number"))));
+        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+            proc, state, "number",
+        ))));
     } else if value.is_bool() {
-        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"bool"))));
+        return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+            proc, state, "bool",
+        ))));
     } else {
         match value.as_cell().get().value {
-            CellValue::Array(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"array")))),
-            CellValue::String(_) | CellValue::InternedString(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"string")))),
-            CellValue::Regex(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"regex")))),
-            CellValue::File(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"file")))),
-            CellValue::Duration(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"duration")))),
-            CellValue::Function(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"function")))),
-            CellValue::Module(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"module")))),
-            CellValue::Regex(_) => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"regex")))),
-            _ => return Ok(ReturnValue::Value(Value::from(Process::allocate_string(proc,state,"object")))),
+            CellValue::Array(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "array",
+                ))))
+            }
+            CellValue::String(_) | CellValue::InternedString(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "string",
+                ))))
+            }
+            CellValue::Regex(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "regex",
+                ))))
+            }
+            CellValue::File(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "file",
+                ))))
+            }
+            CellValue::Duration(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "duration",
+                ))))
+            }
+            CellValue::Function(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "function",
+                ))))
+            }
+            CellValue::Module(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "module",
+                ))))
+            }
+            CellValue::ByteArray(_) => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc,
+                    state,
+                    "bytearray",
+                ))))
+            }
+            _ => {
+                return Ok(ReturnValue::Value(Value::from(Process::allocate_string(
+                    proc, state, "object",
+                ))))
+            }
         }
     }
 }
@@ -196,8 +240,8 @@ pub fn initialize_core(state: &RcState) {
     let start = state.allocate_native_fn(__start, "__start__", 0);
     let instanceof = state.allocate_native_fn(instanceof, "instanceof", 2);
     let force_collect = state.allocate_native_fn(force_collect, "forceCollect", 0);
-    let tyof = state.allocate_native_fn(type_of,"typeof",1);
-    lock.insert("typeof".to_owned(),Value::from(tyof));
+    let tyof = state.allocate_native_fn(type_of, "typeof", 1);
+    lock.insert("typeof".to_owned(), Value::from(tyof));
     lock.insert("require".to_owned(), Value::from(require));
     lock.insert("__start__".to_owned(), Value::from(start));
     lock.insert("instanceof".to_owned(), Value::from(instanceof));

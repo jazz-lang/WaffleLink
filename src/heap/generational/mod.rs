@@ -393,19 +393,11 @@ impl GenerationalHeap {
             );
             self.nursery_space.add_page(self.nursery_space.page_size);
             self.young_threshold = (self.young_threshold as f64 / 0.5) as usize;
+        } else {
+            self.nursery_space.clear();
+            self.nursery_space.add_page(self.nursery_space.page_size);
         }
-        /*for page in self.nursery_space.pages.iter_mut() {
-            page.top = page.data;
-        }*/
-        // We keep only 2 * YOUNG_PAGE_SIZE bytes allocated, and try
-        // to free old memory to OS (pop_front should pop "oldest" pages).
-        let mut i = self.nursery_space.pages_count;
-        while i > 2 {
-            let page = self.nursery_space.pages.pop_front().unwrap();
-            i -= 1;
-            page.uncommit();
-        }
-        self.nursery_space.pages_count = i;
+        //
         log::trace!("Scavenging finished");
         if self.needs_gc != GenerationalGCType::Intermediate {
             self.needs_gc = GenerationalGCType::None;
@@ -418,13 +410,13 @@ impl GenerationalHeap {
         self.trace_process(proc);
         let survived = self.mark_live();
         self.tmp_space = Space::empty();
-        let size = if survived as f64 > self.intermediate_threshold as f64 * 0.5 {
+        let size = if survived as f64 > self.intermediate_threshold as f64 * 0.7 {
             self.intermediate_space.page_size = align_usize(
-                (self.nursery_space.page_size as f64 / 0.5) as usize,
+                (self.nursery_space.page_size as f64 / 0.7) as usize,
                 page_size(),
             );
             //self.nursery_space.add_page(self.nursery_space.page_size);
-            self.intermediate_threshold = (self.intermediate_threshold as f64 / 0.5) as usize;
+            self.intermediate_threshold = (self.intermediate_threshold as f64 / 0.7) as usize;
             self.intermediate_space.page_size
         } else {
             self.intermediate_space.page_size
