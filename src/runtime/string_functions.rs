@@ -145,6 +145,16 @@ native_fn!(_worker,state,proc => replace this(...args) {
     }
 });
 
+native_fn!(_worker,state,proc => substring this(...args) {
+    Ok(ReturnValue::Value(
+        Value::from(
+            Process::allocate_string(proc,state,
+                &(this.to_string())[args[0].to_number() as usize..args[1].to_number() as usize]
+            )
+        )
+    ))
+});
+
 pub fn initialize_string(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let cell = state.string_prototype.as_cell();
@@ -187,6 +197,10 @@ pub fn initialize_string(state: &RcState) {
     cell.add_attribute_without_barrier(
         &Arc::new("lengthUtf8".to_owned()),
         Value::from(state.allocate_native_fn(len_utf8, "lengthUtf8", 0)),
+    );
+    cell.add_attribute_without_barrier(
+        &Arc::new("substring".to_owned()),
+        Value::from(state.allocate_native_fn(substring,"substring",2))
     );
     lock.insert("String".to_owned(), Value::from(cell));
 }
