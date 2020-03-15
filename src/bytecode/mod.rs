@@ -17,7 +17,9 @@
 
 pub mod arithprofile;
 pub mod basicblock;
+pub mod cfg;
 pub mod instruction;
+pub mod loopanalysis;
 pub mod passes;
 pub mod reader;
 pub mod regalloc;

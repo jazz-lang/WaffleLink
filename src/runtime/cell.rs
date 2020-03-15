@@ -22,6 +22,7 @@ use super::state::*;
 use super::value::*;
 use super::*;
 use crate::bytecode;
+use crate::bytecode::cfg::FunctionCFG;
 use crate::heap::space::Space;
 use crate::interpreter::context::Context;
 use crate::util::arc::Arc;
@@ -67,12 +68,24 @@ pub type NativeFn = extern "C" fn(
     &[Value],
 ) -> Result<ReturnValue, Value>;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct FunctionMetadata {
     pub stack_size: usize,
     pub can_jit: bool,
     pub hotness: usize,
+    pub cfg: Option<FunctionCFG>,
+}
+
+impl Default for FunctionMetadata {
+    fn default() -> Self {
+        Self {
+            stack_size: 0,
+            can_jit: true,
+            hotness: 0,
+            cfg: None,
+        }
+    }
 }
 
 pub struct Function {

@@ -1,6 +1,24 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use super::liveness::*;
 use crate::bytecode::basicblock::*;
 use crate::bytecode::instruction::*;
+use crate::bytecode::loopanalysis::BCLoopAnalysisResult;
 use crate::util::arc::Arc;
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
 use log::{debug, error, info, trace, warn};
@@ -78,8 +96,8 @@ pub struct GraphColoring<'a> {
 
 impl<'a> GraphColoring<'a> {
     /// starts coloring
-    pub fn start(cf: &'a mut Arc<Vec<BasicBlock>>) -> GraphColoring<'a> {
-        GraphColoring::start_with_spill_history(LinkedHashMap::new(), 0, cf)
+    pub fn start(cf: &'a mut Arc<Vec<BasicBlock>>, a: &BCLoopAnalysisResult) -> GraphColoring<'a> {
+        GraphColoring::start_with_spill_history(LinkedHashMap::new(), 0, cf, a)
     }
 
     /// restarts coloring with spill history
@@ -87,6 +105,7 @@ impl<'a> GraphColoring<'a> {
         spill_scratch_temps: LinkedHashMap<ID, ID>,
         iteration_count: usize,
         cf: &'a mut Arc<Vec<BasicBlock>>,
+        analysis: &BCLoopAnalysisResult,
     ) -> GraphColoring<'a> {
         assert!(
             iteration_count < MAX_REWRITE_ITERATIONS_ALLOWED,
@@ -97,7 +116,7 @@ impl<'a> GraphColoring<'a> {
 
         trace!("Initializing coloring allocator...");
 
-        let ig = build_interference_graph_chaitin_briggs(cf);
+        let ig = build_interference_graph_chaitin_briggs(cf, analysis);
 
         let coloring = GraphColoring {
             cf: cf,
@@ -129,7 +148,7 @@ impl<'a> GraphColoring<'a> {
             select_stack: Vec::new(),
         };
 
-        coloring.regalloc()
+        coloring.regalloc(analysis)
     }
 
     pub fn spills(&self) -> Vec<ID> {
@@ -822,7 +841,7 @@ impl<'a> GraphColoring<'a> {
     }
 
     /// does coloring register allocation
-    fn regalloc(mut self) -> GraphColoring<'a> {
+    fn regalloc(mut self, a: &BCLoopAnalysisResult) -> GraphColoring<'a> {
         trace!("---InterenceGraph---");
         self.ig.print();
 
@@ -894,6 +913,7 @@ impl<'a> GraphColoring<'a> {
                 self.spill_scratch_temps.clone(),
                 self.iteration_count,
                 self.cf,
+                a,
             );
         }
 

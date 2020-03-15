@@ -1,6 +1,24 @@
+/*
+*   Copyright (c) 2020 Adel Prokurov
+*   All rights reserved.
+
+*   Licensed under the Apache License, Version 2.0 (the "License");
+*   you may not use this file except in compliance with the License.
+*   You may obtain a copy of the License at
+
+*   http://www.apache.org/licenses/LICENSE-2.0
+
+*   Unless required by applicable law or agreed to in writing, software
+*   distributed under the License is distributed on an "AS IS" BASIS,
+*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*   See the License for the specific language governing permissions and
+*   limitations under the License.
+*/
+
 use self::NodeType::*;
 use crate::bytecode::basicblock::*;
 use crate::bytecode::instruction::*;
+use crate::bytecode::loopanalysis::BCLoopAnalysisResult;
 use crate::util::arc::Arc;
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
 use log::{debug, info, trace, warn};
@@ -592,7 +610,10 @@ fn add_all<V: Eq + std::hash::Hash>(x: &mut LinkedHashSet<V>, mut y: LinkedHashS
 /// builds interference graph based on chaitin briggs algorithms
 /// reference: Tailoring Graph-coloring Register Allocation For Runtime Compilation
 /// - CGO'06, Figure 4
-pub fn build_interference_graph_chaitin_briggs(cf: &mut Arc<Vec<BasicBlock>>) -> InterferenceGraph {
+pub fn build_interference_graph_chaitin_briggs(
+    cf: &mut Arc<Vec<BasicBlock>>,
+    analysis: &BCLoopAnalysisResult,
+) -> InterferenceGraph {
     //let _p = hprof::enter("regalloc: build global liveness");
     build_global_liveness(cf);
 
@@ -617,7 +638,10 @@ pub fn build_interference_graph_chaitin_briggs(cf: &mut Arc<Vec<BasicBlock>>) ->
             Some(depth) => *depth,
             None => 0,
         };*/
-        let loop_depth = 0;
+        let loop_depth = match analysis.loop_depth.get(&(block.index as u16)) {
+            Some(depth) => *depth,
+            _ => 0,
+        };
         debug!("loop depth = {}", loop_depth);
         for i in block.instructions.iter() {
             // we separate the case of move nodes, and normal instruction
