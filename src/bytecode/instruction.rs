@@ -79,6 +79,7 @@ pub enum Instruction {
     SetThis(u16),
     LoadCurrentModule(u16),
     ToBoolean(u16, u16),
+    Yield(u16),
 }
 
 impl Instruction {
@@ -272,6 +273,9 @@ impl Instruction {
             Instruction::Return(None) => (),
             Instruction::MakeEnv(r0, _) => {
                 use_set.insert(vreg!(*r0));
+            }
+            Instruction::Yield(r) => {
+                use_set.insert(vreg!(*r));
             }
             Instruction::Push(r0) => {
                 use_set.insert(vreg!(*r0));

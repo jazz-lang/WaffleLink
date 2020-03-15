@@ -107,6 +107,7 @@ pub mod function_functions;
 pub mod interner;
 pub mod io_functions;
 pub mod math_object;
+pub mod generator;
 pub mod module;
 pub mod module_functions;
 pub mod number_functions;

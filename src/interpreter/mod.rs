@@ -23,6 +23,7 @@ use crate::heap::gc_pool::*;
 use crate::runtime::*;
 use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
+use function_functions::*;
 use cell::*;
 use context::*;
 use process::*;
@@ -432,6 +433,12 @@ impl Runtime {
                 }
                 Instruction::Call(dest, function, argc)
                 | Instruction::TailCall(dest, function, argc) => {
+                    let mut args = vec![];
+
+                    for _ in 0..argc {
+                        args.push(context.get().stack.pop().unwrap());
+                    }
+
                     let function = context.get_register(function);
                     if !function.is_cell() {
                         throw_error_message!(
@@ -449,21 +456,35 @@ impl Runtime {
                     }
                     let cell = function.as_cell();
                     let maybe_function = cell.function_value();
+
                     let function: &Function = match maybe_function {
                         Ok(function) => function,
                         Err(_) => {
-                            throw_error_message!(
-                                self,
-                                process,
-                                &format!(
-                                    "Cannot invoke '{}' value.(op {:?})",
-                                    function.to_string(),
-                                    ins
-                                ),
-                                context,
-                                index,
-                                bindex
-                            );
+                            /**/
+                            if let Some(apply) = cell.lookup_attribute(&self.state,&Arc::new("apply".to_owned())) {
+                                let array = Box::new(args);
+                                let array = Process::allocate(process,Cell::with_prototype(CellValue::Array(array),self.state.array_prototype.as_cell()));
+                                let result = invoke_value(worker,process,&self.state,apply,Value::from(VTag::Undefined),Value::from(array))?;
+                                match result {
+                                    ReturnValue::Value(val) => context.set_register(dest,val),
+                                    _ => unreachable!()
+                                };
+
+                                continue;
+                            } else {
+                                throw_error_message!(
+                                    self,
+                                    process,
+                                    &format!(
+                                        "Cannot invoke '{}' value.(op {:?})",
+                                        function.to_string(),
+                                        ins
+                                    ),
+                                    context,
+                                    index,
+                                    bindex
+                                );
+                            }
                         }
                     };
                     /*if argc as i32 != function.argc && function.argc != -1 {
@@ -479,11 +500,6 @@ impl Runtime {
                             bindex
                         );
                     }*/
-                    let mut args = vec![];
-
-                    for _ in 0..argc {
-                        args.push(context.get().stack.pop().unwrap());
-                    }
 
                     if let Some(native_fn) = function.native {
                         let result = native_fn(
@@ -588,22 +604,41 @@ impl Runtime {
                         );
                     }
                     let cell = function.as_cell();
+                    let mut args = vec![];
+
+                    for _ in 0..argc {
+                        args.push(context.stack.pop().unwrap());
+                    }
+                    let this = context.get_register(this);
                     let maybe_function = cell.function_value();
                     let function: &Function = match maybe_function {
                         Ok(function) => function,
                         Err(_) => {
-                            throw_error_message!(
-                                self,
-                                process,
-                                &format!(
-                                    "Cannot invoke '{}' value. (op {:?})",
-                                    function.to_string(),
-                                    ins
-                                ),
-                                context,
-                                index,
-                                bindex
-                            );
+                            /**/
+                            if let Some(apply) = cell.lookup_attribute(&self.state,&Arc::new("apply".to_owned())) {
+                                let array = Box::new(args);
+                                let array = Process::allocate(process,Cell::with_prototype(CellValue::Array(array),self.state.array_prototype.as_cell()));
+                                let result = invoke_value(worker,process,&self.state,apply,this,Value::from(array))?;
+                                match result {
+                                    ReturnValue::Value(val) => context.set_register(dest,val),
+                                    _ => unreachable!()
+                                };
+
+                                continue;
+                            } else {
+                                throw_error_message!(
+                                    self,
+                                    process,
+                                    &format!(
+                                        "Cannot invoke '{}' value.(op {:?})",
+                                        function.to_string(),
+                                        ins
+                                    ),
+                                    context,
+                                    index,
+                                    bindex
+                                );
+                            }
                         }
                     };
                     if argc as i32 != function.argc && function.argc != -1 {
@@ -619,12 +654,7 @@ impl Runtime {
                             bindex
                         );
                     }
-                    let mut args = vec![];
 
-                    for _ in 0..argc {
-                        args.push(context.stack.pop().unwrap());
-                    }
-                    let this = context.get_register(this);
 
                     if let Some(native_fn) = function.native {
                         let result = native_fn(worker, &self.state, process, this, &args);
