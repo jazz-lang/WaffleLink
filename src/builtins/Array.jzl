@@ -1,7 +1,7 @@
 Array.map = function map(f) {
     var new_array = new Array()
-    this.forEach(function iteri(elem) {
-        new_array.push(f(elem))
+    this.forEach(function iteri(elem,_index) {
+        new_array.push(f(elem,_index))
     })
     return new_array
 }
@@ -49,7 +49,7 @@ Array.retain = function retain(f) {
 
 Array.concat = function concat(a2) {
     var a3 = new Array()
-    this.forEach(|elem| a3.push(elem))
-    a2.forEach(|elem| a3.push(elem))
+    this.forEach(|elem,_index| a3.push(elem))
+    a2.forEach(|elem,_index| a3.push(elem))
     a3
 }

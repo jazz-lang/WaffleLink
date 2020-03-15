@@ -166,7 +166,11 @@ fn main() {
         simple_logger::init().unwrap();
     }
     CONFIG.write().directories.push(PathBuf::from(format!(
-        "{}/.waffle/std/",
+        "{}/.local/waffle/packages/std/",
+        dirs::home_dir().unwrap().display()
+    )));
+    CONFIG.write().directories.push(PathBuf::from(format!(
+        "{}/.local/waffle/packages/",
         dirs::home_dir().unwrap().display()
     )));
     let c = Config::default();

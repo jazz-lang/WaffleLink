@@ -84,6 +84,10 @@ impl ModuleRegistry {
                     found = true;
 
                     break;
+                } else if directory.join(&format!("{}.wfl", path)).exists() {
+                    input_path = directory.join(&format!("{}.wfl", path));
+                    found = true;
+                    break;
                 }
             }
 
