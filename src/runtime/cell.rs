@@ -100,7 +100,19 @@ pub struct Function {
 
 pub struct Generator {
     pub function: Value,
-    pub context: Ptr<Context>,
+    pub last_ip: usize,
+    pub last_bp: usize,
+    pub last_this: Value,
+    pub registers: [Value; 32],
+    pub stack: Vec<Value>,
+    pub upvalues: Vec<Value>,
+    pub complete: bool,
+    pub dest: u16,
+}
+
+pub enum GeneratorList {
+    NotStarted,
+    Next(Value, Option<Generator>),
 }
 
 pub enum CellValue {
@@ -118,6 +130,7 @@ pub enum CellValue {
     Process(Arc<Process>),
     Regex(Arc<Regex>),
     Duration(std::time::Duration),
+    GeneratorFunction(Box<Generator>),
     File(File),
 }
 
@@ -207,14 +220,62 @@ impl Cell {
     where
         F: FnMut(*const CellPointer),
     {
-        if let Some(ref prototype) = &self.prototype {
-            cb(prototype)
-        }
-        if self.attributes.is_null() == false {
-            for (_, attribute) in self.attributes.as_ref().unwrap().iter() {
-                if attribute.is_cell() {
-                    cb(&attribute.as_cell());
+        unsafe {
+            if let Some(ref prototype) = &self.prototype {
+                cb(prototype)
+            }
+            if self.attributes.is_null() == false {
+                for (_, attribute) in self.attributes.as_ref().unwrap().iter() {
+                    if attribute.is_cell() {
+                        cb(&attribute.u.ptr);
+                    }
                 }
+            }
+
+            match self.value {
+                CellValue::Array(ref array) => {
+                    for value in array.iter() {
+                        if value.is_cell() {
+                            cb(&value.u.ptr);
+                        }
+                    }
+                }
+                CellValue::Function(ref f) => {
+                    for value in f.upvalues.iter() {
+                        if value.is_cell() {
+                            cb(&value.u.ptr);
+                        }
+                    }
+                    if f.name.is_cell() {
+                        cb(&f.name.u.ptr);
+                    }
+                }
+                CellValue::GeneratorFunction(ref generator) => {
+                    if generator.function.is_cell() {
+                        cb(&generator.function.u.ptr);
+                    }
+                    for value in generator.stack.iter() {
+                        if value.is_cell() {
+                            cb(&value.u.ptr);
+                        }
+                    }
+
+                    for value in generator.registers.iter() {
+                        if value.is_cell() {
+                            cb(&value.u.ptr);
+                        }
+                    }
+                    for value in generator.upvalues.iter() {
+                        if value.is_cell() {
+                            cb(&value.u.ptr);
+                        }
+                    }
+
+                    if generator.last_this.is_cell() {
+                        cb(&generator.last_this.u.ptr);
+                    }
+                }
+                _ => (),
             }
         }
     }
@@ -498,7 +559,12 @@ impl CellPointer {
         if self.raw.is_null() {
             return true;
         }
-        false
+        match self.get().value {
+            CellValue::GeneratorFunction(ref gen) => gen.complete,
+            CellValue::String(ref s) => s.len() == 0,
+            CellValue::Number(ref n) => *n == 0.0,
+            _ => false,
+        }
     }
 
     pub fn attributes(&self) -> Vec<Value> {
@@ -611,6 +677,7 @@ impl CellPointer {
 
                 fmt_buf
             }
+            CellValue::GeneratorFunction(_) => "GeneratorFunction".to_owned(),
             CellValue::InternedString(ref s) => crate::runtime::interner::str(*s).to_string(),
             CellValue::Duration(d) => format!("Duration({})", d.as_millis()),
             CellValue::Process(_) => String::from("Process"),

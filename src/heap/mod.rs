@@ -168,7 +168,7 @@ pub trait HeapTrait {
     fn allocate(&mut self, proc: &Arc<Process>, tenure: GCType, cell: Cell) -> RootedCell;
     /// Copy object from one heap to another heap.
     fn copy_object(&mut self, proc: &Arc<Process>, object: Value) -> Value {
-        if !object.is_cell() {
+        if !object.is_cell() || object.is_empty() {
             return object;
         }
         //self.disable();
@@ -181,6 +181,33 @@ pub trait HeapTrait {
         let value_copy = match &to_copy.value {
             CellValue::Regex(ref r) => CellValue::Regex(r.clone()),
             CellValue::None => CellValue::None,
+            CellValue::GeneratorFunction(ref generator) => {
+                CellValue::GeneratorFunction(Box::new(Generator {
+                    complete: generator.complete,
+                    last_ip: generator.last_ip,
+                    function: self.copy_object(proc, generator.function),
+                    last_bp: generator.last_bp,
+                    dest: generator.dest,
+                    last_this: generator.last_this,
+                    upvalues: generator
+                        .upvalues
+                        .iter()
+                        .map(|value| self.copy_object(proc, *value))
+                        .collect(),
+                    stack: generator
+                        .stack
+                        .iter()
+                        .map(|value| self.copy_object(proc, *value))
+                        .collect(),
+                    registers: {
+                        let mut r = [Value::empty(); 32];
+                        for i in 0..32 {
+                            r[i] = self.copy_object(proc, generator.registers[i]);
+                        }
+                        r
+                    },
+                }))
+            }
             CellValue::Duration(d) => CellValue::Duration(d.clone()),
             CellValue::File(_) => panic!("Cannot copy file"),
             CellValue::Number(x) => CellValue::Number(*x),

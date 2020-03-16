@@ -23,9 +23,9 @@ use crate::heap::gc_pool::*;
 use crate::runtime::*;
 use crate::util::arc::Arc;
 use crate::util::ptr::Ptr;
-use function_functions::*;
 use cell::*;
 use context::*;
+use function_functions::*;
 use process::*;
 use scheduler::process_worker::ProcessWorker;
 use value::*;
@@ -133,14 +133,45 @@ impl Runtime {
                     let value = context.get_register(dest);
                     context.stack[ss0 as usize] = value;
                 }
-                Instruction::Return(value) => {
-                    let value = if let Some(value) = value {
+                Instruction::Return(value_r) => {
+                    let value = if let Some(value) = value_r {
                         context.get_register(value)
                     } else {
                         Value::from(VTag::Null)
                     };
                     self.clear_catch_tables(&context, process);
-
+                    if let Some(generator) = context.generator.as_ref() {
+                        assert!(generator.is_cell());
+                        let cell = generator.as_cell();
+                        match cell.get_mut().value {
+                            CellValue::GeneratorFunction(ref mut gen) => {
+                                gen.last_ip = index;
+                                gen.last_bp = bindex;
+                                gen.stack = context.stack.clone();
+                                gen.registers = context.registers;
+                                gen.upvalues = vec![];
+                                gen.complete = true;
+                                gen.function = context.function;
+                                gen.last_this = context.this;
+                                gen.dest = 255;
+                                if let Some(dest) = context.return_register {
+                                    if let Some(parent) = context.parent {
+                                        parent.get().set_register(dest, value);
+                                    }
+                                } else if context.terminate_upon_return {
+                                    assert!(!process.pop_context()); // generator could not be executed in main ctx.
+                                    return Ok(value);
+                                }
+                                assert!(!process.pop_context()); // generator could not be executed in main ctx.
+                                reset_context!(process, context, index, bindex);
+                                safepoint_and_reduce!(
+                                    self, process, reductions, index, bindex, context
+                                );
+                                continue;
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
                     if context.terminate_upon_return && !context.parent.is_none() {
                         process.pop_context();
                         return Ok(value);
@@ -431,6 +462,49 @@ impl Runtime {
 
                     process.local_data_mut().catch_tables.push(entry);
                 }
+                Instruction::Yield(dest, value) => {
+                    if let Some(generator) = context.generator.as_ref() {
+                        assert!(generator.is_cell());
+                        let value = context.get_register(value);
+                        let cell = generator.as_cell();
+                        match cell.get_mut().value {
+                            CellValue::GeneratorFunction(ref mut gen) => {
+                                gen.last_ip = index;
+                                gen.last_bp = bindex;
+                                gen.stack = context.stack.clone();
+                                gen.registers = context.registers;
+                                gen.upvalues = vec![];
+                                gen.complete = false;
+                                gen.function = context.function;
+                                gen.last_this = context.this;
+                                gen.dest = dest;
+                                if let Some(dest) = context.return_register {
+                                    if let Some(parent) = context.parent {
+                                        parent.get().set_register(dest, value);
+                                    }
+                                } else if context.terminate_upon_return {
+                                    assert!(!process.pop_context()); // generator could not be executed in main ctx.
+                                    return Ok(value);
+                                }
+                                assert!(!process.pop_context()); // generator could not be executed in main ctx.
+                                reset_context!(process, context, index, bindex);
+                                safepoint_and_reduce!(
+                                    self, process, reductions, index, bindex, context
+                                );
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        throw_error_message!(
+                            self,
+                            process,
+                            "yielding in non-generator context",
+                            context,
+                            index,
+                            bindex
+                        );
+                    }
+                }
                 Instruction::Call(dest, function, argc)
                 | Instruction::TailCall(dest, function, argc) => {
                     let mut args = vec![];
@@ -461,13 +535,28 @@ impl Runtime {
                         Ok(function) => function,
                         Err(_) => {
                             /**/
-                            if let Some(apply) = cell.lookup_attribute(&self.state,&Arc::new("apply".to_owned())) {
+                            if let Some(apply) =
+                                cell.lookup_attribute(&self.state, &Arc::new("apply".to_owned()))
+                            {
                                 let array = Box::new(args);
-                                let array = Process::allocate(process,Cell::with_prototype(CellValue::Array(array),self.state.array_prototype.as_cell()));
-                                let result = invoke_value(worker,process,&self.state,apply,Value::from(VTag::Undefined),Value::from(array))?;
+                                let array = Process::allocate(
+                                    process,
+                                    Cell::with_prototype(
+                                        CellValue::Array(array),
+                                        self.state.array_prototype.as_cell(),
+                                    ),
+                                );
+                                let result = invoke_value(
+                                    worker,
+                                    process,
+                                    &self.state,
+                                    apply,
+                                    Value::from(VTag::Undefined),
+                                    Value::from(array),
+                                )?;
                                 match result {
-                                    ReturnValue::Value(val) => context.set_register(dest,val),
-                                    _ => unreachable!()
+                                    ReturnValue::Value(val) => context.set_register(dest, val),
+                                    _ => unreachable!(),
                                 };
 
                                 continue;
@@ -615,13 +704,28 @@ impl Runtime {
                         Ok(function) => function,
                         Err(_) => {
                             /**/
-                            if let Some(apply) = cell.lookup_attribute(&self.state,&Arc::new("apply".to_owned())) {
+                            if let Some(apply) =
+                                cell.lookup_attribute(&self.state, &Arc::new("apply".to_owned()))
+                            {
                                 let array = Box::new(args);
-                                let array = Process::allocate(process,Cell::with_prototype(CellValue::Array(array),self.state.array_prototype.as_cell()));
-                                let result = invoke_value(worker,process,&self.state,apply,this,Value::from(array))?;
+                                let array = Process::allocate(
+                                    process,
+                                    Cell::with_prototype(
+                                        CellValue::Array(array),
+                                        self.state.array_prototype.as_cell(),
+                                    ),
+                                );
+                                let result = invoke_value(
+                                    worker,
+                                    process,
+                                    &self.state,
+                                    apply,
+                                    this,
+                                    Value::from(array),
+                                )?;
                                 match result {
-                                    ReturnValue::Value(val) => context.set_register(dest,val),
-                                    _ => unreachable!()
+                                    ReturnValue::Value(val) => context.set_register(dest, val),
+                                    _ => unreachable!(),
                                 };
 
                                 continue;
@@ -654,7 +758,6 @@ impl Runtime {
                             bindex
                         );
                     }
-
 
                     if let Some(native_fn) = function.native {
                         let result = native_fn(worker, &self.state, process, this, &args);

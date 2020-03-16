@@ -33,6 +33,7 @@ pub struct Context {
     pub index: usize,
     pub bindex: usize,
     pub code: Arc<Vec<BasicBlock>>,
+    pub generator: Option<Value>,
     pub this: Value,
     pub function: Value,
     pub terminate_upon_return: bool,
@@ -67,6 +68,7 @@ impl Context {
             terminate_upon_return: false,
             function: Value::empty(),
             in_tail: false,
+            generator: None,
             n: 0,
         }
     }

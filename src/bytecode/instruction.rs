@@ -79,7 +79,7 @@ pub enum Instruction {
     SetThis(u16),
     LoadCurrentModule(u16),
     ToBoolean(u16, u16),
-    Yield(u16),
+    Yield(u16, u16),
 }
 
 impl Instruction {
@@ -101,6 +101,9 @@ impl Instruction {
             };
         }
         match self {
+            Instruction::Yield(r, _) => {
+                def_set.insert(vreg!(*r));
+            }
             Instruction::LoadStaticById(r, _) => {
                 def_set.insert(vreg!(*r));
             }
@@ -274,7 +277,7 @@ impl Instruction {
             Instruction::MakeEnv(r0, _) => {
                 use_set.insert(vreg!(*r0));
             }
-            Instruction::Yield(r) => {
+            Instruction::Yield(_, r) => {
                 use_set.insert(vreg!(*r));
             }
             Instruction::Push(r0) => {
@@ -518,4 +521,5 @@ pub mod InstructionByte {
     pub const LOAD_UPVALUE: u8 = 0x38;
     pub const STORE_UPVALUE: u8 = 0x39;
     pub const TO_BOOLEAN: u8 = 0x3a;
+    pub const YIELD: u8 = 0x3b;
 }

@@ -97,8 +97,7 @@ impl<'a> BytecodeReader<'a> {
                         for _ in 0..block_size {
                             let op = self.read_u8();
                             assert!(
-                                op >= InstructionByte::LOAD_NULL
-                                    && op <= InstructionByte::TO_BOOLEAN,
+                                op >= InstructionByte::LOAD_NULL && op <= InstructionByte::YIELD,
                                 "unexpected opcode 0x{:x} at {}",
                                 op,
                                 self.bytes.position(),
@@ -353,6 +352,9 @@ impl<'a> BytecodeReader<'a> {
                                 }
                                 InstructionByte::STORE_UPVALUE => {
                                     Instruction::StoreUpvalue(self.read_u8() as _, self.read_u16())
+                                }
+                                InstructionByte::YIELD => {
+                                    Instruction::Yield(self.read_u8() as _, self.read_u8() as _)
                                 }
                                 _ => unreachable!("Unknown opcode {:x}", op),
                             };

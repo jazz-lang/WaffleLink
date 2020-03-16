@@ -58,6 +58,7 @@ pub extern "C" fn require(
                 in_tail: false,
                 index: 0,
                 bindex: 0,
+                generator: None,
                 parent: None,
                 function: main_fn,
                 code: function.code.clone(),

@@ -220,6 +220,11 @@ impl BytecodeWriter {
                 self.write(f as u8);
                 self.write(c);
             }
+            Instruction::Yield(r, r2) => {
+                self.write(YIELD);
+                self.write(r as u8);
+                self.write(r2 as u8);
+            }
             Instruction::Return(Some(r)) => {
                 self.write(RETURN);
                 self.write(r as u8);

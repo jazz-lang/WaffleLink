@@ -166,6 +166,7 @@ impl Process {
                     this: Value::from(VTag::Undefined),
                     return_register: None,
                     terminate_upon_return: true,
+                    generator: None,
                     n: 0,
                 };
 
