@@ -419,6 +419,7 @@ impl GenerationalHeap {
         log::debug!("Minor cycle: mark live objects");
         self.trace_process(proc);
         let survived = self.mark_live();
+        self.intermediate_set.prune();
         self.tmp_space = Space::empty();
         let size = if survived as f64 > self.intermediate_threshold as f64 * 0.7 {
             self.intermediate_space.page_size = align_usize(
@@ -448,6 +449,8 @@ impl GenerationalHeap {
         self.current = GenerationalGCType::Old;
         self.trace_process(proc);
         self.mark_live();
+        self.old_set.prune();
+        self.old2intermediate_set.prune();
         self.sweep_old();
     }
 
@@ -543,12 +546,9 @@ impl GenerationalHeap {
             if do_major {
                 log::trace!("Promotion failed, do major collection");
                 self.major(proc);
-                self.old_set.prune();
-                self.old2intermediate_set.prune();
                 log::trace!("Finish major GC");
             }
             log::trace!("Minor collection finished");
-            self.intermediate_set.prune();
         } else {
             log::trace!("Full GC triggered");
             log::trace!("Full GC: Scavenge");
@@ -557,9 +557,6 @@ impl GenerationalHeap {
             self.minor(proc);
             log::trace!("Full GC: Major");
             self.major(proc);
-            self.old2intermediate_set.prune();
-            self.old_set.prune();
-            self.intermediate_set.prune();
         }
     }
 }
