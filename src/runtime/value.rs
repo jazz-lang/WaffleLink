@@ -363,7 +363,7 @@ impl Value {
         }
     }
 
-    pub fn add_attribute_without_barrier(&self, state: &RcState, name: Arc<String>, value: Value) {
+    pub fn add_attribute_without_barrier(&self, state: &RcState, name: Value, value: Value) {
         if self.is_number() {
             state
                 .number_prototype
@@ -383,7 +383,7 @@ impl Value {
         &self,
         state: &RcState,
         proc: &Arc<Process>,
-        name: Arc<String>,
+        name: Value,
         value: Value,
     ) {
         if self.is_number() {
@@ -415,7 +415,7 @@ impl Value {
         }
     }
 
-    pub fn lookup_attribute_in_self(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
+    pub fn lookup_attribute_in_self(&self, state: &RcState, name: &Value) -> Option<Value> {
         if self.is_number() {
             state.number_prototype.lookup_attribute_in_self(state, name)
         } else if self.is_bool() {
@@ -429,7 +429,7 @@ impl Value {
         }
     }
 
-    pub fn lookup_attribute(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
+    pub fn lookup_attribute(&self, state: &RcState, name: &Value) -> Option<Value> {
         if self.is_number() {
             state
                 .number_prototype
@@ -653,5 +653,23 @@ unsafe impl Sync for Value {}
 impl From<RootedCell> for Value {
     fn from(c: RootedCell) -> Self {
         Self::from(c.as_cell())
+    }
+}
+use std::hash::{Hash, Hasher};
+
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        if self.is_cell() {
+            println!("hash cell");
+            self.as_cell().hash(h);
+        } else if self.is_int32() {
+            self.as_int32().hash(h);
+        } else if self.is_number() {
+            self.as_double().to_bits().hash(h);
+        } else {
+            unsafe {
+                self.u.as_int64.hash(h);
+            }
+        }
     }
 }

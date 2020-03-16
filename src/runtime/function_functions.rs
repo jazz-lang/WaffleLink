@@ -72,7 +72,7 @@ native_fn!(
                 let mut array = vec![];
                 for bb in func.code.iter() {
                     let mut cell = Cell::with_prototype(CellValue::None,state.object_prototype.as_cell());
-                    cell.add_attribute(Arc::new("index".to_owned()),Value::new_int(bb.index as _));
+                    cell.add_attribute(Process::allocate_string(proc, state,"index").into(),Value::new_int(bb.index as _));
                     let mut ins_array = vec![];
                     for ins in bb.instructions.iter() {
                         let string = format!("{:?}",ins);
@@ -80,13 +80,13 @@ native_fn!(
                         let name = split.next().unwrap();
                         let args = ins.args().iter().map(|x| if *x < std::u32::MAX as u64 {Value::new_int(*x as _)} else {Value::new_double(f64::from_bits(*x))}).collect();
                         let mut ins_cell = Cell::with_prototype(CellValue::None,state.object_prototype.as_cell());
-                        ins_cell.add_attribute(Arc::new("name".to_owned()),Value::from(state.intern_string(name.to_owned())));
-                        ins_cell.add_attribute(Arc::new("operands".to_owned()),Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()))));
+                        ins_cell.add_attribute(Process::allocate_string(proc, state,"name").into(),Value::from(state.intern_string(name.to_owned())));
+                        ins_cell.add_attribute(Process::allocate_string(proc, state,"operands").into(),Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(args)),state.array_prototype.as_cell()))));
                         ins_array.push(Value::from(Process::allocate(proc,ins_cell)));
                     }
 
                     let array_ = Value::from(Process::allocate(proc,Cell::with_prototype(CellValue::Array(Box::new(ins_array)),state.array_prototype.as_cell())));
-                    cell.add_attribute(Arc::new("instructions".to_owned()),array_);
+                    cell.add_attribute(Process::allocate_string(proc, state, "instructions").into(),array_);
                     array.push(Value::from(Process::allocate(proc,cell)));
                 }
 
@@ -115,15 +115,15 @@ pub fn initialize_function(state: &RcState) {
     let mut lock = state.static_variables.try_lock().unwrap();
     let func = state.function_prototype.as_cell();
     func.add_attribute_without_barrier(
-        &Arc::new("apply".to_owned()),
+        &Value::from(state.intern_string("apply".to_owned())),
         Value::from(state.allocate_native_fn(apply, "apply", 2)),
     );
     func.add_attribute_without_barrier(
-        &Arc::new("bytecode".to_owned()),
+        &Value::from(state.intern_string("bytecode".to_owned())),
         Value::from(state.allocate_native_fn(bytecode, "bytecode", 0)),
     );
     func.add_attribute_without_barrier(
-        &Arc::new("arguments".to_owned()),
+        &Value::from(state.intern_string("arguments".to_owned())),
         Value::from(state.allocate_native_fn(arguments, "arguments", 0)),
     );
     lock.insert("Function".to_owned(), Value::from(func));

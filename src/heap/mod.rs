@@ -252,10 +252,7 @@ pub trait HeapTrait {
             Cell::new(value_copy)
         };
         if let Some(map) = to_copy.attributes_map() {
-            let mut map_copy = AttributesMap::with_capacity_and_hasher(
-                map.len(),
-                fxhash::FxBuildHasher::default(),
-            );
+            let mut map_copy = AttributesMapTable::new();
             for (key, val) in map.iter() {
                 let key_copy = key.clone();
                 let val = self.copy_object(proc, *val);

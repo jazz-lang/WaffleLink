@@ -157,17 +157,27 @@ pub extern "C" fn array_remove(
 pub fn initialize_array_builtins(state: &RcState) {
     let array_prototype: CellPointer = state.array_prototype.as_cell();
     let new = state.allocate_native_fn(array_new, "constructor", -1);
-    array_prototype
-        .add_attribute_without_barrier(&Arc::new("constructor".to_owned()), Value::from(new));
-    let length = state.allocate_native_fn(array_length, "length", 0);
-    array_prototype
-        .add_attribute_without_barrier(&Arc::new("length".to_owned()), Value::from(length));
-    let push = state.allocate_native_fn(array_push, "push", 1);
-    array_prototype.add_attribute_without_barrier(&Arc::new("push".to_owned()), Value::from(push));
-    let pop = state.allocate_native_fn(array_pop, "pop", 0);
-    array_prototype.add_attribute_without_barrier(&Arc::new("pop".to_owned()), Value::from(pop));
     array_prototype.add_attribute_without_barrier(
-        &Arc::new("remove".to_owned()),
+        &Value::from(state.intern_string("constructor".to_owned())),
+        Value::from(new),
+    );
+    let length = state.allocate_native_fn(array_length, "length", 0);
+    array_prototype.add_attribute_without_barrier(
+        &Value::from(state.intern_string("length".to_owned())),
+        Value::from(length),
+    );
+    let push = state.allocate_native_fn(array_push, "push", 1);
+    array_prototype.add_attribute_without_barrier(
+        &Value::from(state.intern_string("push".to_owned())),
+        Value::from(push),
+    );
+    let pop = state.allocate_native_fn(array_pop, "pop", 0);
+    array_prototype.add_attribute_without_barrier(
+        &Value::from(state.intern_string("pop".to_owned())),
+        Value::from(pop),
+    );
+    array_prototype.add_attribute_without_barrier(
+        &Value::from(state.intern_string("remove".to_owned())),
         Value::from(state.allocate_native_fn(array_remove, "remove", 1)),
     );
     state

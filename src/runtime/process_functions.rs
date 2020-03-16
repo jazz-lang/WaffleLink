@@ -245,27 +245,27 @@ pub extern "C" fn current(
 
 pub fn initialize_process_prototype(state: &RcState) {
     let proc_prototype = state.process_prototype.as_cell();
-    let name = Arc::new("spawn".to_owned());
+    let name = state.intern_string("spawn".to_owned());
     let spawn = state.allocate_native_fn_with_name(spawn, "spawn", 1);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(spawn));
-    let name = Arc::new("send".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(spawn));
+    let name = state.intern_string("send".to_owned());
     let send = state.allocate_native_fn_with_name(send, "send", -1);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(send));
-    let name = Arc::new("receive_message".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(send));
+    let name = state.intern_string("receive_message".to_owned());
     let recv = state.allocate_native_fn_with_name(receive, "receive_message", 0);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(recv));
-    let name = Arc::new("wait_for_message".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(recv));
+    let name = state.intern_string("wait_for_message".to_owned());
     let wait = state.allocate_native_fn_with_name(wait_for_message, "wait_for_message", -1);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(wait));
-    let name = Arc::new("current".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(wait));
+    let name = state.intern_string("current".to_owned());
     let current = state.allocate_native_fn_with_name(current, "current", 0);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(current));
-    let name = Arc::new("has_messages".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(current));
+    let name = state.intern_string("has_messages".to_owned());
     let has_messages = state.allocate_native_fn_with_name(has_messages, "has_messages", 0);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(has_messages));
-    let name = Arc::new("recv".to_owned());
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(has_messages));
+    let name = state.intern_string("recv".to_owned());
     let recv = state.allocate_native_fn_with_name(receive_or_wait, "recv", -1);
-    proc_prototype.add_attribute_without_barrier(&name, Value::from(recv));
+    proc_prototype.add_attribute_without_barrier(&Value::from(name), Value::from(recv));
     state
         .static_variables
         .lock()

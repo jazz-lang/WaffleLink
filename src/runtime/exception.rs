@@ -43,7 +43,7 @@ pub extern "C" fn type_error(
         .as_cell();
     let mut cell = Cell::with_prototype(CellValue::None, proto);
     cell.add_attribute(
-        Arc::new("message".to_owned()),
+        Process::allocate_string(process, state, "message").into(),
         Process::allocate_string(process, state, &msg).into(),
     );
     Ok(ReturnValue::Value(Value::from(Process::allocate(
@@ -58,7 +58,10 @@ pub extern "C" fn exception_to_string(
     this: Value,
     _: &[Value],
 ) -> Result<ReturnValue, Value> {
-    let message = this.lookup_attribute(state, &Arc::new("message".to_owned()));
+    let message = this.lookup_attribute(
+        state,
+        &Value::from(Process::allocate_string(process, state, "message")),
+    );
     let message = if let None = message {
         "Unknown exception".to_owned()
     } else if let Some(message) = message {
@@ -80,14 +83,14 @@ pub fn initialize_exception(state: &RcState) {
     ));
     exception.add_attribute_without_barrier(
         state,
-        Arc::new("toString".to_owned()),
+        Value::from(state.intern_string("toString".to_owned())),
         Value::from(state.allocate_native_fn(exception_to_string, "toString", 0)),
     );
     vars.insert("Exception".to_owned(), Value::from(exception));
     let cell = state.allocate(Cell::with_prototype(CellValue::None, exception.as_cell()));
     cell.add_attribute_without_barrier(
         state,
-        Arc::new("constructor".to_owned()),
+        Value::from(state.intern_string("constructor".to_owned())),
         Value::from(state.allocate_native_fn(type_error, "constructor", -1)),
     );
 

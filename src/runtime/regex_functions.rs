@@ -80,15 +80,15 @@ pub extern "C" fn find(
                 let mut match_object =
                     Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
                 match_object.add_attribute(
-                    Arc::new("start".to_owned()),
+                    Process::allocate_string(process, state, "start").into(),
                     Value::new_int(match_.start() as _),
                 );
                 match_object.add_attribute(
-                    Arc::new("end".to_owned()),
+                    Process::allocate_string(process, state, "end").into(),
                     Value::new_int(match_.end() as _),
                 );
                 match_object.add_attribute(
-                    Arc::new("str".to_owned()),
+                    Process::allocate_string(process, state, "str").into(),
                     Value::from(Value::from(state.intern_string(match_.as_str().to_owned()))),
                 );
                 return Ok(ReturnValue::Value(
@@ -131,15 +131,15 @@ pub extern "C" fn find_iter(
                 let mut match_object =
                     Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
                 match_object.add_attribute(
-                    Arc::new("start".to_owned()),
+                    Process::allocate_string(process, state, "start").into(),
                     Value::new_int(match_.start() as _),
                 );
                 match_object.add_attribute(
-                    Arc::new("end".to_owned()),
+                    Process::allocate_string(process, state, "end").into(),
                     Value::new_int(match_.end() as _),
                 );
                 match_object.add_attribute(
-                    Arc::new("str".to_owned()),
+                    Process::allocate_string(process, state, "str").into(),
                     Value::from(state.intern_string(match_.as_str().to_owned())),
                 );
                 array.push(Value::from(Process::allocate(process, match_object)));
@@ -180,17 +180,17 @@ pub fn initialize_regex(state: &RcState) {
     lock.insert("Regex".to_owned(), Value::from(regex));
     regex.add_attribute_without_barrier(
         state,
-        Arc::new("constructor".to_owned()),
+        state.intern_string("constructor".to_owned()).into(),
         Value::from(state.allocate_native_fn(ctor, "constructor", 1)),
     );
     regex.add_attribute_without_barrier(
         state,
-        Arc::new("find".to_owned()),
+        state.intern_string("find".to_owned()).into(),
         Value::from(state.allocate_native_fn(find, "find", 1)),
     );
     regex.add_attribute_without_barrier(
         state,
-        Arc::new("findAll".to_owned()),
+        state.intern_string("findAll".to_owned()).into(),
         Value::from(state.allocate_native_fn(find_iter, "findAll", 1)),
     );
 }

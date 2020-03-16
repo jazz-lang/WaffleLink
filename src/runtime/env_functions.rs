@@ -59,11 +59,11 @@ pub fn initialize_env(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let mut env = Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
     env.add_attribute(
-        Arc::new("getHome".to_owned()),
+        Value::from(state.intern_string("getHome".to_owned())),
         Value::from(state.allocate_native_fn(get_home, "getHome", 0)),
     );
     env.add_attribute(
-        Arc::new("arguments".to_owned()),
+        Value::from(state.intern_string("arguments".to_owned())),
         Value::from(state.allocate_native_fn(arguments, "arguments", 0)),
     );
     lock.insert("env".to_owned(), Value::from(state.allocate(env)));
