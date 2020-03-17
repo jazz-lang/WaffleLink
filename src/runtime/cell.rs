@@ -120,7 +120,7 @@ impl AttributesMapTable {
     }
     pub fn get(&self, k: &Value) -> Option<&Value> {
         for (key, val) in self.values.iter() {
-            log::trace!("cmp {} == {} is {}", key, k, key == k);
+            //log::trace!("cmp {} == {} is {}", key, k, key == k);
             if key.to_string() == k.to_string() {
                 return Some(val);
             }
