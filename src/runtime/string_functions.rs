@@ -159,48 +159,48 @@ pub fn initialize_string(state: &RcState) {
     let mut lock = state.static_variables.lock();
     let cell = state.string_prototype.as_cell();
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("split".to_owned())),
+        &Arc::new("split".to_owned()),
         Value::from(state.allocate_native_fn(split, "split", -1)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("charAt".to_owned())),
+        &Arc::new("charAt".to_owned()),
         Value::from(state.allocate_native_fn(char_at, "charAt", 1)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("constructor".to_owned())),
+        &Arc::new("constructor".to_owned()),
         Value::from(state.allocate_native_fn(ctor, "constructor", 1)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("isDigit".to_owned())),
+        &Arc::new("isDigit".to_owned()),
         Value::from(state.allocate_native_fn(string_is_digit, "isDigit", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("isSpace".to_owned())),
+        &Arc::new("isSpace".to_owned()),
         Value::from(state.allocate_native_fn(string_is_space, "isSpace", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("isAlpha".to_owned())),
+        &Arc::new("isAlpha".to_owned()),
         Value::from(state.allocate_native_fn(string_is_alpha, "isAlpha", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("chars".to_owned())),
+        &Arc::new("chars".to_owned()),
         Value::from(state.allocate_native_fn(string_chars, "chars", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("length".to_owned())),
+        &Arc::new("length".to_owned()),
         Value::from(state.allocate_native_fn(string_length, "length", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("replace".to_owned())),
+        &Arc::new("replace".to_owned()),
         Value::from(state.allocate_native_fn(replace, "replace", -1)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("lengthUtf8".to_owned())),
+        &Arc::new("lengthUtf8".to_owned()),
         Value::from(state.allocate_native_fn(len_utf8, "lengthUtf8", 0)),
     );
     cell.add_attribute_without_barrier(
-        &Value::from(state.intern_string("substring".to_owned())),
-        Value::from(state.allocate_native_fn(substring, "substring", 2)),
+        &Arc::new("substring".to_owned()),
+        Value::from(state.allocate_native_fn(substring,"substring",2))
     );
     lock.insert("String".to_owned(), Value::from(cell));
 }

@@ -54,7 +54,7 @@ pub fn initialize_module(state: &RcState) {
     let mut lock = state.static_variables.lock();
     state.module_prototype.add_attribute_without_barrier(
         state,
-        Value::from(state.intern_string("exports".to_owned())),
+        Arc::new("exports".to_owned()),
         Value::from(state.allocate_native_fn(exports, "exports", 0)),
     );
     lock.insert("Module".to_owned(), state.module_prototype);

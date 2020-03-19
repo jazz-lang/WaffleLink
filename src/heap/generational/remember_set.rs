@@ -47,7 +47,7 @@ impl Chunk {
 
         self.index += 1;
         let i = self.index;
-        self.values[i - 1] = cell;
+        self.values[i] = cell;
         true
     }
 }

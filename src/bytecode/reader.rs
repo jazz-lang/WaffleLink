@@ -374,7 +374,7 @@ impl<'a> BytecodeReader<'a> {
                     });
                     func.add_attribute_without_barrier(
                         &rt.state,
-                        RUNTIME.state.intern_string("prototype".to_owned()).into(),
+                        Arc::new("prototype".to_owned()),
                         rt.state.allocate(Cell::with_prototype(
                             CellValue::None,
                             rt.state.object_prototype.as_cell(),

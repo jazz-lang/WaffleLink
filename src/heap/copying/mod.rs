@@ -90,8 +90,8 @@ impl CopyingCollector {
                     self.stack.push(Slot::from_ptr(cb));
                 });
                 self.remembered_permanent.insert(slot.value);
-            } else if !slot.value.get().color != CELL_BLACK {
-                slot.value.get_mut().color = CELL_BLACK;
+            } else if !slot.value.is_marked() {
+                slot.value.mark(true);
                 self.copy_object(&slot, &mut new_space);
             }
         }

@@ -34,16 +34,15 @@ pub extern "C" fn writeln(
     }*/
     for value in arguments.iter() {
         let value: &Value = value;
-        let string = if let Some(to_string) =
-            value.lookup_attribute(s, &Value::from(Process::allocate_string(p, s, "toString")))
-        {
-            match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
-                ReturnValue::Value(value) => format!("{}", value),
-                _ => unimplemented!(),
-            }
-        } else {
-            format!("{}", value)
-        };
+        let string =
+            if let Some(to_string) = value.lookup_attribute(s, &Arc::new("toString".to_owned())) {
+                match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
+                    ReturnValue::Value(value) => format!("{}", value),
+                    _ => unimplemented!(),
+                }
+            } else {
+                format!("{}", value)
+            };
         print!("{}", string);
     }
     println!();
@@ -59,16 +58,15 @@ pub extern "C" fn write(
 ) -> Result<ReturnValue, Value> {
     for value in arguments.iter() {
         let value: &Value = value;
-        let string = if let Some(to_string) =
-            value.lookup_attribute(s, &Value::from(Process::allocate_string(p, s, "toString")))
-        {
-            match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
-                ReturnValue::Value(value) => format!("{}", value),
-                _ => unimplemented!(),
-            }
-        } else {
-            format!("{}", value)
-        };
+        let string =
+            if let Some(to_string) = value.lookup_attribute(s, &Arc::new("toString".to_owned())) {
+                match invoke_value(w, p, s, to_string, *value, Value::from(VTag::Undefined))? {
+                    ReturnValue::Value(value) => format!("{}", value),
+                    _ => unimplemented!(),
+                }
+            } else {
+                format!("{}", value)
+            };
         print!("{}", string);
     }
     Ok(ReturnValue::Value(Value::from(VTag::Null)))
@@ -108,17 +106,17 @@ pub fn initialize_io(state: &RcState) {
     let io = Cell::with_prototype(CellValue::None, state.object_prototype.as_cell());
     let io = state.allocate(io);
     state.static_variables.lock().insert("io".to_owned(), io);
-    let name = Value::from(state.intern_string("writeln".to_owned()));
+    let name = Arc::new("writeln".to_owned());
     let writeln = state.allocate_native_fn_with_name(writeln, "writeln", -1);
     io.as_cell()
         .add_attribute_without_barrier(&name, Value::from(writeln));
 
-    let name = Value::from(state.intern_string("write".to_owned()));
+    let name = Arc::new("write".to_owned());
     let write = state.allocate_native_fn_with_name(write, "write", -1);
     io.as_cell()
         .add_attribute_without_barrier(&name, Value::from(write));
     io.as_cell().add_attribute_without_barrier(
-        &Value::from(state.intern_string("readln".to_owned())),
+        &Arc::new("readln".to_owned()),
         Value::from(state.allocate_native_fn(readln, "readln", -1)),
     );
 }

@@ -103,19 +103,19 @@ pub fn initialize_file(state: &RcState) {
     let file = state.file_prototype.as_cell();
     let mut lock = state.static_variables.lock();
     file.add_attribute_without_barrier(
-        &Value::from(state.intern_string("readOnly".to_owned())),
+        &Arc::new("readOnly".to_owned()),
         Value::from(state.allocate_native_fn(read_only, "readOnly", -1)),
     );
     file.add_attribute_without_barrier(
-        &Value::from(state.intern_string("readBytes".to_owned())),
+        &Arc::new("readBytes".to_owned()),
         Value::from(state.allocate_native_fn(read_bytes, "readBytes", -1)),
     );
     file.add_attribute_without_barrier(
-        &Value::from(state.intern_string("tryReadBytes".to_owned())),
+        &Arc::new("tryReadBytes".to_owned()),
         Value::from(state.allocate_native_fn(try_read_bytes, "tryReadBytes", -1)),
     );
     file.add_attribute_without_barrier(
-        &Value::from(state.intern_string("readToString".to_owned())),
+        &Arc::new("readToString".to_owned()),
         Value::from(state.allocate_native_fn(read_str, "readToString", 0)),
     );
     lock.insert("File".to_owned(), Value::from(file));

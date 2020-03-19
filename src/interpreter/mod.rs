@@ -214,7 +214,7 @@ impl Runtime {
                     if global.is_null_or_undefined() {
                         panic!("Null or undefined Id");
                     }
-                    let id = global;
+                    let id = global.to_string();
 
                     let object = context.get_register(object);
                     let id = Arc::new(id);
@@ -264,15 +264,16 @@ impl Runtime {
                             }
                         }
                     }
-                    let id = Process::allocate_string(process, &self.state, &value.to_string());
-                    let attr = object.lookup_attribute(&self.state, &Value::from(id.as_cell()));
+                    let id = value.to_string();
+                    let id = Arc::new(id);
+                    let attr = object.lookup_attribute(&self.state, &id);
                     if let Some(value) = attr {
                         context.set_register(dest, value);
                     } else {
                         throw_error_message!(
                             self,
                             process,
-                            &format!("Attribute '{}' not found in '{}'", id.as_cell(), object),
+                            &format!("Attribute '{}' not found in '{}'", id, object),
                             context,
                             index,
                             bindex
@@ -316,7 +317,7 @@ impl Runtime {
                     if global.is_null_or_undefined() {
                         panic!("Null or undefined Id");
                     }
-                    let id = global;
+                    let id = Arc::new(global.to_string());
                     let object = context.get_register(object);
                     let value = context.get_register(value);
 
@@ -369,7 +370,7 @@ impl Runtime {
                             }
                         }
                     }
-                    let id = key;
+                    let id = Arc::new(key.to_string());
                     object.add_attribute_barriered(&self.state, &process, id, value);
                 }
                 Instruction::Push(r) => {
@@ -511,7 +512,7 @@ impl Runtime {
                     for _ in 0..argc {
                         args.push(context.get().stack.pop().unwrap());
                     }
-
+                    args.reverse();
                     let function = context.get_register(function);
                     if !function.is_cell() {
                         throw_error_message!(
@@ -534,14 +535,9 @@ impl Runtime {
                         Ok(function) => function,
                         Err(_) => {
                             /**/
-                            if let Some(apply) = cell.lookup_attribute(
-                                &self.state,
-                                &Value::from(Process::allocate_string(
-                                    process,
-                                    &self.state,
-                                    "apply",
-                                )),
-                            ) {
+                            if let Some(apply) =
+                                cell.lookup_attribute(&self.state, &Arc::new("apply".to_owned()))
+                            {
                                 let array = Box::new(args);
                                 let array = Process::allocate(
                                     process,
@@ -708,14 +704,9 @@ impl Runtime {
                         Ok(function) => function,
                         Err(_) => {
                             /**/
-                            if let Some(apply) = cell.lookup_attribute(
-                                &self.state,
-                                &Value::from(Process::allocate_string(
-                                    process,
-                                    &self.state,
-                                    "apply",
-                                )),
-                            ) {
+                            if let Some(apply) =
+                                cell.lookup_attribute(&self.state, &Arc::new("apply".to_owned()))
+                            {
                                 let array = Box::new(args);
                                 let array = Process::allocate(
                                     process,
@@ -859,24 +850,16 @@ impl Runtime {
                                 Value::from(cell),
                                 cell.lookup_attribute_in_self(
                                     &self.state,
-                                    &Value::from(Process::allocate_string(
-                                        process,
-                                        &self.state,
-                                        "prototype",
-                                    )),
+                                    &Arc::new("prototype".to_owned()),
                                 )
                                 .unwrap()
                                 .as_cell(),
                             ),
                             Err(_) => {
-                                if let Some(ctor) = function.lookup_attribute_in_self(
-                                    &self.state,
-                                    &Value::from(Process::allocate_string(
-                                        process,
-                                        &self.state,
-                                        "constructor",
-                                    )),
-                                ) {
+                                let ctor = Arc::new("constructor".to_owned());
+                                if let Some(ctor) =
+                                    function.lookup_attribute_in_self(&self.state, &ctor)
+                                {
                                     let ctor_cell = ctor;
                                     if ctor.is_cell() {
                                         if let Ok(ctor) = ctor.as_cell().function_value() {
@@ -886,7 +869,7 @@ impl Runtime {
                                                 self,
                                                 process,
                                                 &format!(
-                                                    "Cannot invoke constructor on '{}' value.",
+                                                    "Cannot invoke constructor on '{}' value.(not a function)",
                                                     function.to_string()
                                                 ),
                                                 context,
@@ -899,7 +882,7 @@ impl Runtime {
                                             self,
                                             process,
                                             &format!(
-                                                "Cannot invoke constructor on '{}' value.",
+                                                "Cannot invoke constructor on '{}' value.(not a function)",
                                                 function.to_string()
                                             ),
                                             context,
@@ -912,7 +895,7 @@ impl Runtime {
                                         self,
                                         process,
                                         &format!(
-                                            "Cannot invoke constructor on '{}' value.",
+                                            "Cannot invoke constructor on '{}' value.(ctor not found)",
                                             function.to_string()
                                         ),
                                         context,

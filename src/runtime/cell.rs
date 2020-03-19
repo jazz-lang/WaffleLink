@@ -77,74 +77,6 @@ pub struct FunctionMetadata {
     pub cfg: Option<FunctionCFG>,
 }
 
-#[derive(Clone, PartialEq, Eq, Default)]
-pub struct AttributesMapTable {
-    pub values: Vec<(Value, Value)>,
-}
-
-impl AttributesMapTable {
-    pub fn new() -> Self {
-        Self { values: vec![] }
-    }
-    pub fn len(&self) -> usize {
-        self.values.len()
-    }
-
-    pub fn values(&self) -> Vec<&Value> {
-        self.values.iter().map(|x| &x.1).collect()
-    }
-
-    pub fn remove(&mut self, k: &Value) -> Option<Value> {
-        let mut pos = None;
-        for (i, (key, _)) in self.values.iter().enumerate() {
-            if key.to_string() == k.to_string() {
-                pos = Some(i);
-                break;
-            }
-        }
-
-        if let Some(p) = pos {
-            Some(self.values.remove(p).1)
-        } else {
-            None
-        }
-    }
-
-    pub fn get_mut(&mut self, k: &Value) -> Option<&mut Value> {
-        for (key, val) in self.values.iter_mut() {
-            if key.to_string() == k.to_string() {
-                return Some(val);
-            }
-        }
-        None
-    }
-    pub fn get(&self, k: &Value) -> Option<&Value> {
-        for (key, val) in self.values.iter() {
-            log::trace!("cmp {} == {} is {}", key, k, key == k);
-            if key.to_string() == k.to_string() {
-                return Some(val);
-            }
-        }
-        None
-    }
-
-    pub fn insert(&mut self, k: Value, v: Value) {
-        if let Some(field) = self.get_mut(&k) {
-            *field = v;
-        } else {
-            self.values.push((k, v));
-        }
-    }
-
-    pub fn contains(&self, k: Value) -> bool {
-        self.get(&k).is_some()
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, (Value, Value)> {
-        self.values.iter()
-    }
-}
-
 impl Default for FunctionMetadata {
     fn default() -> Self {
         Self {
@@ -212,7 +144,7 @@ pub struct Cell {
     pub forward: crate::util::mem::Address,
 }
 
-pub type AttributesMap = AttributesMapTable;
+pub type AttributesMap = hashlink::LinkedHashMap<Arc<String>, Value, fxhash::FxBuildHasher>;
 
 pub const MARK_BIT: usize = 0;
 
@@ -275,8 +207,9 @@ impl Cell {
     }
 
     /// Adds a new attribute to the current object.
-    pub fn add_attribute(&mut self, name: Value, object: Value) {
+    pub fn add_attribute(&mut self, name: Arc<String>, object: Value) {
         self.allocate_attributes_map();
+        assert!(name.references() != 0);
         self.attributes_map_mut().unwrap().insert(name, object);
     }
 
@@ -292,12 +225,9 @@ impl Cell {
                 cb(prototype)
             }
             if self.attributes.is_null() == false {
-                for (key, attribute) in self.attributes.as_ref().unwrap().iter() {
+                for (_, attribute) in self.attributes.as_ref().unwrap().iter() {
                     if attribute.is_cell() {
                         cb(&attribute.u.ptr);
-                    }
-                    if key.is_cell() {
-                        cb(&key.u.ptr);
                     }
                 }
             }
@@ -366,7 +296,7 @@ impl Cell {
     }
 
     /// Removes an attribute and returns it.
-    pub fn remove_attribute(&mut self, name: &Value) -> Option<Value> {
+    pub fn remove_attribute(&mut self, name: &Arc<String>) -> Option<Value> {
         if let Some(map) = self.attributes_map_mut() {
             map.remove(name)
         } else {
@@ -386,12 +316,12 @@ impl Cell {
     }
 
     /// Returns all the attribute names available to this object.
-    pub fn attribute_names(&self) -> Vec<Value> {
+    pub fn attribute_names(&self) -> Vec<&Arc<String>> {
         let mut attributes = Vec::new();
 
         if let Some(map) = self.attributes_map() {
             for (key, _) in map.iter() {
-                attributes.push(*key);
+                attributes.push(key);
             }
             //push_collection!(map, keys, attributes);
         }
@@ -399,7 +329,7 @@ impl Cell {
         attributes
     }
     /// Looks up an attribute without walking the prototype chain.
-    pub fn lookup_attribute_in_self(&self, name: &Value) -> Option<Value> {
+    pub fn lookup_attribute_in_self(&self, name: &Arc<String>) -> Option<Value> {
         if let Some(map) = self.attributes_map() {
             map.get(name).map(|x| *x)
         } else {
@@ -407,7 +337,7 @@ impl Cell {
         }
     }
     /// Looks up an attribute in either the current object or a parent object.
-    pub fn lookup_attribute(&self, name: &Value) -> Option<Value> {
+    pub fn lookup_attribute(&self, name: &Arc<String>) -> Option<Value> {
         let got = self.lookup_attribute_in_self(&name);
 
         if got.is_some() {
@@ -572,10 +502,9 @@ impl CellPointer {
 
         while let Some(proto) = prototype {
             if other.is_function() {
-                if let Some(other) = other.lookup_attribute_in_self(
-                    state,
-                    &Value::from(state.intern_string("prototype".to_owned())),
-                ) {
+                if let Some(other) =
+                    other.lookup_attribute_in_self(state, &Arc::new("prototype".to_owned()))
+                {
                     if other.as_cell() == proto {
                         return true;
                     }
@@ -592,17 +521,17 @@ impl CellPointer {
     }
 
     /// Adds an attribute to the object this pointer points to.
-    pub fn add_attribute(&self, proc: &Arc<Process>, name: &Value, attr: Value) {
+    pub fn add_attribute(&self, proc: &Arc<Process>, name: &Arc<String>, attr: Value) {
         proc.local_data_mut().heap.field_write_barrier(*self, attr);
         self.get_mut().add_attribute(name.clone(), attr);
     }
 
-    pub fn add_attribute_without_barrier(&self, name: &Value, attr: Value) {
+    pub fn add_attribute_without_barrier(&self, name: &Arc<String>, attr: Value) {
         self.get_mut().add_attribute(name.clone(), attr);
     }
 
     /// Looks up an attribute.
-    pub fn lookup_attribute(&self, state: &RcState, name: &Value) -> Option<Value> {
+    pub fn lookup_attribute(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
         if self.is_tagged_number() {
             state
                 .number_prototype
@@ -615,16 +544,8 @@ impl CellPointer {
     }
 
     /// Looks up an attribute without walking the prototype chain.
-    pub fn lookup_attribute_in_self(&self, state: &RcState, name: &Value) -> Option<Value> {
-        if self.is_tagged_number() {
-            state
-                .number_prototype
-                .as_cell()
-                .get()
-                .lookup_attribute_in_self(name)
-        } else {
-            self.get().lookup_attribute_in_self(name)
-        }
+    pub fn lookup_attribute_in_self(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
+        self.get().lookup_attribute_in_self(name)
     }
     pub fn is_false(&self) -> bool {
         if self.raw.is_null() {
@@ -650,7 +571,7 @@ impl CellPointer {
         false
     }
 
-    pub fn attribute_names(&self) -> Vec<Value> {
+    pub fn attribute_names(&self) -> Vec<&Arc<String>> {
         if self.is_tagged_number() {
             vec![]
         } else {
@@ -787,28 +708,6 @@ impl Clone for CellPointer {
 
 impl PartialEq for CellPointer {
     fn eq(&self, other: &Self) -> bool {
-        match (&self.get().value, &other.get().value) {
-            (CellValue::String(ref s1), CellValue::String(ref s2)) => {
-                if s1.len() != s2.len() {
-                    return false;
-                } else if Arc::ptr_eq(s1, s2) {
-                    return true;
-                } else {
-                    return **s1 == **s2;
-                }
-            }
-            (CellValue::InternedString(ref s1), CellValue::InternedString(ref s2)) => {
-                return *s1 == *s2;
-            }
-            (CellValue::String(ref s1), CellValue::InternedString(ref s2)) => {
-                return **s1 == *crate::runtime::interner::str(*s2);
-            }
-            (CellValue::InternedString(ref s2), CellValue::String(ref s1)) => {
-                return **s1 == *crate::runtime::interner::str(*s2);
-            }
-
-            _ => (),
-        }
         self.raw.untagged() == other.raw.untagged()
     }
 }
@@ -837,8 +736,10 @@ impl fmt::Display for CellPointer {
 
 #[no_mangle]
 pub extern "C" fn cell_add_attribute_wo_barrier(cell: *const Cell, key: Value, value: Value) {
+    let key = key.to_string();
+    let key_ptr = Arc::new(key);
     let pointer = CellPointer::from(cell);
-    pointer.add_attribute_without_barrier(&key, value);
+    pointer.add_attribute_without_barrier(&key_ptr, value);
 }
 
 pub extern "C" fn cell_add_attribute_barriered(
@@ -848,15 +749,18 @@ pub extern "C" fn cell_add_attribute_barriered(
     value: Value,
 ) {
     let proc = unsafe { Arc::from_raw(proc as *mut Process) };
-
+    let key = key.to_string();
+    let key_ptr = Arc::new(key);
     let pointer = CellPointer::from(cell);
-    pointer.add_attribute(&proc, &key, value);
+    pointer.add_attribute(&proc, &key_ptr, value);
 }
 
 #[no_mangle]
 pub extern "C" fn cell_lookup_attribute(cell: *const Cell, key: Value) -> Value {
+    let key = key.to_string();
+    let key_ptr = Arc::new(key);
     let pointer = CellPointer::from(cell);
-    if let Some(value) = pointer.lookup_attribute(&RUNTIME.state, &key) {
+    if let Some(value) = pointer.lookup_attribute(&RUNTIME.state, &key_ptr) {
         return value;
     } else {
         Value::empty()
@@ -882,16 +786,7 @@ unsafe impl Send for CellPointer {}
 use std::hash::{Hash, Hasher};
 impl Hash for CellPointer {
     fn hash<H: Hasher>(&self, h: &mut H) {
-        match self.get().value {
-            CellValue::String(ref s) => {
-                println!("hash str");
-                s.hash(h);
-            }
-            CellValue::InternedString(ref s) => {
-                crate::runtime::interner::str(*s).hash(h);
-            }
-            _ => (self.raw.raw as usize).hash(h),
-        }
+        (self.raw.raw as usize).hash(h);
     }
 }
 
