@@ -77,6 +77,77 @@ pub struct FunctionMetadata {
     pub cfg: Option<FunctionCFG>,
 }
 
+<<<<<<< HEAD
+=======
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct AttributesMapTable {
+    pub values: Vec<(Value, Value)>,
+}
+
+impl AttributesMapTable {
+    pub fn new() -> Self {
+        Self { values: vec![] }
+    }
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn values(&self) -> Vec<&Value> {
+        self.values.iter().map(|x| &x.1).collect()
+    }
+
+    pub fn remove(&mut self, k: &Value) -> Option<Value> {
+        let mut pos = None;
+        for (i, (key, _)) in self.values.iter().enumerate() {
+            if key.to_string() == k.to_string() {
+                pos = Some(i);
+                break;
+            }
+        }
+
+        if let Some(p) = pos {
+            Some(self.values.remove(p).1)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut(&mut self, k: &Value) -> Option<&mut Value> {
+        for (key, val) in self.values.iter_mut() {
+            if key.to_string() == k.to_string() {
+                return Some(val);
+            }
+        }
+        None
+    }
+    pub fn get(&self, k: &Value) -> Option<&Value> {
+        for (key, val) in self.values.iter() {
+            //log::trace!("cmp {} == {} is {}", key, k, key == k);
+            if key.to_string() == k.to_string() {
+                return Some(val);
+            }
+        }
+        None
+    }
+
+    pub fn insert(&mut self, k: Value, v: Value) {
+        if let Some(field) = self.get_mut(&k) {
+            *field = v;
+        } else {
+            self.values.push((k, v));
+        }
+    }
+
+    pub fn contains(&self, k: Value) -> bool {
+        self.get(&k).is_some()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, (Value, Value)> {
+        self.values.iter()
+    }
+}
+
+>>>>>>> 67a0b4bcc15a0006b6144505545becf43a229df7
 impl Default for FunctionMetadata {
     fn default() -> Self {
         Self {
