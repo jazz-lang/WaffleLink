@@ -77,8 +77,6 @@ pub struct FunctionMetadata {
     pub cfg: Option<FunctionCFG>,
 }
 
-<<<<<<< HEAD
-=======
 #[derive(Clone, PartialEq, Eq, Default)]
 pub struct AttributesMapTable {
     pub values: Vec<(Value, Value)>,
@@ -147,7 +145,6 @@ impl AttributesMapTable {
     }
 }
 
->>>>>>> 67a0b4bcc15a0006b6144505545becf43a229df7
 impl Default for FunctionMetadata {
     fn default() -> Self {
         Self {
