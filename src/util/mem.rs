@@ -1,20 +1,3 @@
-/*
-*   Copyright (c) 2020 Adel Prokurov
-*   All rights reserved.
-
-*   Licensed under the Apache License, Version 2.0 (the "License");
-*   you may not use this file except in compliance with the License.
-*   You may obtain a copy of the License at
-
-*   http://www.apache.org/licenses/LICENSE-2.0
-
-*   Unless required by applicable law or agreed to in writing, software
-*   distributed under the License is distributed on an "AS IS" BASIS,
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-*   See the License for the specific language governing permissions and
-*   limitations under the License.
-*/
-
 use std::cmp::*;
 use std::fmt;
 use std::sync::atomic::{AtomicPtr, Ordering};
@@ -544,11 +527,6 @@ impl Access {
 pub struct Address(pub usize);
 
 impl Address {
-    pub fn to_cell(&self) -> crate::runtime::cell::CellPointer {
-        crate::runtime::cell::CellPointer {
-            raw: super::tagged::TaggedPointer::new(self.to_mut_ptr()),
-        }
-    }
     #[inline(always)]
     pub const fn from(val: usize) -> Address {
         Address(val)
@@ -794,19 +772,3 @@ impl fmt::Display for FormattedSize {
 pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
 }
-
-/*pub fn alloc<T>() -> *mut T {
-    unsafe {
-        let layout = std::alloc::Layout::new::<T>();
-        libmimalloc_sys::mi_malloc_aligned(layout.size() as _, layout.align() as _) as *const T
-            as *mut _
-    }
-    //unsafe { libc::malloc(std::mem::size_of::<T>()) as *mut _ }
-}
-
-pub fn free<T: ?Sized>(ptr: *mut T) {
-    unsafe {
-        libmimalloc_sys::mi_free(ptr as *const _);
-    }
-}
-*/
