@@ -22,6 +22,16 @@ pub struct Threads {
 }
 
 impl Threads {
+    pub fn new() -> Threads {
+        Threads {
+            threads: Mutex::new(Vec::new()),
+            cond_join: Condvar::new(),
+            next_id: AtomicUsize::new(1),
+            safepoint: Mutex::new((0, 1)),
+            barrier: Barrier::new(),
+        }
+    }
+
     pub fn attach_current_thread(&self) {
         THREAD.with(|thread| {
             let mut threads = self.threads.lock();
