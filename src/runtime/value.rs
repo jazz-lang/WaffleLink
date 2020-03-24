@@ -6,7 +6,7 @@
 pub const NOT_INT52: usize = 1 << 52;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature="jit",target_arch="x86_64"))] {
+    if #[cfg(all(feature="jit",target_pointer_width="64"))] {
         #[derive(Copy, Clone)]
         #[repr(C)]
         pub union EncodedValueDescriptor {
