@@ -84,6 +84,19 @@ impl StringCell {
     }
 }
 
+#[derive(Copy, Clone)]
+pub struct ObjectCell {
+    pub mask: usize,
+    pub map: *mut u8,
+    pub proto: *mut u8,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct ArrayCell {
+    pub header: ObjectCell,
+    pub length: usize,
+}
+
 #[cfg(test)]
 mod tests {
     extern "C" {
