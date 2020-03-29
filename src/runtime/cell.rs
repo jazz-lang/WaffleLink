@@ -75,12 +75,11 @@ impl CellLock {
     }
 }
 
-pub trait CellTrait
-{
+pub trait CellTrait {
     fn base(&self) -> &mut Cell;
 }
 
-use std::ops::{Deref,DerefMut};
+use std::ops::{Deref, DerefMut};
 
 impl Deref for dyn CellTrait {
     type Target = Cell;

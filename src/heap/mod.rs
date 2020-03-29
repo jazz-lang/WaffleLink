@@ -8,10 +8,11 @@
 //! evacuation is triggered then full STW is used because we cannot properly move objects
 //! in concurrent mode (there are some read barriers,but we do not implement them).
 
+pub mod allocator;
 pub mod cell_state;
 pub mod freelist;
 pub mod heap_cell;
-
+pub mod marked_block;
 pub mod prelude {
     pub use super::cell_state::*;
     pub use super::freelist::*;

@@ -10,3 +10,7 @@ edition = "2018"
 paste = "0.1"
 parking_lot = "0.10"
 atomig = {version = "0.1", features = ["derive"]}
+libc = "*"
+[target.'cfg(target_family = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
+kernel32-sys = "0.2"

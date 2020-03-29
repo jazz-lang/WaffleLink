@@ -28,6 +28,6 @@ impl WaffleString {
 
 impl CellTrait for WaffleString {
     fn base(&self) -> &mut Cell {
-        unsafe {&mut *(&self.base as *const Cell as *mut Cell)}
+        unsafe { &mut *(&self.base as *const Cell as *mut Cell) }
     }
 }

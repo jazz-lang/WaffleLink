@@ -56,4 +56,6 @@ macro_rules! unlikely {
 }
 pub use std::intrinsics::{likely, unlikely};
 pub mod heap;
+pub mod memory;
 pub mod runtime;
+pub(crate) use memory::*;
