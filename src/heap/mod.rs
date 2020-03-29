@@ -2,7 +2,7 @@
 //!
 //! Cake is a concurrent mark&sweep garbage collector with optional evacutaion.
 //! GC is highly inspired by WebKit's Riptide garbage collector and borrows a
-//! lot ideas from it.
+//! lot ideas and code from it.
 //!
 //! Cake has concurrent mark&sweep and also optional evacuation for blocks. When
 //! evacuation is triggered then full STW is used because we cannot properly move objects

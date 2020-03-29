@@ -74,3 +74,23 @@ impl CellLock {
         self.mtx.unlock();
     }
 }
+
+pub trait CellTrait
+{
+    fn base(&self) -> &mut Cell;
+}
+
+use std::ops::{Deref,DerefMut};
+
+impl Deref for dyn CellTrait {
+    type Target = Cell;
+    fn deref(&self) -> &Cell {
+        self.base()
+    }
+}
+
+impl DerefMut for dyn CellTrait {
+    fn deref_mut(&mut self) -> &mut Cell {
+        self.base()
+    }
+}

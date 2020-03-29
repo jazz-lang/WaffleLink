@@ -1,5 +1,8 @@
+use super::cell::*;
+use super::cell_type::*;
 /// A string is represented either by a String or a rope of fibers.
 pub struct WaffleString {
+    base: Cell,
     length: usize,
     flags: u16,
     /// The poison is strategically placed and holds a value such the first 64 bits
@@ -20,5 +23,11 @@ impl WaffleString {
 
     pub fn value<'a>(&self) -> &String {
         &self.value
+    }
+}
+
+impl CellTrait for WaffleString {
+    fn base(&self) -> &mut Cell {
+        unsafe {&mut *(&self.base as *const Cell as *mut Cell)}
     }
 }
