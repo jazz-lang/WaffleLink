@@ -1,35 +1,12 @@
 [package]
-name = "waffle"
-version = "0.0.1"
-authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
+name = "wafflen"
+version = "0.1.0"
+authors = ["gtash <adel.prokurov@protonmail.com>"]
 edition = "2018"
-build = "build.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fxhash = "0.2"
-lazy_static = "1.4"
-cfg-if = "0.1"
+paste = "0.1"
 parking_lot = "0.10"
-libc = "0.2.68"
-
-[target.'cfg(target_family = "windows")'.dependencies]
-winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
-kernel32-sys = "0.2"
-
-[target.'cfg(not(target_arch = "wasm"))'.dependencies]
-rustyline = "6.0"
-
-[features]
-jit = ["word-tagging"]
-word-tagging = []
-threaded = []
-nightly = ["threaded","jit"]
-default = ["nightly"]
-
-
-[profile.release]
-opt-level = 3
-codegen-units = 1
-lto = true
-panic = "unwind"
+atomig = {version = "0.1", features = ["derive"]}
