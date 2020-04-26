@@ -1124,6 +1124,7 @@ pub extern "C" fn op_call(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Re
     }
     if cell.is_function() {
         let f = cell.func_value_unchecked_mut();
+        // TODO: Compile or invoke JITed code.
         #[cfg(feature = "jit")]
         {
             if f.can_jit {
@@ -1164,4 +1165,19 @@ pub extern "C" fn op_call(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Re
             local_data().allocate_string(format!("{} is not a function", function.to_string()))
         );
     }
+}
+
+pub extern "C" fn op_throw(frame: Frame, _: Ptr<Cell>, _: Ptr<u8>) -> Result<Value, Value> {
+    let exception = frame.rax;
+
+    local_data().frames.push(frame);
+    Err(exception)
+}
+
+pub extern "C" fn op_catch_setup(
+    frame: Frame,
+    func: Ptr<Cell>,
+    vpc: Ptr<u8>,
+) -> Result<Value, Value> {
+    unimplemented!()
 }
