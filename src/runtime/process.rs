@@ -40,6 +40,12 @@ impl LocalData {
 }
 
 impl LocalData {
+    pub fn stacktrace<W: std::fmt::Write>(&self,buffer: &mut W) -> std::fmt::Result {
+        for (i,frame) in self.frames.iter().enumerate() {
+            writeln!(buffer,"{}: {}",i,frame.func.func_value_unchecked().name.to_string())?;
+        }
+        Ok(())
+    }
     pub fn allocate_string(&mut self, s: impl AsRef<str>, f: &mut Frame) -> Value {
         let cell = Cell {
             prototype: Some(self.string_proto.as_cell()),

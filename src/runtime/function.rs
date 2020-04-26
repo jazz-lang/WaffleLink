@@ -43,6 +43,15 @@ impl Function {
             }
         }
     }
+    #[inline(always)]
+    pub fn get_bytecode_unchecked_mut(&mut self) -> &mut Vec<BasicBlock> {
+        unsafe {
+            match &mut self.code {
+                FunctionCode::Bytecode(bc) => bc,
+                _ => std::hint::unreachable_unchecked(),
+            }
+        }
+    }
 }
 
 pub enum FeedBack {
@@ -74,5 +83,5 @@ pub enum FunctionCode {
 }
 
 pub struct BasicBlock {
-    pub code: Vec<u8>,
+    pub code: Vec<OpV>,
 }

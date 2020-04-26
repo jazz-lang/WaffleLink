@@ -512,6 +512,16 @@ impl From<i32> for Value {
     }
 }
 
+impl From<f64> for Value {
+    fn from(x: f64) -> Value {
+        let as_i32 = x as i32;
+        if as_i32 as f64 != x || !(as_i32 == 0 && signbit!(x)) {
+            return Value::new_double(x)
+        } else {
+            return Value::new_int(as_i32);
+        }
+    }
+}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         unsafe { self.u.as_int64 == other.u.as_int64 }

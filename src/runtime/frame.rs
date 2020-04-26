@@ -1,4 +1,5 @@
 use super::cell::*;
+use super::function::*;
 use super::value::*;
 use crate::common::mem::{commit, uncommit, Address};
 use crate::common::ptr::*;
@@ -9,10 +10,9 @@ pub struct Frame {
     pub regs: Ptr<Value>,
     pub func: Ptr<Cell>,
     pub this: Value,
-    pub arguments: Vec<Value>,
-    pub stack: Vec<Value>,
+    pub arguments: Value,
+    pub sp: usize,
     pub module: Value,
-
     pub ip: usize,
     pub bp: usize,
     pub try_catch: Vec<u32>,
@@ -20,19 +20,27 @@ pub struct Frame {
 }
 
 impl Frame {
+    pub fn get_code(&self) -> &[BasicBlock] {
+        self.func.func_value_unchecked().get_bytecode_unchecked()
+    }
+    pub fn get_code_mut(&mut self) -> &mut [BasicBlock] {
+        self.func
+            .func_value_unchecked_mut()
+            .get_bytecode_unchecked_mut()
+    }
     pub fn new(this: Value, module: Value) -> Self {
         Self {
             this,
             bp: 0,
             ip: 0,
             func: Ptr::null(),
-            arguments: vec![],
+            arguments: Value::empty(),
             try_catch: vec![],
             rax: Value::new_int(0),
-            stack: Vec::with_capacity(256),
+            sp: 256,
             regs: Ptr::from_raw(
                 commit(
-                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256 + 4 * 1024),
                     false,
                 )
                 .to_mut_ptr::<u8>(),
@@ -42,7 +50,7 @@ impl Frame {
         }
     }
 
-    pub fn native_frame(this: Value, args: Vec<Value>, module: Value) -> Self {
+    pub fn native_frame(this: Value, args: Value, module: Value) -> Self {
         Self {
             func: Ptr::null(),
             this,
@@ -50,9 +58,16 @@ impl Frame {
             ip: 0,
             rax: Value::new_int(0),
             arguments: args,
-            stack: vec![],
             try_catch: vec![],
-            regs: Ptr::null(),
+            regs: Ptr::from_raw(
+                commit(
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256 + 4 * 1024),
+                    false,
+                )
+                .to_mut_ptr::<u8>(),
+            ),
+            sp: 256,
+
             exit_on_return: false,
             module,
         }
@@ -62,10 +77,8 @@ impl Frame {
         if self.this.is_cell() {
             stack.push_back(self.this.cell_ref());
         }
-        for arg in self.arguments.iter() {
-            if arg.is_cell() {
-                stack.push_back(arg.cell_ref());
-            }
+        if self.arguments.is_cell() {
+            stack.push_back(self.arguments.cell_ref());
         }
 
         if !self.regs.is_null() {
@@ -83,26 +96,27 @@ impl Frame {
         stack.push_back(self.module.cell_ref());
     }
 
-    pub fn r(&self, i: usize) -> &mut Value {
+    pub fn r(&self, i: u8) -> &mut Value {
         unsafe { &mut *self.regs.offset(i as _).raw }
     }
 
-    pub fn push(&mut self, val: Value) {
-        self.stack.push(val);
-    }
-
-    pub fn pop(&mut self) -> Value {
-        self.stack.pop().unwrap_or(Value::from(VTag::Undefined))
+    pub fn pop(&mut self) -> Option<&mut Value> {
+        if self.sp == 256 {
+            return None;
+        } else if self.sp == 256 + 1024 {
+            panic!("Max stack size reached");
+        } else {
+            unsafe { Some(&mut *self.regs.raw.offset(self.sp as _)) }
+        }
     }
 }
 
 impl Drop for Frame {
     fn drop(&mut self) {
-        self.stack.clear();
         self.this = Value::empty();
         uncommit(
             Address::from_ptr(self.regs.raw),
-            crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
+            crate::common::mem::page_align(std::mem::size_of::<Value>() * 256 + 8 * 1024),
         );
     }
 }

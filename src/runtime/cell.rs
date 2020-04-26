@@ -229,7 +229,12 @@ impl Cell {
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }
-
+    pub fn func_value_unchecked(&self) -> &Function {
+        match &self.value {
+            CellValue::Function(f) => f,
+            _ => unsafe { std::hint::unreachable_unchecked() },
+        }
+    }
     pub fn inline(&mut self, value: Value) -> u32 {
         self.slots.as_mut().unwrap().push(value);
         self.slots.as_mut().unwrap().len() as u32 - 1
