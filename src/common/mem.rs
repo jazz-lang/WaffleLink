@@ -1,6 +1,5 @@
 use std::cmp::*;
 use std::fmt;
-use std::sync::atomic::{AtomicPtr, Ordering};
 static mut PAGE_SIZE: usize = 0;
 static mut PAGE_SIZE_BITS: usize = 0;
 
@@ -232,14 +231,20 @@ mod tests {
 }
 
 #[cfg(target_family = "unix")]
-pub fn reserve(size: usize) -> Address {
-    debug_assert!(memory::is_page_aligned(size));
-
+pub fn reserve(size: usize, writable: bool, executable: bool) -> Address {
+    debug_assert!(mem::is_page_aligned(size));
+    let mut protection = libc::PROT_READ;
+    if writable {
+        protection |= libc::PROT_WRITE;
+    }
+    if executable {
+        protection |= libc::PROT_EXEC;
+    }
     let ptr = unsafe {
         libc::mmap(
             ptr::null_mut(),
             size,
-            libc::PROT_NONE,
+            protection,
             libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_NORESERVE,
             -1,
             0,
@@ -254,13 +259,22 @@ pub fn reserve(size: usize) -> Address {
 }
 
 #[cfg(target_family = "windows")]
-pub fn reserve(size: usize) -> Address {
-    debug_assert!(memory::is_page_aligned(size));
+pub fn reserve(size: usize, writable: bool, executable: bool) -> Address {
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualAlloc;
-    use winapi::um::winnt::{MEM_RESERVE, PAGE_NOACCESS};
+    use winapi::um::winnt::{
+        MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_NOACCESS, PAGE_READWRITE,
+    };
+    let prot = if executable && writable {
+        PAGE_EXECUTE_READWRITE
+    } else if executable {
+        PAGE_EXECUTE_READ
+    } else {
+        PAGE_READWRITE
+    };
 
-    let ptr = unsafe { VirtualAlloc(ptr::null_mut(), size as u64, MEM_RESERVE, PAGE_NOACCESS) };
+    let ptr = unsafe { VirtualAlloc(ptr::null_mut(), size as u64, MEM_RESERVE, prot) };
 
     if ptr.is_null() {
         panic!("VirtualAlloc failed");
@@ -269,14 +283,14 @@ pub fn reserve(size: usize) -> Address {
     Address::from_ptr(ptr)
 }
 
-pub fn reserve_align(size: usize, align: usize) -> Address {
-    debug_assert!(memory::is_page_aligned(size));
-    debug_assert!(memory::is_page_aligned(align));
+pub fn reserve_align(size: usize, align: usize, writable: bool, executable: bool) -> Address {
+    debug_assert!(mem::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(align));
 
     let align_minus_page = align - page_size();
 
-    let unaligned = reserve(size + align_minus_page);
-    let aligned: Address = memory::align_usize(unaligned.to_usize(), align).into();
+    let unaligned = reserve(size + align_minus_page, writable, executable);
+    let aligned: Address = mem::align_usize(unaligned.to_usize(), align).into();
 
     let gap_start = aligned.offset_from(unaligned);
     let gap_end = align_minus_page - gap_start;
@@ -294,7 +308,7 @@ pub fn reserve_align(size: usize, align: usize) -> Address {
 
 #[cfg(target_family = "unix")]
 pub fn commit(size: usize, executable: bool) -> Address {
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     let mut prot = libc::PROT_READ | libc::PROT_WRITE;
 
@@ -322,7 +336,7 @@ pub fn commit(size: usize, executable: bool) -> Address {
 
 #[cfg(target_family = "windows")]
 pub fn commit(size: usize, executable: bool) -> Address {
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualAlloc;
     use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PAGE_READWRITE};
@@ -345,7 +359,7 @@ pub fn commit(size: usize, executable: bool) -> Address {
 #[cfg(target_family = "unix")]
 pub fn commit_at(ptr: Address, size: usize, executable: bool) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     let mut prot = libc::PROT_READ | libc::PROT_WRITE;
 
@@ -372,7 +386,7 @@ pub fn commit_at(ptr: Address, size: usize, executable: bool) {
 #[cfg(target_family = "windows")]
 pub fn commit_at(ptr: Address, size: usize, executable: bool) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualAlloc;
     use winapi::um::winnt::{MEM_COMMIT, PAGE_EXECUTE_READWRITE, PAGE_READWRITE};
@@ -393,7 +407,7 @@ pub fn commit_at(ptr: Address, size: usize, executable: bool) {
 #[cfg(target_family = "unix")]
 pub fn uncommit(ptr: Address, size: usize) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     let val = unsafe {
         libc::mmap(
@@ -414,7 +428,7 @@ pub fn uncommit(ptr: Address, size: usize) {
 #[cfg(target_family = "windows")]
 pub fn uncommit(ptr: Address, size: usize) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualFree;
     use winapi::um::winnt::MEM_RELEASE;
@@ -425,7 +439,7 @@ pub fn uncommit(ptr: Address, size: usize) {
 #[cfg(target_family = "unix")]
 pub fn discard(ptr: Address, size: usize) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     let res = unsafe { libc::madvise(ptr.to_mut_ptr(), size, libc::MADV_DONTNEED) };
 
@@ -443,7 +457,7 @@ pub fn discard(ptr: Address, size: usize) {
 #[cfg(target_family = "windows")]
 pub fn discard(ptr: Address, size: usize) {
     debug_assert!(ptr.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualFree;
     use winapi::um::winnt::MEM_DECOMMIT;
@@ -454,7 +468,7 @@ pub fn discard(ptr: Address, size: usize) {
 #[cfg(target_family = "unix")]
 pub fn protect(start: Address, size: usize, access: Access) {
     debug_assert!(start.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     if access.is_none() {
         discard(start, size);
@@ -479,7 +493,7 @@ pub fn protect(start: Address, size: usize, access: Access) {
 #[cfg(target_family = "windows")]
 pub fn protect(start: Address, size: usize, access: Access) {
     debug_assert!(start.is_page_aligned());
-    debug_assert!(memory::is_page_aligned(size));
+    debug_assert!(mem::is_page_aligned(size));
 
     use kernel32::VirtualAlloc;
     use winapi::um::winnt::{
@@ -524,11 +538,11 @@ impl Access {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct Address(pub usize);
+pub struct Address(usize);
 
 impl Address {
     #[inline(always)]
-    pub const fn from(val: usize) -> Address {
+    pub fn from(val: usize) -> Address {
         Address(val)
     }
 
@@ -556,12 +570,12 @@ impl Address {
 
     #[inline(always)]
     pub fn add_ptr(self, words: usize) -> Address {
-        Address(self.0 + words * memory::ptr_width_usize())
+        Address(self.0 + words * mem::ptr_width_usize())
     }
 
     #[inline(always)]
     pub fn sub_ptr(self, words: usize) -> Address {
-        Address(self.0 - words * memory::ptr_width_usize())
+        Address(self.0 - words * mem::ptr_width_usize())
     }
 
     #[inline(always)]
@@ -601,17 +615,17 @@ impl Address {
 
     #[inline(always)]
     pub fn align_page(self) -> Address {
-        memory::page_align(self.to_usize()).into()
+        mem::page_align(self.to_usize()).into()
     }
 
     #[inline(always)]
     pub fn align_page_down(self) -> Address {
-        Address(self.0 & !(memory::page_size() - 1))
+        Address(self.0 & !(mem::page_size() - 1))
     }
 
     #[inline(always)]
     pub fn is_page_aligned(self) -> bool {
-        memory::is_page_aligned(self.to_usize())
+        mem::is_page_aligned(self.to_usize())
     }
 
     #[inline(always)]
@@ -619,31 +633,13 @@ impl Address {
         Self(self.0 & x.0)
     }
 
+    pub fn deref(self) -> Self {
+        unsafe { *(self.offset(0).to_mut_ptr::<Self>()) }
+    }
+
     #[inline(always)]
     pub const fn or(self, x: Address) -> Self {
         Self(self.0 | x.0)
-    }
-
-    pub fn deref(&self) -> Address {
-        unsafe {
-            assert!(self.is_non_null());
-            Address::from_ptr(*self.to_ptr::<*const u8>())
-        }
-    }
-    /// Atomically replaces the current pointer with the given one.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn atomic_store(&self, other: *mut u8) {
-        self.as_atomic().store(other, Ordering::Release);
-    }
-
-    /// Atomically loads the pointer.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn atomic_load(&self) -> *mut u8 {
-        self.as_atomic().load(Ordering::Acquire)
-    }
-
-    fn as_atomic(&self) -> &AtomicPtr<u8> {
-        unsafe { &*(self as *const Address as *const AtomicPtr<u8>) }
     }
 }
 
@@ -771,33 +767,4 @@ impl fmt::Display for FormattedSize {
 
 pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
-}
-
-#[cfg(target_family = "unix")]
-pub fn fast_aligned_malloc(alignment: usize, size: usize) -> *mut u8 {
-    let mut p = std::ptr::null_mut();
-    unsafe {
-        libc::posix_memalign(&mut p, alignment, size);
-        if p.is_null() {
-            panic!("Aligned malloc failed");
-        }
-
-        p as *mut u8
-    }
-}
-
-#[cfg(target_family = "windows")]
-pub fn fast_aligned_malloc(alignment: usize, size: usize) -> *mut u8 {
-    unsafe {
-        extern "C" {
-            fn _algined_malloc(_: usize, _: usize) -> *mut u8;
-        }
-
-        let p = _aligned_malloc(size, alignment);
-        if p.is_null() {
-            panic!("Alligned malloc failed");
-        }
-
-        p
-    }
 }

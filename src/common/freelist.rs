@@ -1,7 +1,6 @@
-use crate::common::mem::Address;
+use super::mem::*;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-
 pub struct SizeClass(usize);
 pub const K: usize = 1024;
 pub const SIZE_CLASSES: usize = 6;
@@ -73,10 +72,14 @@ impl SizeClass {
     fn idx(self) -> usize {
         self.0
     }
+
+    fn size(self) -> usize {
+        SIZES[self.0]
+    }
 }
 
 pub struct FreeList {
-    pub classes: Vec<FreeListClass>,
+    classes: Vec<FreeListClass>,
 }
 impl FreeList {
     pub fn new() -> FreeList {
@@ -113,7 +116,6 @@ impl FreeList {
     pub fn add(&mut self, addr: Address, size: usize) {
         if size < SIZE_SMALLEST {
             //fill_region(vm, addr, addr.offset(size));
-            println!("not smallest");
             return;
         }
 
@@ -147,7 +149,7 @@ use fxhash::FxBuildHasher;
 
 use std::collections::HashMap;
 
-pub struct FreeListClass {
+struct FreeListClass {
     head: FreeSpace,
     sizes: HashMap<Address, usize, FxBuildHasher>,
 }
@@ -191,8 +193,8 @@ impl FreeListClass {
                 } else {
                     prev.set_next(curr.next());
                 }
-
-                return (curr, self.size(curr.0));
+                let size = self.sizes.remove(&curr.0).unwrap();
+                return (curr, size);
             }
 
             prev = curr;

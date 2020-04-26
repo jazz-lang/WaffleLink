@@ -1,16 +1,51 @@
 [package]
-name = "wafflen"
+name = "jlight"
 version = "0.1.0"
-authors = ["gtash <adel.prokurov@protonmail.com>"]
+authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-paste = "0.1"
+cfg-if = "0.1"
+sorted-vec = "0.3"
+lazy_static = "1.4"
+fxhash ="*"
 parking_lot = "0.10"
-atomig = {version = "0.1", features = ["derive"]}
-libc = "*"
+bitvec = "0.17"
+may = "0.3"
+log = "0.4"
+paste = "0.1"
+libc = "0.2"
+cranelift = {version= "0.62.0", optional = true}
+cranelift-module = {version= "0.62.0",optional = true}
+cranelift-simplejit = {version= "0.62.0", optional = true}
+smallvec = "1.4"
+[features]
+use-slow-value = []
+use-value64 = []
+indirect-threaded = []
+direct-threaded = []
+loop-jit = ["jit"] # enables JIT for hot loops
+jit = ["cranelift","cranelift-module","cranelift-simplejit"] # enables BaselineJIT
+fast-jit = ["jit"] # enables FastJIT
+fusion-jit = ["jit"] # enables FusionJIT
+default = [
+    "use-value64",
+    "jit",
+    "loop-jit",
+    "fast-jit",
+    "fusion-jit"
+]
+
 [target.'cfg(target_family = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi","synchapi","sysinfoapi"] }
 kernel32-sys = "0.2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
