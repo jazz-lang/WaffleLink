@@ -2,14 +2,17 @@ use super::cell::*;
 use super::value::*;
 use crate::common::mem::{commit, uncommit, Address};
 use crate::common::ptr::*;
+
+#[repr(C)]
 pub struct Frame {
+    pub rax: Value,
+    pub regs: Ptr<Value>,
     pub func: Ptr<Cell>,
     pub this: Value,
     pub arguments: Vec<Value>,
     pub stack: Vec<Value>,
     pub module: Value,
-    pub regs: Ptr<Value>,
-    pub rax: Value,
+
     pub ip: usize,
     pub bp: usize,
     pub try_catch: Vec<u32>,
@@ -28,7 +31,11 @@ impl Frame {
             rax: Value::new_int(0),
             stack: Vec::with_capacity(256),
             regs: Ptr::from_raw(
-                commit(std::mem::size_of::<Value>() * 255, false).to_mut_ptr::<u8>(),
+                commit(
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
+                    false,
+                )
+                .to_mut_ptr::<u8>(),
             ),
             exit_on_return: false,
             module,
@@ -69,6 +76,10 @@ impl Frame {
                 }
             }
         }
+        stack.push_back(&self.func);
+        if !self.module.is_empty() {
+            stack.push_back(self.module.cell_ref());
+        }
         stack.push_back(self.module.cell_ref());
     }
 
@@ -91,7 +102,7 @@ impl Drop for Frame {
         self.this = Value::empty();
         uncommit(
             Address::from_ptr(self.regs.raw),
-            std::mem::size_of::<Value>() * 255,
+            crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
         );
     }
 }

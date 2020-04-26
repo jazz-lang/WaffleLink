@@ -324,7 +324,11 @@ impl Value {
         if self.is_bool() {
             return self.is_true();
         }
-        return !self.as_cell().is_false();
+        if self.is_cell() {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     pub fn to_number(&self) -> f64 {

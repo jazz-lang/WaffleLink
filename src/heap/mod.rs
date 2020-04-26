@@ -41,13 +41,15 @@ use crate::common::ptr::*;
 use crate::common::space::*;
 use crate::runtime;
 use runtime::cell::*;
+use runtime::frame::*;
 use runtime::process::*;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 pub struct Heap {
     pub alloc: allocator::FreeListAllocator,
     pub needs_gc: bool,
-    pub gc_threshold: AtomicUsize,
+    pub gc_threshold: usize,
+    pub allocated_bytes: usize,
 }
 
 impl Heap {
@@ -57,7 +59,8 @@ impl Heap {
                 16 * 1024, /* 16 kb per page */
             )),
             needs_gc: false,
-            gc_threshold: AtomicUsize::new(0),
+            gc_threshold: 4 * 1024, // first GC cycle at 4kb heap usage
+            allocated_bytes: 0,
         }
     }
 
@@ -69,7 +72,8 @@ impl Heap {
         }
     }
 
-    pub fn collect(&mut self) {
+    pub fn collect(&mut self, stack: &mut VecDeque<*const Ptr<Cell>>) {
+        self.needs_gc = false;
         // 1. Sweep termination
         for i in (0..self.alloc.space.pages.len()).rev() {
             let all_free = self.alloc.space.pages[i].sweep();
@@ -84,12 +88,11 @@ impl Heap {
             return;
         }
 
-        let mut stack = VecDeque::new();
         // 2. Root scanning
-        self.gather_roots(&mut stack);
+        self.gather_roots(stack);
 
         // 3. Marking
-        self.mark(&mut stack);
+        self.mark(stack);
         // 4. Initialize lazy sweep.
         self.sweep();
     }
@@ -110,15 +113,27 @@ impl Heap {
             }
         }
     }
-
-    pub fn allocate_cell(&mut self, cell: Cell) -> Ptr<Cell> {
+    pub fn allocate(&mut self, frame: &mut Frame, cell: Cell) -> Ptr<Cell> {
         let memory = self.alloc.allocate(std::mem::size_of::<Cell>(), false);
         let memory = if memory.is_null() {
-            self.collect();
+            let mut stack = VecDeque::new();
+            frame.trace(&mut stack);
+            self.collect(&mut stack);
             self.alloc.allocate(std::mem::size_of::<Cell>(), true)
         } else {
             memory
         };
+        let raw = memory.to_mut_ptr::<Cell>();
+        unsafe {
+            raw.write(cell);
+        }
+
+        Ptr {
+            raw: memory.to_mut_ptr::<Cell>(),
+        }
+    }
+    pub fn allocate_cell(&mut self, cell: Cell) -> Ptr<Cell> {
+        let memory = self.alloc.allocate(std::mem::size_of::<Cell>(), true);
         let raw = memory.to_mut_ptr::<Cell>();
         unsafe {
             raw.write(cell);

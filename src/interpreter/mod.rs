@@ -13,13 +13,14 @@ type IFn = extern "C" fn(Frame, Ptr<Cell>, Ptr<u8>) -> Result<Value, Value>;
 
 #[rustfmt::skip]
 #[no_mangle]
-static OP_TABLE: [IFn; 41] = [
-    op_star,
-    op_ldar,
-    op_mov,
-    op_add,
-    op_sub,
+static OP_TABLE: [IFn; 56] = [
+    op_star, // 0
+    op_ldar, // 1
+    op_mov, // 2
+    op_add, // 3
+    op_sub, // 4
     op_div,
+    op_mod,
     op_mul,
     op_ushr,
     op_shr,
@@ -27,12 +28,12 @@ static OP_TABLE: [IFn; 41] = [
     op_bor,
     op_band,
     op_bxor,
+    op_ldaundefined,
     op_lda_int,
     op_lda_true,
     op_lda_false,
     op_ldak,
     op_ldanull,
-    op_ldaundefined,
     op_ldaglobal,
     op_staglobal,
     op_lda_by_id,
@@ -43,7 +44,7 @@ static OP_TABLE: [IFn; 41] = [
     op_sta_by_idx,
     op_lda_own_property,
     op_sta_own_property,
-    op_lda_chain_property,
+    op_lda_proto_property,
     op_sta_own_property,
     op_lda_chain_property,
     op_sta_own_property,
@@ -55,6 +56,20 @@ static OP_TABLE: [IFn; 41] = [
     op_sta_slow_by_id,
     op_lda_slow_by_idx,
     op_sta_slow_by_idx,
+    op_lda_slow_by_idx,
+    op_sta_slow_by_idx,
+    op_push_acc,
+    op_pop_acc,
+    op_push_reg,
+    op_pop_reg,
+    op_lda_this,
+    op_call,
+    op_throw,
+    op_catch_setup,
+    op_loop_hint,
+    op_brc,
+    op_br,
+    op_return,
 ];
 
 pub fn interpret_with_error_handling(mut frame: Frame, start_block: usize) -> Value {
@@ -107,13 +122,24 @@ pub fn interpret_with_error_handling(mut frame: Frame, start_block: usize) -> Va
     }
 }
 
-#[inline]
-#[naked]
-pub extern "C" fn dispatch(frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<Value, Value> {
-    let op = *vpc.offset(0).get();
-    unsafe { OP_TABLE.get_unchecked(op as usize)(frame, func, vpc) }
+global_asm!(
+    "dispatch_asm:
+        movzbl  (%rdi), %eax
+        movq OP_TABLE(%rip),%rcx
+        jmpq *(%rcx,%rax,8)
+
+    "
+);
+
+#[inline(always)]
+#[no_mangle]
+pub extern "C" fn dispatch(_frame: Frame, _func: Ptr<Cell>, _vpc: Ptr<u8>) -> Result<Value, Value> {
+    let op = *_vpc.offset(0).get();
+
+    unsafe { OP_TABLE.get_unchecked(op as usize)(_frame, _func, _vpc) }
 }
 
+#[inline]
 pub extern "C" fn op_star(frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<Value, Value> {
     let r = *vpc.offset(1).get();
     let rax = frame.rax;
@@ -121,6 +147,7 @@ pub extern "C" fn op_star(frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result
     dispatch(frame, func, vpc.offset(2))
 }
 
+#[inline]
 pub extern "C" fn op_ldar(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<Value, Value> {
     let r = *vpc.offset(1).get();
     let value = *frame.r(r as usize);
@@ -128,6 +155,7 @@ pub extern "C" fn op_ldar(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Re
     dispatch(frame, func, vpc.offset(2))
 }
 
+#[inline]
 pub extern "C" fn op_mov(frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<Value, Value> {
     let r = *vpc.offset(1).get();
     let r2 = *vpc.offset(2).get();
@@ -136,6 +164,7 @@ pub extern "C" fn op_mov(frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<
     dispatch(frame, func, vpc.offset(3))
 }
 #[naked]
+#[inline]
 pub extern "C" fn op_add(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -161,7 +190,7 @@ pub extern "C" fn op_add(
 
             return dispatch(frame, func, vpc);
         } else {
-            frame.rax = op_add_slow(acc, val);
+            frame.rax = op_add_slow(acc, val, &mut frame);
             let rax_ty = frame.rax.primitive_ty();
             *func
                 .func_value_unchecked_mut()
@@ -177,16 +206,17 @@ pub extern "C" fn op_add(
     }
 }
 
-pub fn op_add_slow(x: Value, y: Value) -> Value {
+pub fn op_add_slow(x: Value, y: Value, f: &mut Frame) -> Value {
     if x.is_number() && y.is_number() {
         Value::new_double(x.to_number() + y.to_number())
     } else if x.is_null_or_undefined() || y.is_null_or_undefined() {
         Value::from(VTag::Undefined)
     } else {
-        local_data().allocate_string(format!("{}{}", x.to_string(), y.to_string()))
+        local_data().allocate_string(format!("{}{}", x.to_string(), y.to_string()), f)
     }
 }
 #[naked]
+#[inline]
 pub extern "C" fn op_sub(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -222,6 +252,7 @@ fn op_sub_slow(_x: Value, _y: Value) -> Value {
     Value::new_double(std::f64::NAN)
 }
 
+#[inline]
 pub extern "C" fn op_div(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -261,6 +292,7 @@ pub extern "C" fn op_div(
     }
 }
 
+#[inline]
 pub extern "C" fn op_mul(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -292,6 +324,7 @@ pub extern "C" fn op_mul(
     }
 }
 
+#[inline]
 pub extern "C" fn op_mod(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -323,6 +356,7 @@ pub extern "C" fn op_mod(
     }
 }
 
+#[inline]
 pub extern "C" fn op_ushr(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -356,6 +390,7 @@ pub extern "C" fn op_ushr(
     }
 }
 
+#[inline]
 pub extern "C" fn op_shr(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -389,6 +424,7 @@ pub extern "C" fn op_shr(
     }
 }
 
+#[inline]
 pub extern "C" fn op_shl(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -422,6 +458,7 @@ pub extern "C" fn op_shl(
     }
 }
 
+#[inline]
 pub extern "C" fn op_bor(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -455,6 +492,7 @@ pub extern "C" fn op_bor(
     }
 }
 
+#[inline]
 pub extern "C" fn op_band(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -488,6 +526,7 @@ pub extern "C" fn op_band(
     }
 }
 
+#[inline]
 pub extern "C" fn op_bxor(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -521,6 +560,7 @@ pub extern "C" fn op_bxor(
     }
 }
 
+#[inline]
 pub extern "C" fn op_ldaundefined(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -530,6 +570,7 @@ pub extern "C" fn op_ldaundefined(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_lda_int(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -540,6 +581,7 @@ pub extern "C" fn op_lda_int(
     dispatch(frame, func, vpc.offset(5))
 }
 
+#[inline]
 pub extern "C" fn op_lda_true(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -549,6 +591,7 @@ pub extern "C" fn op_lda_true(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_lda_false(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -558,6 +601,7 @@ pub extern "C" fn op_lda_false(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_ldak(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -573,6 +617,7 @@ pub extern "C" fn op_ldak(
     dispatch(frame, func, vpc.offset(5))
 }
 
+#[inline]
 pub extern "C" fn op_ldanull(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -582,6 +627,7 @@ pub extern "C" fn op_ldanull(
     dispatch(frame, func, vpc.offset(5))
 }
 
+#[inline]
 pub extern "C" fn op_ldaglobal(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -603,6 +649,7 @@ pub extern "C" fn op_ldaglobal(
     dispatch(frame, func, vpc.offset(5))
 }
 
+#[inline]
 pub extern "C" fn op_staglobal(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -623,6 +670,7 @@ pub extern "C" fn op_staglobal(
     dispatch(frame, func, vpc.offset(5))
 }
 
+#[inline]
 pub extern "C" fn op_lda_by_id(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -632,6 +680,7 @@ pub extern "C" fn op_lda_by_id(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_lda_by_val(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -647,8 +696,9 @@ pub extern "C" fn op_lda_by_val(
     dispatch(frame, func, vpc.offset(3))
 }
 
+#[inline]
 pub extern "C" fn op_sta_by_val(
-    mut frame: Frame,
+    frame: Frame,
     func: Ptr<Cell>,
     vpc: Ptr<u8>,
 ) -> Result<Value, Value> {
@@ -661,6 +711,7 @@ pub extern "C" fn op_sta_by_val(
     dispatch(frame, func, vpc.offset(3))
 }
 
+#[inline]
 pub extern "C" fn op_lda_by_idx(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -670,6 +721,7 @@ pub extern "C" fn op_lda_by_idx(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_sta_by_idx(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -679,6 +731,7 @@ pub extern "C" fn op_sta_by_idx(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_sta_by_id(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -688,6 +741,7 @@ pub extern "C" fn op_sta_by_id(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_lda_own_property(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -728,6 +782,7 @@ pub extern "C" fn op_lda_own_property(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_lda_proto_property(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -773,6 +828,7 @@ pub extern "C" fn op_lda_proto_property(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_lda_chain_property(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -818,6 +874,7 @@ pub extern "C" fn op_lda_chain_property(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_sta_own_property(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -862,6 +919,7 @@ pub extern "C" fn op_sta_own_property(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_sta_own_id(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -899,6 +957,7 @@ pub extern "C" fn op_sta_own_id(
     }
     return dispatch(frame, func, vpc.offset(10));
 }
+#[inline]
 pub extern "C" fn op_lda_own_id(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -938,6 +997,7 @@ pub extern "C" fn op_lda_own_id(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_lda_proto_id(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -982,6 +1042,7 @@ pub extern "C" fn op_lda_proto_id(
     return dispatch(frame, func, vpc.offset(10));
 }
 
+#[inline]
 pub extern "C" fn op_lda_slow_by_id(
     mut frame: Frame,
     mut func: Ptr<Cell>,
@@ -1003,6 +1064,7 @@ pub extern "C" fn op_lda_slow_by_id(
 
     dispatch(frame, func, vpc.offset(10))
 }
+#[inline]
 pub extern "C" fn op_sta_slow_by_id(
     frame: Frame,
     mut func: Ptr<Cell>,
@@ -1024,6 +1086,7 @@ pub extern "C" fn op_sta_slow_by_id(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_lda_slow_by_idx(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1039,6 +1102,7 @@ pub extern "C" fn op_lda_slow_by_idx(
 
     dispatch(frame, func, vpc.offset(10))
 }
+#[inline]
 pub extern "C" fn op_sta_slow_by_idx(
     frame: Frame,
     func: Ptr<Cell>,
@@ -1054,6 +1118,7 @@ pub extern "C" fn op_sta_slow_by_idx(
     dispatch(frame, func, vpc.offset(10))
 }
 
+#[inline]
 pub extern "C" fn op_push_acc(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1064,6 +1129,7 @@ pub extern "C" fn op_push_acc(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_pop_acc(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1074,6 +1140,7 @@ pub extern "C" fn op_pop_acc(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_push_reg(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1085,6 +1152,7 @@ pub extern "C" fn op_push_reg(
     dispatch(frame, func, vpc.offset(2))
 }
 
+#[inline]
 pub extern "C" fn op_pop_reg(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1096,6 +1164,7 @@ pub extern "C" fn op_pop_reg(
     dispatch(frame, func, vpc.offset(2))
 }
 
+#[inline]
 pub extern "C" fn op_lda_this(
     mut frame: Frame,
     func: Ptr<Cell>,
@@ -1106,15 +1175,17 @@ pub extern "C" fn op_lda_this(
     dispatch(frame, func, vpc.offset(1))
 }
 
+#[inline]
 pub extern "C" fn op_call(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Result<Value, Value> {
     let function = *vpc.offset(1);
     let argc = *vpc.offset(2).cast::<u32>();
     let this = frame.rax;
     let function = *frame.r(function as _);
     if !function.is_cell() {
-        return Err(
-            local_data().allocate_string(format!("{} is not a function", function.to_string()))
-        );
+        return Err(local_data().allocate_string(
+            format!("{} is not a function", function.to_string()),
+            &mut frame,
+        ));
     }
 
     let mut cell = function.as_cell();
@@ -1161,12 +1232,14 @@ pub extern "C" fn op_call(mut frame: Frame, func: Ptr<Cell>, vpc: Ptr<u8>) -> Re
         local_data().frames.push(frame);
         return dispatch(new_frame, cell, new_vpc);
     } else {
-        return Err(
-            local_data().allocate_string(format!("{} is not a function", function.to_string()))
-        );
+        return Err(local_data().allocate_string(
+            format!("{} is not a function", function.to_string()),
+            &mut frame,
+        ));
     }
 }
 
+#[inline]
 pub extern "C" fn op_throw(frame: Frame, _: Ptr<Cell>, _: Ptr<u8>) -> Result<Value, Value> {
     let exception = frame.rax;
 
@@ -1174,10 +1247,83 @@ pub extern "C" fn op_throw(frame: Frame, _: Ptr<Cell>, _: Ptr<u8>) -> Result<Val
     Err(exception)
 }
 
+#[inline]
 pub extern "C" fn op_catch_setup(
-    frame: Frame,
+    mut frame: Frame,
     func: Ptr<Cell>,
     vpc: Ptr<u8>,
 ) -> Result<Value, Value> {
+    let catch_block = *vpc.offset(1).cast::<u32>();
+    frame.try_catch.push(catch_block);
+    dispatch(frame, func, vpc.offset(5))
+}
+
+// TODO: increment function hotness and loop hotness and jit compile loop if needed.
+#[inline]
+pub extern "C" fn op_loop_hint(
+    _frame: Frame,
+    _func: Ptr<Cell>,
+    _vpc: Ptr<u8>,
+) -> Result<Value, Value> {
     unimplemented!()
+}
+
+#[inline]
+pub extern "C" fn op_brc(
+    frame: Frame,
+    mut func: Ptr<Cell>,
+    mut vpc: Ptr<u8>,
+) -> Result<Value, Value> {
+    let condition = frame.rax.to_boolean();
+    let if_true = *vpc.offset(1).cast::<u32>();
+    let if_false = *vpc.offset(5).cast::<u32>();
+    if condition {
+        unsafe {
+            vpc = Ptr {
+                raw: func
+                    .func_value_unchecked_mut()
+                    .get_bytecode_unchecked()
+                    .get_unchecked(if_true as usize)
+                    .code
+                    .as_ptr() as *mut u8,
+            };
+        }
+    } else {
+        unsafe {
+            vpc = Ptr {
+                raw: func
+                    .func_value_unchecked_mut()
+                    .get_bytecode_unchecked()
+                    .get_unchecked(if_false as usize)
+                    .code
+                    .as_ptr() as *mut u8,
+            };
+        }
+    }
+    dispatch(frame, func, vpc)
+}
+
+#[inline]
+pub extern "C" fn op_br(
+    frame: Frame,
+    mut func: Ptr<Cell>,
+    mut vpc: Ptr<u8>,
+) -> Result<Value, Value> {
+    let block = *vpc.offset(1).cast::<u32>();
+    unsafe {
+        vpc = Ptr {
+            raw: func
+                .func_value_unchecked_mut()
+                .get_bytecode_unchecked()
+                .get_unchecked(block as usize)
+                .code
+                .as_ptr() as *mut u8,
+        };
+    }
+    dispatch(frame, func, vpc)
+}
+
+#[inline]
+pub extern "C" fn op_return(frame: Frame, _func: Ptr<Cell>, _vpc: Ptr<u8>) -> Result<Value, Value> {
+    return Ok(frame.rax);
 }

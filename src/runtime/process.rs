@@ -40,7 +40,7 @@ impl LocalData {
 }
 
 impl LocalData {
-    pub fn allocate_string(&mut self, s: impl AsRef<str>) -> Value {
+    pub fn allocate_string(&mut self, s: impl AsRef<str>, f: &mut Frame) -> Value {
         let cell = Cell {
             prototype: Some(self.string_proto.as_cell()),
             attributes: TaggedPointer::null(),
@@ -49,7 +49,7 @@ impl LocalData {
             slots: TaggedPointer::null(),
         };
 
-        Value::from(self.heap.allocate_cell(cell))
+        Value::from(self.heap.allocate(f, cell))
     }
 }
 

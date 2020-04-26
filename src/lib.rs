@@ -6,7 +6,10 @@
 #![allow(const_err)]
 #![feature(naked_functions)]
 #![feature(untagged_unions)]
-
+#![feature(global_asm)]
+#![allow(improper_ctypes)]
+#![feature(llvm_asm)]
+#![feature(asm)]
 #[macro_export]
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {
@@ -14,6 +17,7 @@ macro_rules! offset_of {
     };
 }
 pub mod arc;
+pub mod assembler;
 pub mod bytecode;
 pub mod common;
 pub mod heap;
