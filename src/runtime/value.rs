@@ -209,6 +209,14 @@ impl Value {
             pub fn as_int32(&self) -> i32 {
                 unsafe { self.u.as_int64 as i32 }
             }
+            #[inline(always)]
+            pub fn to_int32(&self) -> i32 {
+                if self.is_number() {
+                    self.to_number().floor() as i32
+                } else {
+                    0
+                }
+            }
 
         } else if #[cfg(feature="use-slow-value")] {
 

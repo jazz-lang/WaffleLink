@@ -100,13 +100,27 @@ impl Frame {
         unsafe { &mut *self.regs.offset(i as _).raw }
     }
 
+    pub fn get_constant(&self, ix: u16) -> Value {
+        self.func.func_value_unchecked().constants[ix as usize]
+    }
+
     pub fn pop(&mut self) -> Option<&mut Value> {
         if self.sp == 256 {
             return None;
-        } else if self.sp == 256 + 1024 {
+        } else if self.sp == 256 + 512 {
             panic!("Max stack size reached");
         } else {
             unsafe { Some(&mut *self.regs.raw.offset(self.sp as _)) }
+        }
+    }
+
+    pub fn push(&mut self, val: Value) {
+        if self.sp == 256 + 512 {
+            panic!("Max stack size reached");
+        } else {
+            unsafe {
+                self.regs.raw.offset(self.sp as _).write(val);
+            }
         }
     }
 }

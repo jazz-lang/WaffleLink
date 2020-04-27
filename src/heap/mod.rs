@@ -44,7 +44,6 @@ use runtime::cell::*;
 use runtime::frame::*;
 use runtime::process::*;
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicUsize;
 pub struct Heap {
     pub alloc: allocator::FreeListAllocator,
     pub needs_gc: bool,
