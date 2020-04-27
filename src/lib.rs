@@ -8,6 +8,7 @@
 #![feature(untagged_unions)]
 #![feature(global_asm)]
 #![allow(improper_ctypes)]
+#![feature(arbitrary_self_types)]
 #![feature(llvm_asm)]
 #[macro_export]
 macro_rules! offset_of {
@@ -18,9 +19,9 @@ macro_rules! offset_of {
 pub mod arc;
 pub mod assembler;
 pub mod bytecode;
-pub mod interpreter;
 pub mod common;
 pub mod heap;
+pub mod interpreter;
 
 #[cfg(feature = "jit")]
 pub mod jit;

@@ -27,6 +27,14 @@ impl Symbol {
     pub fn name(self) -> String {
         self.0.to_string()
     }
+
+    pub fn dummy() -> Self {
+        Self(Value::empty())
+    }
+
+    pub fn is_dummy(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 use std::hash::{Hash, Hasher};

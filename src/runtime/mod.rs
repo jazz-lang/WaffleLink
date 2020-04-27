@@ -5,6 +5,7 @@ pub mod function;
 pub mod map;
 pub mod module;
 pub mod process;
+pub mod structure;
 pub mod symbol;
 pub mod value;
 pub struct RuntimeOpts {
