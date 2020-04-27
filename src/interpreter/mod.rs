@@ -7,8 +7,9 @@ use runtime::function::*;
 use runtime::process::*;
 use runtime::symbol::*;
 use runtime::value::*;
+use OpV::*;
 pub fn run(mut frame: Frame) -> Result<Value, Value> {
-    loop {
+    'interp: loop {
         unsafe {
             use OpV::*;
             let code = frame.get_code();
@@ -273,7 +274,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                 LdaGlobalDirect(_) => unimplemented!(),
                 StaGlobalDirect(_) => unimplemented!(),
                 LdaById(base_r, key_r, fdbk) => {
-                    let bp = frame.bp;
+                    /*let bp = frame.bp;
                     let ip = frame.ip;
                     let feedback =
                         &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
@@ -322,10 +323,11 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                             frame.get_code_mut()[bp].code[ip - 1] =
                                 OpV::LdaSlowById(base_r, key_r, fdbk);
                         }
-                    }
+                    }*/
+                    lda_by_id(&mut frame, base_r, key_r, fdbk);
                 }
                 StaById(base_r, key_r, fdbk) => {
-                    let bp = frame.bp;
+                    /*let bp = frame.bp;
                     let ip = frame.ip;
                     let feedback =
                         &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
@@ -354,7 +356,8 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                             frame.get_code_mut()[bp].code[ip - 1] =
                                 StaSlowById(base_r, key_r, fdbk);
                         }
-                    }
+                    }*/
+                    sta_by_id(&mut frame, base_r, key_r, fdbk)
                 }
                 LdaByVal(base, val) => {
                     let mut base = *frame.r(base);
@@ -371,119 +374,389 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     frame.rax = slot.value();
                 }
                 LdaByIdx(base_r, idx_r, fdbk) => {
-                    let bp = frame.bp;
-                    let ip = frame.ip;
-                    let feedback =
-                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                    let mut should_cache = true;
-                    let mut misses = 0;
-                    if let FeedBack::Cache(_, _, m) = feedback {
-                        if *m >= 15 {
-                            should_cache = false;
-                        }
-                        misses = *m;
-                    }
-                    let mut base = *frame.r(base_r);
-                    let key = Symbol::new_index(idx_r as i32);
-                    let mut slot = Slot::new();
-                    if base.is_cell() && should_cache {
-                        let mut cell = base.as_cell();
-                        if cell.lookup(key, &mut slot) {
-                            if slot.base.raw == cell.raw {
-                                frame.get_code_mut()[bp].code[ip - 1] =
-                                    LdaOwnIdx(base_r, idx_r, fdbk);
-                            } else {
-                                if let Some(proto) = cell.prototype {
-                                    if slot.base.raw == proto.raw {
-                                        frame.get_code_mut()[bp].code[ip - 1] =
-                                            LdaProtoIdx(base_r, idx_r, fdbk);
-                                    } else {
-                                        frame.get_code_mut()[bp].code[ip - 1] =
-                                            LdaChainIdx(base_r, idx_r, fdbk);
-                                    }
-                                } else {
-                                    unreachable!()
-                                }
-                            }
-                            frame.rax = slot.value();
-                            let feedback =
-                                &mut frame.func.func_value_unchecked_mut().feedback_vector
-                                    [fdbk as usize];
-                            *feedback = FeedBack::Cache(slot.base.attributes, slot.offset, misses);
-                        } else {
-                            frame.rax = slot.value();
-                        }
-                    } else {
-                        base.lookup(key, &mut slot);
-                        frame.rax = slot.value();
-                        if !should_cache {
-                            frame.get_code_mut()[bp].code[ip - 1] =
-                                OpV::LdaSlowByIdx(base_r, idx_r, fdbk);
-                        }
-                    }
+                    lda_by_idx(&mut frame, base_r, idx_r, fdbk);
                 }
-                StaByIdx(base_r, key_r, fdbk) => {
-                    let bp = frame.bp;
-                    let ip = frame.ip;
-                    let feedback =
-                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                    let mut should_cache = true;
-                    let mut misses = 0;
-                    if let FeedBack::Cache(_, _, m) = feedback {
-                        if *m >= 15 {
-                            should_cache = false;
-                        }
-                        misses = *m;
-                    }
-                    let mut base = *frame.r(base_r);
-                    let key = Symbol::new_index(key_r as i32);
-                    let mut slot = Slot::new();
-                    if base.is_cell() && should_cache {
-                        let mut cell = base.as_cell();
-                        cell.insert(key, frame.rax, &mut slot);
-                        frame.get_code_mut()[bp].code[ip - 1] = StaOwnIdx(base_r, key_r, fdbk);
-                        let feedback = &mut frame.func.func_value_unchecked_mut().feedback_vector
-                            [fdbk as usize];
-                        *feedback = FeedBack::Cache(cell.attributes, slot.offset, misses);
-                    } else {
-                        base.insert(key, frame.rax, &mut slot);
-                        if !should_cache {
-                            frame.get_code_mut()[bp].code[ip - 1] =
-                                StaSlowByIdx(base_r, key_r, fdbk);
-                        }
-                    }
-                }
+                StaByIdx(base_r, key_r, fdbk) => sta_by_idx(&mut frame, base_r, key_r, fdbk),
                 LdaOwnProperty(base_r, key_r, fdbk) => {
-                    let bp = frame.bp;
-                    let ip = frame.ip;
                     let mut base = *frame.r(base_r);
                     let key = frame.get_constant(key_r);
                     let mut slot = Slot::new();
                     let feedback =
                         &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                    let uncache;
+
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
                             if base.as_cell().attributes.raw == attrs.raw {
                                 frame.rax = base.as_cell().direct(*offset);
-                                uncache = false;
                             } else {
                                 *misses += 1;
-                                uncache = true;
+                                lda_by_id(&mut frame, base_r, key_r, fdbk);
                             }
                         } else {
                             base.lookup(Symbol::new_value(key), &mut slot);
                             frame.rax = slot.value();
-                            uncache = false;
                         }
                     } else {
                         unreachable!();
                     };
-                    if uncache {
-                        frame.get_code_mut()[bp].code[ip - 1] = LdaById(base_r, key_r, fdbk);
+                }
+                StaOwnProperty(base_r, key_r, fdbk) => {
+                    let base = *frame.r(base_r);
+                    let value = frame.rax;
+
+                    let key = frame.get_constant(key_r);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            if base.as_cell().attributes.raw == attrs.raw {
+                                base.as_cell().store_direct(*offset, value);
+                            } else {
+                                *misses += 1;
+                                sta_by_id(&mut frame, base_r, key_r, fdbk);
+                            }
+                        } else {
+                            base.as_cell()
+                                .insert(Symbol::new_value(key), value, &mut slot);
+                        }
+                    } else {
+                        unreachable!();
                     }
                 }
+                LdaProtoProperty(base_r, key_r, fdbk) => {
+                    let mut base = *frame.r(base_r);
+
+                    let key = frame.get_constant(key_r);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            if let Some(proto) = base.as_cell().prototype {
+                                if proto.attributes.raw == attrs.raw {
+                                    frame.rax = proto.direct(*offset);
+                                } else {
+                                    *misses += 1;
+                                    lda_by_id(&mut frame, base_r, key_r, fdbk);
+                                }
+                            } else {
+                                *misses += 1;
+                                lda_by_id(&mut frame, base_r, key_r, fdbk);
+                            }
+                        } else {
+                            base.lookup(Symbol::new_value(key), &mut slot);
+                            frame.rax = slot.value();
+                        }
+                    }
+                }
+                LdaChainProperty(base_r, key_r, fdbk) => {
+                    let mut base = *frame.r(base_r);
+
+                    let key = frame.get_constant(key_r);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            let mut obj = Some(base.as_cell());
+                            while let Some(object) = obj {
+                                if object.attributes.raw == attrs.raw {
+                                    frame.rax = object.direct(*offset);
+                                    continue 'interp;
+                                } else {
+                                    obj = object.prototype;
+                                }
+                            }
+                            *misses += 1;
+                            lda_by_id(&mut frame, base_r, key_r, fdbk);
+                        } else {
+                            base.lookup(Symbol::new_value(key), &mut slot);
+                            frame.rax = slot.value();
+                        }
+                    }
+                }
+                LdaOwnIdx(base_r, idx_r, fdbk) => {
+                    let mut base = *frame.r(base_r);
+
+                    let key = Symbol::new_index(idx_r as _);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            if base.as_cell().attributes.raw == attrs.raw {
+                                frame.rax = base.as_cell().direct(*offset);
+                            } else {
+                                *misses += 1;
+                                lda_by_idx(&mut frame, base_r, idx_r, fdbk);
+                            }
+                        } else {
+                            base.lookup(key, &mut slot);
+                            frame.rax = slot.value();
+                        }
+                    }
+                }
+                LdaProtoIdx(base_r, idx_r, fdbk) => {
+                    let mut base = *frame.r(base_r);
+
+                    let key = Symbol::new_index(idx_r as _);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            if base.as_cell().attributes.raw == attrs.raw {
+                                frame.rax = base.as_cell().direct(*offset);
+                            } else {
+                                *misses += 1;
+                                lda_by_idx(&mut frame, base_r, idx_r, fdbk);
+                            }
+                        } else {
+                            base.lookup(key, &mut slot);
+                            frame.rax = slot.value();
+                        }
+                    }
+                }
+                LdaChainIdx { .. } => unimplemented!(),
+                StaOwnIdx(base_r, idx_r, fdbk) => {
+                    let mut base = *frame.r(base_r);
+
+                    let key = Symbol::new_index(idx_r as _);
+                    let mut slot = Slot::new();
+                    let feedback =
+                        &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+                    if let FeedBack::Cache(attrs, offset, misses) = feedback {
+                        if base.is_cell() {
+                            if base.as_cell().attributes.raw == attrs.raw {
+                                base.as_cell().store_direct(*offset, frame.rax);
+                            } else {
+                                *misses += 1;
+                                sta_by_idx(&mut frame, base_r, idx_r, fdbk);
+                            }
+                        } else {
+                            /*base.lookup(key, &mut slot);
+                            frame.rax = slot.value();*/
+                            base.insert(key, frame.rax, &mut slot);
+                        }
+                    }
+                }
+                LdaSlowById(base_r, key_r, _) => {
+                    let mut base = *frame.r(base_r);
+                    let key = Symbol::new_value(frame.get_constant(key_r));
+                    let mut slot = Slot::new();
+                    base.lookup(key, &mut slot);
+                    frame.rax = slot.value();
+                }
+                StaSlowById(base_r, key_r, _) => {
+                    let mut base = *frame.r(base_r);
+                    let key = Symbol::new_value(frame.get_constant(key_r));
+                    let mut slot = Slot::new();
+                    base.insert(key, frame.rax, &mut slot);
+                }
+                LdaSlowByIdx(base_r, key, _) => {
+                    let mut base = *frame.r(base_r);
+                    let key = Symbol::new_index(key as _);
+                    let mut slot = Slot::new();
+                    base.lookup(key, &mut slot);
+                    frame.rax = slot.value();
+                }
+                StaSlowByIdx(base_r, key, _) => {
+                    let mut base = *frame.r(base_r);
+                    let key = Symbol::new_index(key as _);
+                    let mut slot = Slot::new();
+                    base.insert(key, frame.rax, &mut slot);
+                }
+                PushA => {
+                    let val = frame.rax;
+                    frame.push(val);
+                }
+                PopA => {
+                    let val = frame
+                        .pop()
+                        .map(|x| *x)
+                        .unwrap_or(Value::from(VTag::Undefined));
+                    frame.rax = val;
+                }
+                PushR(r) => {
+                    let val = *frame.r(r);
+                    frame.push(val);
+                }
+                PopR(r) => {
+                    let val = frame
+                        .pop()
+                        .map(|x| *x)
+                        .unwrap_or(Value::from(VTag::Undefined));
+                    *frame.r(r) = val;
+                }
+                LdaThis => {
+                    let this = frame.this;
+                    frame.rax = this;
+                }
                 _ => (),
+            }
+        }
+    }
+
+    fn sta_by_idx(frame: &mut Frame, base_r: u8, key_r: u32, fdbk: u32) {
+        let bp = frame.bp;
+        let ip = frame.ip;
+        let feedback = &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+        let mut should_cache = true;
+        let mut misses = 0;
+        if let FeedBack::Cache(_, _, m) = feedback {
+            if *m >= 15 {
+                should_cache = false;
+            }
+            misses = *m;
+        }
+        let mut base = *frame.r(base_r);
+        let key = Symbol::new_index(key_r as i32);
+        let mut slot = Slot::new();
+        if base.is_cell() && should_cache {
+            let mut cell = base.as_cell();
+            cell.insert(key, frame.rax, &mut slot);
+            frame.get_code_mut()[bp].code[ip - 1] = StaOwnIdx(base_r, key_r, fdbk);
+            let feedback =
+                &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+            *feedback = FeedBack::Cache(cell.attributes, slot.offset, misses);
+        } else {
+            base.insert(key, frame.rax, &mut slot);
+            if !should_cache {
+                frame.get_code_mut()[bp].code[ip - 1] = StaSlowByIdx(base_r, key_r, fdbk);
+            }
+        }
+    }
+    fn lda_by_idx(frame: &mut Frame, base_r: u8, idx_r: u32, fdbk: u32) {
+        let bp = frame.bp;
+        let ip = frame.ip;
+        let feedback = &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+        let mut should_cache = true;
+        let mut misses = 0;
+        if let FeedBack::Cache(_, _, m) = feedback {
+            if *m >= 15 {
+                should_cache = false;
+            }
+            misses = *m;
+        }
+        let mut base = *frame.r(base_r);
+        let key = Symbol::new_index(idx_r as i32);
+        let mut slot = Slot::new();
+        if base.is_cell() && should_cache {
+            let mut cell = base.as_cell();
+            if cell.lookup(key, &mut slot) {
+                if slot.base.raw == cell.raw {
+                    frame.get_code_mut()[bp].code[ip - 1] = LdaOwnIdx(base_r, idx_r, fdbk);
+                } else {
+                    if let Some(proto) = cell.prototype {
+                        if slot.base.raw == proto.raw {
+                            frame.get_code_mut()[bp].code[ip - 1] =
+                                LdaProtoIdx(base_r, idx_r, fdbk);
+                        } else {
+                            frame.get_code_mut()[bp].code[ip - 1] =
+                                LdaChainIdx(base_r, idx_r, fdbk);
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                frame.rax = slot.value();
+                let feedback =
+                    &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+                *feedback = FeedBack::Cache(slot.base.attributes, slot.offset, misses);
+            } else {
+                frame.rax = slot.value();
+            }
+        } else {
+            base.lookup(key, &mut slot);
+            frame.rax = slot.value();
+            if !should_cache {
+                frame.get_code_mut()[bp].code[ip - 1] = OpV::LdaSlowByIdx(base_r, idx_r, fdbk);
+            }
+        }
+    }
+
+    fn sta_by_id(frame: &mut Frame, base_r: u8, key_r: u16, fdbk: u32) {
+        let bp = frame.bp;
+        let ip = frame.ip;
+        let feedback = &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+        let mut should_cache = true;
+        let mut misses = 0;
+        if let FeedBack::Cache(_, _, m) = feedback {
+            if *m >= 15 {
+                should_cache = false;
+            }
+            misses = *m;
+        }
+        let mut base = *frame.r(base_r);
+        let key = Symbol::new_value(frame.get_constant(key_r));
+        let mut slot = Slot::new();
+        if base.is_cell() && should_cache {
+            let mut cell = base.as_cell();
+            cell.insert(key, frame.rax, &mut slot);
+            frame.get_code_mut()[bp].code[ip - 1] = StaOwnProperty(base_r, key_r, fdbk);
+            let feedback =
+                &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+
+            *feedback = FeedBack::Cache(cell.attributes, slot.offset, misses);
+        } else {
+            base.insert(key, frame.rax, &mut slot);
+            if !should_cache {
+                frame.get_code_mut()[bp].code[ip - 1] = StaSlowById(base_r, key_r, fdbk);
+            }
+        }
+    }
+    fn lda_by_id(frame: &mut Frame, base_r: u8, key_r: u16, fdbk: u32) {
+        let bp = frame.bp;
+        let ip = frame.ip;
+        let feedback = &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+        let mut should_cache = true;
+        let mut misses = 0;
+        if let FeedBack::Cache(_, _, m) = feedback {
+            if *m >= 15 {
+                should_cache = false;
+            }
+            misses = *m;
+        }
+        let mut base = *frame.r(base_r);
+        let key = Symbol::new_value(frame.get_constant(key_r));
+        let mut slot = Slot::new();
+        if base.is_cell() && should_cache {
+            let mut cell = base.as_cell();
+            if cell.lookup(key, &mut slot) {
+                if slot.base.raw == cell.raw {
+                    frame.get_code_mut()[bp].code[ip - 1] = LdaOwnProperty(base_r, key_r, fdbk);
+                } else {
+                    if let Some(proto) = cell.prototype {
+                        if slot.base.raw == proto.raw {
+                            frame.get_code_mut()[bp].code[ip - 1] =
+                                LdaProtoProperty(base_r, key_r, fdbk);
+                        } else {
+                            frame.get_code_mut()[bp].code[ip - 1] =
+                                LdaChainProperty(base_r, key_r, fdbk);
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                }
+                frame.rax = slot.value();
+                let feedback =
+                    &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
+                *feedback = FeedBack::Cache(slot.base.attributes, slot.offset, misses);
+            } else {
+                frame.rax = slot.value();
+            }
+        } else {
+            base.lookup(key, &mut slot);
+            frame.rax = slot.value();
+            if !should_cache {
+                frame.get_code_mut()[bp].code[ip - 1] = OpV::LdaSlowById(base_r, key_r, fdbk);
             }
         }
     }
