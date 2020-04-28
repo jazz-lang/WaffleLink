@@ -71,7 +71,9 @@ impl<T> ArcWithoutWeak<T> {
     pub fn references(&self) -> usize {
         self.inner().references.load(Ordering::SeqCst)
     }
-
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        self.inner.as_ptr() == other.inner.as_ptr()
+    }
     pub fn as_ptr(&self) -> *mut T {
         self.inner.as_ptr() as _
     }

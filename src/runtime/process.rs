@@ -18,6 +18,7 @@ pub struct LocalData {
     pub globals: HashMap<Symbol, Value>,
     pub string_proto: Value,
     pub object_proto: Value,
+    pub array_proto: Value,
     pub function_proto: Value,
     pub number_proto: Value,
     pub boolean_proto: Value,
@@ -25,36 +26,62 @@ pub struct LocalData {
 
 impl LocalData {
     pub fn new() -> Self {
+        let mut heap = Heap::new();
+        let obj = heap.allocate_cell(Cell::new(None));
+        let str = heap.allocate_cell(Cell::new(Some(obj)));
         Self {
             frames: vec![],
             process: Value::empty(), // initialized later.
             heap: Heap::new(),
-            string_proto: Value::new_int(0),
-            object_proto: Value::new_int(0),
+            string_proto: Value::from(str),
+            object_proto: Value::from(obj),
             function_proto: Value::new_int(0),
             number_proto: Value::new_int(0),
             boolean_proto: Value::new_int(0),
+            array_proto: Value::new_int(0),
             globals: HashMap::new(),
         }
     }
 }
 
 impl LocalData {
-    pub fn stacktrace<W: std::fmt::Write>(&self,buffer: &mut W) -> std::fmt::Result {
-        for (i,frame) in self.frames.iter().enumerate() {
-            writeln!(buffer,"{}: {}",i,frame.func.func_value_unchecked().name.to_string())?;
+    pub fn stacktrace<W: std::fmt::Write>(&self, buffer: &mut W) -> std::fmt::Result {
+        for (i, frame) in self.frames.iter().enumerate() {
+            writeln!(
+                buffer,
+                "{}: {}",
+                i,
+                frame.func.func_value_unchecked().name.to_string()
+            )?;
         }
         Ok(())
+    }
+    pub fn allocate_cell(&mut self, cell: Cell) -> Value {
+        Value::from(self.heap.allocate_cell(cell))
     }
     pub fn allocate_string(&mut self, s: impl AsRef<str>, f: &mut Frame) -> Value {
         let cell = Cell {
             prototype: Some(self.string_proto.as_cell()),
-            attributes: TaggedPointer::null(),
             color: CELL_WHITE_A,
             value: CellValue::String(Box::new(s.as_ref().to_string())),
             slots: TaggedPointer::null(),
+            attributes: TaggedPointer::null(),
+            map: Arc::new(super::structure::Map::new_unique(Ptr::null(), false)),
         };
 
+        Value::from(self.heap.allocate(f, cell))
+    }
+
+    pub fn allocate_array(&mut self, values: Vec<Value>, f: &mut Frame) -> Value {
+        //let length = Value::new_int(values.len() as _);
+        let cell = Cell {
+            prototype: Some(self.object_proto.as_cell()),
+            color: CELL_WHITE_A,
+            value: CellValue::Array(Box::new(values)),
+            slots: TaggedPointer::null(),
+            attributes: TaggedPointer::null(),
+            map: Arc::new(super::structure::Map::new_unique(Ptr::null(), false)),
+        };
         Value::from(self.heap.allocate(f, cell))
     }
 }

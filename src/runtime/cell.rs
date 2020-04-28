@@ -1,8 +1,10 @@
 use super::function::*;
 use super::map::*;
 use super::process::*;
+use super::structure::Map as Structure;
 use super::symbol::*;
 use super::value::*;
+use crate::arc::ArcWithoutWeak as Arc;
 use crate::common::ptr::*;
 use std::collections::HashMap;
 pub enum CellValue {
@@ -35,39 +37,23 @@ pub type AttributesMap = Map;
 pub struct Cell {
     pub value: CellValue,
     pub(crate) color: u8,
-    pub(crate) attributes: TaggedPointer<Map>,
     pub(crate) prototype: Option<Ptr<Cell>>,
     pub(crate) slots: TaggedPointer<Vec<Value>>,
+    pub(crate) map: Arc<Structure>,
+    pub(crate) attributes: TaggedPointer<Map>,
 }
 
 impl Cell {
-    pub fn direct(&self, offset: u32) -> Value {
-        if self.slots.is_null() {
-            return Value::from(VTag::Undefined);
+    pub fn new(proto: Option<Ptr<Cell>>) -> Self {
+        Self {
+            value: CellValue::None,
+            color: 0,
+            prototype: proto,
+            slots: TaggedPointer::null(),
+            map: Arc::new(Structure::new_unique(Ptr::null(), true)),
+            attributes: TaggedPointer::null(),
         }
-        if offset >= self.slots.as_ref().unwrap().len() as u32 {
-            return Value::from(VTag::Undefined);
-        }
-        unsafe { *self.slots.as_ref().unwrap().get_unchecked(offset as usize) }
     }
-    pub fn direct_ref(&self, offset: u32) -> DerefPointer<Value> {
-        if self.slots.is_null() {
-            return DerefPointer::null();
-        }
-        if offset >= self.slots.as_ref().unwrap().len() as u32 {
-            return DerefPointer::null();
-        }
-        unsafe { DerefPointer::new(self.slots.as_ref().unwrap().get_unchecked(offset as usize)) }
-    }
-
-    pub fn to_string(&self) -> String {
-        String::new()
-    }
-
-    pub fn is_false(&self) -> bool {
-        false
-    }
-
     /// Returns an immutable reference to the attributes.
     pub fn attributes_map(&self) -> Option<&AttributesMap> {
         self.attributes.as_ref()
@@ -101,6 +87,36 @@ impl Cell {
         self.attributes = TaggedPointer::null();
     }
 
+    pub fn direct(&self, offset: u32) -> Value {
+        if self.slots.is_null() {
+            return Value::from(VTag::Undefined);
+        }
+        if offset >= self.slots.as_ref().unwrap().len() as u32 {
+            return Value::from(VTag::Undefined);
+        }
+        unsafe { *self.slots.as_ref().unwrap().get_unchecked(offset as usize) }
+    }
+    pub fn direct_ref(&self, offset: u32) -> DerefPointer<Value> {
+        if self.slots.is_null() {
+            return DerefPointer::null();
+        }
+        if offset >= self.slots.as_ref().unwrap().len() as u32 {
+            return DerefPointer::null();
+        }
+        unsafe { DerefPointer::new(self.slots.as_ref().unwrap().get_unchecked(offset as usize)) }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self.value {
+            CellValue::String(ref s) => (*s).to_string(),
+            _ => String::new(),
+        }
+    }
+
+    pub fn is_false(&self) -> bool {
+        false
+    }
+
     pub fn trace(&self, stack: &mut std::collections::VecDeque<*const Ptr<Cell>>) {
         if self.has_attributes() {
             for entry in self.attributes_map().unwrap().storage.iter() {
@@ -109,6 +125,7 @@ impl Cell {
                 }
             }
         }
+        //self.map.trace(stack);
         if let Some(slots) = self.slots.as_ref() {
             for value in slots.iter() {
                 if value.is_cell() {
@@ -125,7 +142,49 @@ impl Cell {
         }
     }
 
-    pub fn lookup_in_self(&self, sym: Symbol, slot: &mut Slot) -> bool {
+    pub fn lookup_in_self(&mut self, sym: Symbol, slot: &mut Slot) -> bool {
+        if !sym.is_index() && sym.name() == "length" {
+            match self.value {
+                CellValue::Array(ref a) => {
+                    slot.value_c = Value::new_int(a.len() as _);
+                    return true;
+                }
+                CellValue::String(ref a) => {
+                    slot.value_c = Value::new_int(a.len() as _);
+
+                    return true;
+                }
+                _ => (),
+            }
+        }
+        /*if sym.is_index() {
+            if let CellValue::Array(ref array) = &self.value {
+                if let Some(value) = array.get(sym.index() as usize) {
+                    slot.base = Ptr {
+                        raw: self as *const Self as *mut Self,
+                    };
+                    slot.value = DerefPointer::new(value);
+                    slot.offset = Map::NOT_FOUND;
+                    return true;
+                }
+            }
+        }
+        let off = self.map.get(sym);
+        if off.is_not_found() {
+            slot.base = Ptr {
+                raw: self as *const Self as *mut Self,
+            };
+            slot.value = DerefPointer::null();
+            slot.offset = Map::NOT_FOUND;
+
+            return false;
+        } else {
+            slot.value = self.direct_ref(off.offset);
+            slot.base = Ptr {
+                raw: self as *const Self as *mut Self,
+            };
+            true
+        }*/
         if sym.is_index() {
             if let CellValue::Array(ref array) = &self.value {
                 if let Some(value) = array.get(sym.index() as usize) {
@@ -189,36 +248,47 @@ impl Cell {
         }
     }
 
-    pub fn insert(&mut self, sym: Symbol, value: Value, slot: &mut Slot) {
+    pub fn insert(&mut self, sym: Symbol, slot: &mut Slot) {
         if self.slots.is_null() {
             self.slots = TaggedPointer::new(Box::into_raw(Box::new(Vec::with_capacity(4))));
         }
         self.allocate_attributes_map();
         let off = self.attributes_map_mut().unwrap().insert(sym);
         if off as usize == self.slots.as_ref().unwrap().len() {
-            self.slots.as_mut().unwrap().push(value);
-        } else {
-            self.store_direct(off, value);
+            self.slots.as_mut().unwrap().push(Value::empty());
         }
         slot.value = self.direct_ref(off);
         slot.base = Ptr {
             raw: self as *mut Self,
         };
         slot.offset = off;
+
+        /*if !self.lookup_in_self(sym, slot) {
+            let mut offset = 422;
+            let map = self.map.add_property_transition(sym, &mut offset, 0);
+            self.map = map;
+            self.slots
+                .as_mut()
+                .unwrap()
+                .resize(self.map.get_slots_size(), Value::empty());
+            println!("new offset: {}", offset);
+            slot.offset = offset;
+            println!("shit");
+            slot.value = self.direct_ref(offset);
+        } else {
+            println!("new offset: {}", slot.offset);
+            let r = self.direct_ref(slot.offset);
+            slot.value = r;
+        }*/
     }
     pub fn lookup(&mut self, sym: Symbol, slot: &mut Slot) -> bool {
         let mut object = Some(DerefPointer::new(self));
-        while let Some(obj) = object {
-            /*if let Some(value) = obj.lookup_in_self(sym) {
-                slot.base = Ptr {
-                    raw: self as *mut Cell,
-                };
-                slot.value = value;
-            }*/
+        while let Some(mut obj) = object {
             if obj.lookup_in_self(sym, slot) {
                 return true;
             }
-            object = self.prototype.map(|x| DerefPointer::new(x.get()));
+
+            object = obj.prototype.map(|x| DerefPointer::new(x.get()));
         }
         false
     }
@@ -271,6 +341,7 @@ impl Drop for Cell {
 pub struct Slot {
     pub base: Ptr<Cell>,
     pub value: DerefPointer<Value>,
+    pub value_c: Value,
     pub offset: u32,
 }
 
@@ -280,12 +351,23 @@ impl Slot {
             base: Ptr::null(),
             offset: Map::NOT_FOUND,
             value: DerefPointer::null(),
+            value_c: Value::empty(),
         }
     }
-
+    pub fn store(&mut self, val: Value) -> bool {
+        if self.value.is_null() {
+            return false;
+        }
+        *self.value = val;
+        true
+    }
     pub fn value(&self) -> Value {
         if self.value.is_null() {
-            Value::from(VTag::Undefined)
+            if self.value_c.is_empty() {
+                Value::from(VTag::Undefined)
+            } else {
+                self.value_c
+            }
         } else {
             *self.value
         }

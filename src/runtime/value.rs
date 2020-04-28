@@ -400,7 +400,7 @@ impl Value {
             } else {
                 String::from("false")
             }
-        } else if self.is_number() && !self.is_cell() {
+        } else if self.is_number() {
             self.to_number().to_string()
         } else if self.is_null_or_undefined() {
             if self.is_undefined() {
@@ -428,18 +428,15 @@ impl Value {
             false
         }
     }
-    pub fn insert(&mut self, key: Symbol, value: Value, slot: &mut Slot) -> bool {
+    pub fn insert(&mut self, key: Symbol, slot: &mut Slot) -> bool {
         if self.is_number() {
-            local_data().number_proto.as_cell().insert(key, value, slot);
+            local_data().number_proto.as_cell().insert(key, slot);
             true
         } else if self.is_bool() {
-            local_data()
-                .boolean_proto
-                .as_cell()
-                .insert(key, value, slot);
+            local_data().boolean_proto.as_cell().insert(key, slot);
             true
         } else if self.is_cell() {
-            self.as_cell().insert(key, value, slot);
+            self.as_cell().insert(key, slot);
             true
         } else {
             false

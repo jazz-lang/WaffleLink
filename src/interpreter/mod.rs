@@ -1,3 +1,4 @@
+use crate::arc::ArcWithoutWeak as Arc;
 use crate::bytecode::op::*;
 use crate::heap::*;
 use crate::runtime;
@@ -370,7 +371,8 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     let mut base = *frame.r(base);
                     let val = *frame.r(val);
                     let mut slot = Slot::new();
-                    base.insert(Symbol::new_value(val), frame.rax, &mut slot);
+                    base.insert(Symbol::new_value(val), &mut slot);
+                    slot.store(frame.rax);
                     frame.rax = slot.value();
                 }
                 LdaByIdx(base_r, idx_r, fdbk) => {
@@ -386,7 +388,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().attributes.raw == attrs.raw {
+                            if base.as_cell().map.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -411,15 +413,15 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().attributes.raw == attrs.raw {
+                            if base.as_cell().map.ptr_eq(attrs) {
                                 base.as_cell().store_direct(*offset, value);
                             } else {
                                 *misses += 1;
                                 sta_by_id(&mut frame, base_r, key_r, fdbk);
                             }
                         } else {
-                            base.as_cell()
-                                .insert(Symbol::new_value(key), value, &mut slot);
+                            base.as_cell().insert(Symbol::new_value(key), &mut slot);
+                            slot.store(value);
                         }
                     } else {
                         unreachable!();
@@ -436,7 +438,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
                             if let Some(proto) = base.as_cell().prototype {
-                                if proto.attributes.raw == attrs.raw {
+                                if proto.map.ptr_eq(attrs) {
                                     frame.rax = proto.direct(*offset);
                                 } else {
                                     *misses += 1;
@@ -464,7 +466,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                         if base.is_cell() {
                             let mut obj = Some(base.as_cell());
                             while let Some(object) = obj {
-                                if object.attributes.raw == attrs.raw {
+                                if object.map.ptr_eq(attrs) {
                                     frame.rax = object.direct(*offset);
                                     continue 'interp;
                                 } else {
@@ -489,7 +491,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().attributes.raw == attrs.raw {
+                            if base.as_cell().map.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -511,7 +513,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().attributes.raw == attrs.raw {
+                            if base.as_cell().map.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -534,7 +536,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().attributes.raw == attrs.raw {
+                            if base.as_cell().map.ptr_eq(attrs) {
                                 base.as_cell().store_direct(*offset, frame.rax);
                             } else {
                                 *misses += 1;
@@ -543,7 +545,8 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                         } else {
                             /*base.lookup(key, &mut slot);
                             frame.rax = slot.value();*/
-                            base.insert(key, frame.rax, &mut slot);
+                            base.insert(key, &mut slot);
+                            slot.store(frame.rax);
                         }
                     }
                 }
@@ -558,7 +561,10 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     let mut base = *frame.r(base_r);
                     let key = Symbol::new_value(frame.get_constant(key_r));
                     let mut slot = Slot::new();
-                    base.insert(key, frame.rax, &mut slot);
+                    base.insert(key, &mut slot);
+                    if !slot.value.is_null() {
+                        *slot.value = frame.rax;
+                    }
                 }
                 LdaSlowByIdx(base_r, key, _) => {
                     let mut base = *frame.r(base_r);
@@ -571,17 +577,15 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     let mut base = *frame.r(base_r);
                     let key = Symbol::new_index(key as _);
                     let mut slot = Slot::new();
-                    base.insert(key, frame.rax, &mut slot);
+                    base.insert(key, &mut slot);
+                    slot.store(frame.rax);
                 }
                 PushA => {
                     let val = frame.rax;
                     frame.push(val);
                 }
                 PopA => {
-                    let val = frame
-                        .pop()
-                        .map(|x| *x)
-                        .unwrap_or(Value::from(VTag::Undefined));
+                    let val = frame.pop().unwrap_or(Value::from(VTag::Undefined));
                     frame.rax = val;
                 }
                 PushR(r) => {
@@ -589,16 +593,96 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     frame.push(val);
                 }
                 PopR(r) => {
-                    let val = frame
-                        .pop()
-                        .map(|x| *x)
-                        .unwrap_or(Value::from(VTag::Undefined));
+                    let val = frame.pop().unwrap_or(Value::from(VTag::Undefined));
                     *frame.r(r) = val;
                 }
                 LdaThis => {
                     let this = frame.this;
                     frame.rax = this;
                 }
+                Call(function, argc) => {
+                    let value = *frame.r(function);
+                    let this = frame.rax;
+                    let arguments = {
+                        let mut v = vec![];
+                        for _ in 0..argc {
+                            if let Some(val) = frame.pop() {
+                                v.push(val);
+                            } else {
+                                break;
+                            }
+                        }
+                        v
+                    };
+                    if value.is_cell() {
+                        let cell = value.as_cell();
+                        if cell.is_function() {
+                            let func = cell.func_value_unchecked();
+                            let args = local_data().allocate_array(arguments, &mut frame);
+                            /*let mut new_frame = Frame::new(frame.rax, func.module);
+                            new_frame.arguments =
+
+                            new_frame.code*/
+                            match func.code {
+                                FunctionCode::Bytecode(_) => {
+                                    match func.threshold {
+                                        x if x >= 10_000 => {
+                                            // TODO: Simple JIT
+                                        }
+                                        x if x >= 100_000 => {
+                                            // TODO: Full JIT
+                                        }
+                                        _ => {
+                                            local_data().frames.push(frame);
+                                            frame = Frame::new(this, func.module);
+                                            frame.func = cell;
+                                            frame.arguments = args;
+                                            continue;
+                                        }
+                                    }
+                                }
+                                FunctionCode::Native(fun) => {
+                                    let mut f = Frame::native_frame(frame.rax, args, func.module);
+                                    let value = fun(&mut f)?;
+                                    frame.rax = value;
+                                }
+                            }
+                        } else {
+                            return Err(local_data().allocate_string(
+                                format!("{} is not a function", value.to_string()),
+                                &mut frame,
+                            ));
+                        }
+                    } else {
+                        return Err(local_data().allocate_string(
+                            format!("{} is not a function", value.to_string()),
+                            &mut frame,
+                        ));
+                    }
+                }
+                Throw => {
+                    let err = frame.rax;
+                    local_data().frames.push(frame);
+                    return Err(err);
+                }
+                CatchSetup(block) => {
+                    frame.try_catch.push(block as _);
+                }
+                BrC(if_true, if_false) => {
+                    let c = frame.rax.to_boolean();
+                    if c {
+                        frame.bp = if_true as _;
+                        frame.ip = 0;
+                    } else {
+                        frame.bp = if_false as _;
+                        frame.ip = 0;
+                    }
+                }
+                Br(x) => {
+                    frame.bp = x as _;
+                    frame.ip = 0;
+                }
+                Return => return Ok(frame.rax),
                 _ => (),
             }
         }
@@ -621,13 +705,17 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
         let mut slot = Slot::new();
         if base.is_cell() && should_cache {
             let mut cell = base.as_cell();
-            cell.insert(key, frame.rax, &mut slot);
+            cell.insert(key, &mut slot);
+            if !slot.value.is_null() {
+                *slot.value = frame.rax;
+            }
             frame.get_code_mut()[bp].code[ip - 1] = StaOwnIdx(base_r, key_r, fdbk);
             let feedback =
                 &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-            *feedback = FeedBack::Cache(cell.attributes, slot.offset, misses);
+            *feedback = FeedBack::Cache(cell.map.clone(), slot.offset, misses);
         } else {
-            base.insert(key, frame.rax, &mut slot);
+            base.insert(key, &mut slot);
+            slot.store(frame.rax);
             if !should_cache {
                 frame.get_code_mut()[bp].code[ip - 1] = StaSlowByIdx(base_r, key_r, fdbk);
             }
@@ -669,7 +757,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                 frame.rax = slot.value();
                 let feedback =
                     &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                *feedback = FeedBack::Cache(slot.base.attributes, slot.offset, misses);
+                *feedback = FeedBack::Cache(slot.base.map.clone(), slot.offset, misses);
             } else {
                 frame.rax = slot.value();
             }
@@ -699,14 +787,18 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
         let mut slot = Slot::new();
         if base.is_cell() && should_cache {
             let mut cell = base.as_cell();
-            cell.insert(key, frame.rax, &mut slot);
+            cell.insert(key, &mut slot);
+            if !slot.value.is_null() {
+                *slot.value = frame.rax;
+            }
             frame.get_code_mut()[bp].code[ip - 1] = StaOwnProperty(base_r, key_r, fdbk);
             let feedback =
                 &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
 
-            *feedback = FeedBack::Cache(cell.attributes, slot.offset, misses);
+            *feedback = FeedBack::Cache(cell.map.clone(), slot.offset, misses);
         } else {
-            base.insert(key, frame.rax, &mut slot);
+            base.insert(key, &mut slot);
+            slot.store(frame.rax);
             if !should_cache {
                 frame.get_code_mut()[bp].code[ip - 1] = StaSlowById(base_r, key_r, fdbk);
             }
@@ -748,7 +840,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                 frame.rax = slot.value();
                 let feedback =
                     &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                *feedback = FeedBack::Cache(slot.base.attributes, slot.offset, misses);
+                *feedback = FeedBack::Cache(slot.base.map.clone(), slot.offset, misses);
             } else {
                 frame.rax = slot.value();
             }

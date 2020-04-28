@@ -56,7 +56,7 @@ impl Function {
 
 pub enum FeedBack {
     None,
-    Cache(TaggedPointer<AttributesMap>, u32, u16),
+    Cache(Arc<super::structure::Map>, u32, u16),
     Count(usize),
     TypeInfo(SmallVec<[Type; 3]>),
 }
@@ -78,7 +78,7 @@ pub enum Type {
 
 pub enum FunctionCode {
     /// Native function.
-    Native(extern "C" fn(&mut Frame, Ptr<Cell>, Ptr<u8>) -> Result<Value, Value>),
+    Native(extern "C" fn(&mut Frame) -> Result<Value, Value>),
     Bytecode(Vec<BasicBlock>),
 }
 

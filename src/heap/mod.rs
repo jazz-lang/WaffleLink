@@ -112,7 +112,7 @@ impl Heap {
             }
         }
     }
-    pub fn allocate(&mut self, frame: &mut Frame, cell: Cell) -> Ptr<Cell> {
+    pub fn allocate(&mut self, frame: &mut Frame, mut cell: Cell) -> Ptr<Cell> {
         let memory = self.alloc.allocate(std::mem::size_of::<Cell>(), false);
         let memory = if memory.is_null() {
             let mut stack = VecDeque::new();
@@ -122,6 +122,7 @@ impl Heap {
         } else {
             memory
         };
+        cell.color = CELL_WHITE_A;
         let raw = memory.to_mut_ptr::<Cell>();
         unsafe {
             raw.write(cell);
@@ -131,9 +132,10 @@ impl Heap {
             raw: memory.to_mut_ptr::<Cell>(),
         }
     }
-    pub fn allocate_cell(&mut self, cell: Cell) -> Ptr<Cell> {
+    pub fn allocate_cell(&mut self, mut cell: Cell) -> Ptr<Cell> {
         let memory = self.alloc.allocate(std::mem::size_of::<Cell>(), true);
         let raw = memory.to_mut_ptr::<Cell>();
+        cell.color = CELL_WHITE_A;
         unsafe {
             raw.write(cell);
         }

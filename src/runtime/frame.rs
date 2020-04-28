@@ -11,7 +11,7 @@ pub struct Frame {
     pub func: Ptr<Cell>,
     pub this: Value,
     pub arguments: Value,
-    pub sp: usize,
+    pub stack: Vec<Value>,
     pub module: Value,
     pub ip: usize,
     pub bp: usize,
@@ -37,10 +37,10 @@ impl Frame {
             arguments: Value::empty(),
             try_catch: vec![],
             rax: Value::new_int(0),
-            sp: 256,
+            stack: Vec::with_capacity(8),
             regs: Ptr::from_raw(
                 commit(
-                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256 + 4 * 1024),
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
                     false,
                 )
                 .to_mut_ptr::<u8>(),
@@ -61,12 +61,12 @@ impl Frame {
             try_catch: vec![],
             regs: Ptr::from_raw(
                 commit(
-                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256 + 4 * 1024),
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
                     false,
                 )
                 .to_mut_ptr::<u8>(),
             ),
-            sp: 256,
+            stack: vec![],
 
             exit_on_return: false,
             module,
@@ -89,6 +89,11 @@ impl Frame {
                 }
             }
         }
+        for val in self.stack.iter() {
+            if val.is_cell() {
+                stack.push_back(val.cell_ref());
+            }
+        }
         stack.push_back(&self.func);
         if !self.module.is_empty() {
             stack.push_back(self.module.cell_ref());
@@ -104,24 +109,12 @@ impl Frame {
         self.func.func_value_unchecked().constants[ix as usize]
     }
 
-    pub fn pop(&mut self) -> Option<&mut Value> {
-        if self.sp == 256 {
-            return None;
-        } else if self.sp == 256 + 512 {
-            panic!("Max stack size reached");
-        } else {
-            unsafe { Some(&mut *self.regs.raw.offset(self.sp as _)) }
-        }
+    pub fn pop(&mut self) -> Option<Value> {
+        self.stack.pop()
     }
 
     pub fn push(&mut self, val: Value) {
-        if self.sp == 256 + 512 {
-            panic!("Max stack size reached");
-        } else {
-            unsafe {
-                self.regs.raw.offset(self.sp as _).write(val);
-            }
-        }
+        self.stack.push(val);
     }
 }
 

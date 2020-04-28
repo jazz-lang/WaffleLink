@@ -5,16 +5,23 @@ use crate::arc::ArcWithoutWeak as Arc;
 use crate::common::ptr::{DerefPointer, Ptr};
 use std::collections::HashMap;
 
+pub const ATTR_ENUMERABLE: u8 = 1;
+pub const ATTR_GETTER: u8 = 2;
+pub const ATTR_SETTER: u8 = 4;
+pub const ATTR_GETSET: u8 = 8;
+
 /// TODO: Add attributes
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct MapEntry {
     pub offset: u32,
+    pub flags: u8,
 }
 
 impl MapEntry {
     pub fn not_found() -> Self {
         Self {
             offset: std::u32::MAX,
+            flags: 0,
         }
     }
 
@@ -51,16 +58,6 @@ pub enum Transition {
 pub struct Transitions {
     holder: Transition,
     flags: u8,
-}
-
-pub union TransitionsEnc {
-    table: Ptr<Table>,
-    pair: PairT,
-}
-
-pub struct PairT {
-    key: MapKey,
-    map: Ptr<Map>,
 }
 
 impl Transitions {
@@ -148,7 +145,11 @@ pub struct Map {
 impl Map {
     pub fn with_proto(proto: Ptr<Cell>, unique: bool, indexed: bool) -> Self {
         Self {
-            prototype: Some(proto),
+            prototype: if proto.is_null() == false {
+                Some(proto)
+            } else {
+                None
+            },
             previous: None,
             table: Ptr::null(),
             transitions: Transitions::new(!unique, indexed),
@@ -211,8 +212,12 @@ impl Map {
         self: &mut Arc<Self>,
         name: Symbol,
         offset: &mut u32,
+        attrs: u8,
     ) -> Arc<Map> {
-        let mut entry = MapEntry { offset: 0 };
+        let mut entry = MapEntry {
+            offset: 0,
+            flags: attrs,
+        };
         if self.is_unique() {
             if !self.has_table() {
                 self.allocate_table();
@@ -235,7 +240,7 @@ impl Map {
         }
         if self.transit_count > 32 {
             let mut map = Arc::new(Map::new_unique_prev(self.clone()));
-            return map.add_property_transition(name, offset);
+            return map.add_property_transition(name, offset, attrs);
         }
 
         let mut map = Arc::new(Map::with_prev(self.clone(), false));
@@ -244,6 +249,7 @@ impl Map {
             name,
             MapEntry {
                 offset: self.get_slots_size() as u32,
+                flags: attrs,
             },
         );
         map.calculated_size = self.get_slots_size() + 1;
