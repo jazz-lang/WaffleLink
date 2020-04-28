@@ -65,7 +65,7 @@ impl LocalData {
             color: CELL_WHITE_A,
             value: CellValue::String(Box::new(s.as_ref().to_string())),
             slots: TaggedPointer::null(),
-            attributes: TaggedPointer::null(),
+            attributes: Arc::new(super::map::Map::new()),
             map: Arc::new(super::structure::Map::new_unique(Ptr::null(), false)),
         };
 
@@ -79,7 +79,7 @@ impl LocalData {
             color: CELL_WHITE_A,
             value: CellValue::Array(Box::new(values)),
             slots: TaggedPointer::null(),
-            attributes: TaggedPointer::null(),
+            attributes: Arc::new(super::map::Map::new()),
             map: Arc::new(super::structure::Map::new_unique(Ptr::null(), false)),
         };
         Value::from(self.heap.allocate(f, cell))

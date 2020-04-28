@@ -40,7 +40,7 @@ pub struct Cell {
     pub(crate) prototype: Option<Ptr<Cell>>,
     pub(crate) slots: TaggedPointer<Vec<Value>>,
     pub(crate) map: Arc<Structure>,
-    pub(crate) attributes: TaggedPointer<Map>,
+    pub(crate) attributes: Arc<Map>,
 }
 
 impl Cell {
@@ -51,16 +51,16 @@ impl Cell {
             prototype: proto,
             slots: TaggedPointer::null(),
             map: Arc::new(Structure::new_unique(Ptr::null(), true)),
-            attributes: TaggedPointer::null(),
+            attributes: Arc::new(Map::new()),
         }
     }
     /// Returns an immutable reference to the attributes.
     pub fn attributes_map(&self) -> Option<&AttributesMap> {
-        self.attributes.as_ref()
+        Some(&self.attributes)
     }
 
-    pub fn attributes_map_mut(&self) -> Option<&mut AttributesMap> {
-        self.attributes.as_mut()
+    pub fn attributes_map_mut(&mut self) -> Option<&mut AttributesMap> {
+        Some(&mut self.attributes)
     }
     /// Allocates an attribute map if needed.
     fn allocate_attributes_map(&mut self) {
@@ -71,21 +71,13 @@ impl Cell {
 
     /// Returns true if an attributes map has been allocated.
     pub fn has_attributes(&self) -> bool {
-        !self.attributes.untagged().is_null()
+        true
     }
     pub fn set_attributes_map(&mut self, attrs: AttributesMap) {
-        self.attributes = TaggedPointer::new(Box::into_raw(Box::new(attrs)));
+        self.attributes = Arc::new(attrs)
     }
 
-    pub fn drop_attributes(&mut self) {
-        if !self.has_attributes() {
-            return;
-        }
-
-        drop(unsafe { Box::from_raw(self.attributes.untagged()) });
-
-        self.attributes = TaggedPointer::null();
-    }
+    pub fn drop_attributes(&mut self) {}
 
     pub fn direct(&self, offset: u32) -> Value {
         if self.slots.is_null() {
@@ -247,7 +239,27 @@ impl Cell {
             _ => false,
         }
     }
+    pub fn call(&self, this: Value, args: Value) -> Result<Value, Value> {
+        use crate::interpreter::run;
+        assert!(self.is_function());
+        let mut frame = super::frame::Frame::native_frame(this, args, Value::empty());
 
+        let func = self.func_value_unchecked();
+        frame.module = func.module;
+
+        frame.func = Ptr {
+            raw: self as *const Self as *mut Self,
+        };
+        match func.code {
+            FunctionCode::Bytecode(_) => {
+                frame.allocate_regs();
+                return run(frame);
+            }
+            FunctionCode::Native(fun) => {
+                return fun(&mut frame);
+            }
+        }
+    }
     pub fn insert(&mut self, sym: Symbol, slot: &mut Slot) {
         if self.slots.is_null() {
             self.slots = TaggedPointer::new(Box::into_raw(Box::new(Vec::with_capacity(4))));

@@ -17,7 +17,8 @@ may = "0.3"
 log = "0.4"
 paste = "0.1"
 libc = "0.2"
-
+dynasm = "0.6"
+dynasmrt = "0.6"
 smallvec = "1.4"
 [features]
 use-slow-value = []
@@ -44,5 +45,5 @@ kernel32-sys = "0.2"
 opt-level = 1
 
 [profile.release]
-opt-level = 2
+opt-level = 3
 codegen-units = 1

@@ -388,7 +388,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().map.ptr_eq(attrs) {
+                            if base.as_cell().attributes.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -413,7 +413,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().map.ptr_eq(attrs) {
+                            if base.as_cell().attributes.ptr_eq(attrs) {
                                 base.as_cell().store_direct(*offset, value);
                             } else {
                                 *misses += 1;
@@ -438,7 +438,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
                             if let Some(proto) = base.as_cell().prototype {
-                                if proto.map.ptr_eq(attrs) {
+                                if proto.attributes.ptr_eq(attrs) {
                                     frame.rax = proto.direct(*offset);
                                 } else {
                                     *misses += 1;
@@ -466,7 +466,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                         if base.is_cell() {
                             let mut obj = Some(base.as_cell());
                             while let Some(object) = obj {
-                                if object.map.ptr_eq(attrs) {
+                                if object.attributes.ptr_eq(attrs) {
                                     frame.rax = object.direct(*offset);
                                     continue 'interp;
                                 } else {
@@ -491,7 +491,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().map.ptr_eq(attrs) {
+                            if base.as_cell().attributes.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -513,7 +513,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().map.ptr_eq(attrs) {
+                            if base.as_cell().attributes.ptr_eq(attrs) {
                                 frame.rax = base.as_cell().direct(*offset);
                             } else {
                                 *misses += 1;
@@ -536,7 +536,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
 
                     if let FeedBack::Cache(attrs, offset, misses) = feedback {
                         if base.is_cell() {
-                            if base.as_cell().map.ptr_eq(attrs) {
+                            if base.as_cell().attributes.ptr_eq(attrs) {
                                 base.as_cell().store_direct(*offset, frame.rax);
                             } else {
                                 *misses += 1;
@@ -712,7 +712,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
             frame.get_code_mut()[bp].code[ip - 1] = StaOwnIdx(base_r, key_r, fdbk);
             let feedback =
                 &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-            *feedback = FeedBack::Cache(cell.map.clone(), slot.offset, misses);
+            *feedback = FeedBack::Cache(cell.attributes.clone(), slot.offset, misses);
         } else {
             base.insert(key, &mut slot);
             slot.store(frame.rax);
@@ -757,7 +757,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                 frame.rax = slot.value();
                 let feedback =
                     &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                *feedback = FeedBack::Cache(slot.base.map.clone(), slot.offset, misses);
+                *feedback = FeedBack::Cache(slot.base.attributes.clone(), slot.offset, misses);
             } else {
                 frame.rax = slot.value();
             }
@@ -795,7 +795,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
             let feedback =
                 &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
 
-            *feedback = FeedBack::Cache(cell.map.clone(), slot.offset, misses);
+            *feedback = FeedBack::Cache(cell.attributes.clone(), slot.offset, misses);
         } else {
             base.insert(key, &mut slot);
             slot.store(frame.rax);
@@ -840,7 +840,7 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                 frame.rax = slot.value();
                 let feedback =
                     &mut frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize];
-                *feedback = FeedBack::Cache(slot.base.map.clone(), slot.offset, misses);
+                *feedback = FeedBack::Cache(slot.base.attributes.clone(), slot.offset, misses);
             } else {
                 frame.rax = slot.value();
             }

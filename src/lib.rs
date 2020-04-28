@@ -10,6 +10,13 @@
 #![allow(improper_ctypes)]
 #![feature(arbitrary_self_types)]
 #![feature(llvm_asm)]
+#![feature(plugin)]
+#![feature(proc_macro_hygiene)]
+#[macro_use]
+extern crate dynasm;
+
+extern crate dynasmrt;
+
 #[macro_export]
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {

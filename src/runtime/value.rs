@@ -588,6 +588,18 @@ pub fn is_num(x: Value) -> bool {
     x.is_number()
 }
 
-pub fn as_i32(x: Value) -> i32 {
+pub fn to_i32(x: Value) -> i32 {
     x.as_int32()
+}
+
+pub fn num(x: f64) -> Value {
+    Value::from(x)
+}
+
+pub fn new_i32(x: i32) -> Value {
+    Value::new_int(x)
+}
+
+pub fn vtag(x: i32) -> Value {
+    Value::from(x)
 }

@@ -49,7 +49,17 @@ impl Frame {
             module,
         }
     }
-
+    pub fn allocate_regs(&mut self) {
+        if self.regs.is_null() {
+            self.regs = Ptr::from_raw(
+                commit(
+                    crate::common::mem::page_align(std::mem::size_of::<Value>() * 256),
+                    false,
+                )
+                .to_mut_ptr::<u8>(),
+            );
+        }
+    }
     pub fn native_frame(this: Value, args: Value, module: Value) -> Self {
         Self {
             func: Ptr::null(),

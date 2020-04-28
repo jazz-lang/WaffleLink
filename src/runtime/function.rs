@@ -28,9 +28,8 @@ pub struct Function {
     pub upvalues: Vec<Value>,
     pub code: FunctionCode,
     pub module: Value,
-    pub simple_jit: Option<extern "C" fn(&mut Frame, Ptr<Cell>, Ptr<u8>) -> Result<Value, Value>>,
-    pub easy_jit: Option<extern "C" fn(&mut Frame, Ptr<Cell>, Ptr<u8>) -> Result<Value, Value>>,
-    pub full_jit: Option<extern "C" fn(&mut Frame, Ptr<Cell>, Ptr<u8>) -> Result<Value, Value>>,
+    pub simple_jit: Option<extern "C" fn(&mut Frame) -> Result<Value, Value>>,
+    pub full_jit: Option<extern "C" fn(&mut Frame) -> Result<Value, Value>>,
 }
 
 impl Function {
@@ -56,7 +55,7 @@ impl Function {
 
 pub enum FeedBack {
     None,
-    Cache(Arc<super::structure::Map>, u32, u16),
+    Cache(Arc<super::map::Map>, u32, u16),
     Count(usize),
     TypeInfo(SmallVec<[Type; 3]>),
 }
