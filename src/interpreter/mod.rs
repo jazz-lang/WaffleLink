@@ -683,6 +683,224 @@ pub fn run(mut frame: Frame) -> Result<Value, Value> {
                     frame.ip = 0;
                 }
                 Return => return Ok(frame.rax),
+                Greater(rhs, fdbk) => {
+                    let lhs = frame.rax;
+                    let rhs = *frame.r(rhs);
+                    let value = if lhs.is_int32() && rhs.is_int32() {
+                        lhs.as_int32() > rhs.as_int32()
+                    } else {
+                        if lhs.is_number() && rhs.is_number() {
+                            lhs.to_number() > rhs.to_number()
+                        } else {
+                            if lhs.is_cell() && rhs.is_cell() {
+                                match (&lhs.as_cell().value, &rhs.as_cell().value) {
+                                    (CellValue::String(s), CellValue::String(s2)) => {
+                                        s.len() > s2.len()
+                                    }
+                                    (CellValue::Array(a), CellValue::Array(a2)) => {
+                                        a.len() > a2.len()
+                                    }
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+                    if value {
+                        frame.rax = Value::from(VTag::True);
+                    } else {
+                        frame.rax = Value::from(VTag::False);
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            lhs.primitive_ty(),
+                            rhs.primitive_ty(),
+                            Type::Boolean,
+                        ]));
+                }
+                Less(rhs, fdbk) => {
+                    let lhs = frame.rax;
+                    let rhs = *frame.r(rhs);
+                    let value = if lhs.is_int32() && rhs.is_int32() {
+                        lhs.as_int32() < rhs.as_int32()
+                    } else {
+                        if lhs.is_number() && rhs.is_number() {
+                            lhs.to_number() < rhs.to_number()
+                        } else {
+                            if lhs.is_cell() && rhs.is_cell() {
+                                match (&lhs.as_cell().value, &rhs.as_cell().value) {
+                                    (CellValue::String(s), CellValue::String(s2)) => s < s2,
+                                    (CellValue::Array(a), CellValue::Array(a2)) => {
+                                        a.len() < a2.len()
+                                    }
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+                    if value {
+                        frame.rax = Value::from(VTag::True);
+                    } else {
+                        frame.rax = Value::from(VTag::False);
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            lhs.primitive_ty(),
+                            rhs.primitive_ty(),
+                            Type::Boolean,
+                        ]));
+                }
+
+                GreaterEqual(rhs, fdbk) => {
+                    let lhs = frame.rax;
+                    let rhs = *frame.r(rhs);
+                    let value = if lhs.is_int32() && rhs.is_int32() {
+                        lhs.as_int32() >= rhs.as_int32()
+                    } else {
+                        if lhs.is_number() && rhs.is_number() {
+                            lhs.to_number() >= rhs.to_number()
+                        } else {
+                            if lhs.is_cell() && rhs.is_cell() {
+                                match (&lhs.as_cell().value, &rhs.as_cell().value) {
+                                    (CellValue::String(s), CellValue::String(s2)) => s >= s2,
+
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+                    if value {
+                        frame.rax = Value::from(VTag::True);
+                    } else {
+                        frame.rax = Value::from(VTag::False);
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            lhs.primitive_ty(),
+                            rhs.primitive_ty(),
+                            Type::Boolean,
+                        ]));
+                }
+                LessEqual(rhs, fdbk) => {
+                    let lhs = frame.rax;
+                    let rhs = *frame.r(rhs);
+                    let value = if lhs.is_int32() && rhs.is_int32() {
+                        lhs.as_int32() == rhs.as_int32()
+                    } else {
+                        if lhs.is_number() && rhs.is_number() {
+                            lhs.to_number() == rhs.to_number()
+                        } else {
+                            if lhs.is_cell() && rhs.is_cell() {
+                                match (&lhs.as_cell().value, &rhs.as_cell().value) {
+                                    (CellValue::String(s), CellValue::String(s2)) => s == s2,
+
+                                    _ => false,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+                    if value {
+                        frame.rax = Value::from(VTag::True);
+                    } else {
+                        frame.rax = Value::from(VTag::False);
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            lhs.primitive_ty(),
+                            rhs.primitive_ty(),
+                            Type::Boolean,
+                        ]));
+                }
+                Equal(rhs, fdbk) => {
+                    let lhs = frame.rax;
+                    let rhs = *frame.r(rhs);
+                    let value = if lhs.is_int32() && rhs.is_int32() {
+                        lhs.as_int32() == rhs.as_int32()
+                    } else {
+                        if lhs.is_number() && rhs.is_number() {
+                            lhs.to_number() == rhs.to_number()
+                        } else {
+                            if lhs.is_cell() && rhs.is_cell() {
+                                match (&lhs.as_cell().value, &rhs.as_cell().value) {
+                                    (CellValue::String(s), CellValue::String(s2)) => s == s2,
+
+                                    _ => rhs.as_cell().raw == lhs.as_cell().raw,
+                                }
+                            } else {
+                                false
+                            }
+                        }
+                    };
+                    if value {
+                        frame.rax = Value::from(VTag::True);
+                    } else {
+                        frame.rax = Value::from(VTag::False);
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            lhs.primitive_ty(),
+                            rhs.primitive_ty(),
+                            Type::Boolean,
+                        ]));
+                }
+                Not(fdbk) => {
+                    let value = frame.rax;
+                    let prev_ty = value.primitive_ty();
+                    if value.is_int32() {
+                        frame.rax = Value::new_int(!value.as_int32());
+                    } else if value.is_bool() {
+                        if value.to_boolean() {
+                            frame.rax = Value::from(VTag::False);
+                        } else {
+                            frame.rax = Value::from(VTag::True);
+                        }
+                    } else if value.is_number() {
+                        frame.rax = Value::from((!(value.to_number().floor() as i64)) as f64);
+                    } else {
+                        if value.to_boolean() {
+                            frame.rax = Value::from(VTag::False);
+                        } else {
+                            frame.rax = Value::from(VTag::True);
+                        }
+                    }
+                    frame.func.func_value_unchecked_mut().feedback_vector[fdbk as usize] =
+                        FeedBack::TypeInfo(smallvec::SmallVec::from_buf([
+                            prev_ty,
+                            frame.rax.primitive_ty(),
+                            Type::Int32, // we do not care there
+                        ]));
+                }
+                CloseEnv(count) => {
+                    let upvalues = {
+                        let mut v = vec![];
+                        for _ in 0..count {
+                            v.push(frame.pop().expect("Unexpected"));
+                        }
+                        v
+                    };
+                    let mut cell = frame.rax.as_cell();
+                    let func = cell.func_value_unchecked_mut();
+                    func.upvalues = upvalues;
+                }
+                NewObject => {
+                    let cell = Cell::new(Some(local_data().object_proto.as_cell()));
+                    let ptr = local_data().allocate(cell, &mut frame);
+                    frame.rax = ptr;
+                }
+                NewArray(count) => {
+                    let cell = local_data().allocate_array(
+                        vec![Value::from(VTag::Undefined); count as usize],
+                        &mut frame,
+                    );
+                    frame.rax = cell;
+                }
                 _ => (),
             }
         }

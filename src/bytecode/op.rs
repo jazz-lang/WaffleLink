@@ -68,7 +68,7 @@ pub enum OpV {
     Less(u8, u32),
     LessEqual(u8, u32),
     Equal(u8, u32),
-    NotEqual(u8, u32),
+    Not(u32),
 
     CloseEnv(u16),
     // acc = new Object()

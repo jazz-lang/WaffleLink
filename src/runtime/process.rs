@@ -59,6 +59,9 @@ impl LocalData {
     pub fn allocate_cell(&mut self, cell: Cell) -> Value {
         Value::from(self.heap.allocate_cell(cell))
     }
+    pub fn allocate(&mut self, cell: Cell, frame: &mut Frame) -> Value {
+        Value::from(self.heap.allocate(frame, cell))
+    }
     pub fn allocate_string(&mut self, s: impl AsRef<str>, f: &mut Frame) -> Value {
         let cell = Cell {
             prototype: Some(self.string_proto.as_cell()),
