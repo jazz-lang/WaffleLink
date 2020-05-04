@@ -38,4 +38,12 @@ impl Runtime {
     pub fn allocate<T: Traceable + 'static>(&mut self, val: T) -> Rooted<T> {
         self.heap.allocate(val)
     }
+
+    pub fn allocate_string(&mut self, string: impl AsRef<str>) -> Rooted<Cell> {
+        let s = string.as_ref().to_string();
+        let proto = self.string_prototype.as_cell();
+        let cell = Cell::new(CellValue::String(Box::new(s)), Some(proto));
+
+        self.allocate_cell(cell)
+    }
 }

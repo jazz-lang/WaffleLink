@@ -7,4 +7,5 @@ macro_rules! offset_of {
     };
 }
 
+pub mod bytecode;
 pub mod runtime;

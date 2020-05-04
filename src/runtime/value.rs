@@ -1,6 +1,7 @@
 //! Value implementation is exactly the same as in JSC and uses NaN-boxing.
 use super::cell::*;
 use super::pure_nan::*;
+use super::*;
 use cgc::api::Handle;
 #[cfg(all(target_pointer_width = "64", feature = "value32-64"))]
 compile_error!("Cannot use value32-64 feature on 64 target");
@@ -544,6 +545,25 @@ impl Value {
             self.as_double()
         }
     }
+
+    pub fn to_string(&self, rt: &mut Runtime) -> String {
+        if self.is_number() {
+            self.to_number().to_string()
+        } else if self.is_true() || self.is_false() {
+            if self.is_true() {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
+        } else if self.is_null() {
+            "null".to_string()
+        } else if self.is_undefined() {
+            "undefined".to_string()
+        } else {
+            // TODO: Get current value prototype and invoke `toString(self)` on it.
+            String::new()
+        }
+    }
 }
 
 macro_rules! signbit {
@@ -596,3 +616,28 @@ impl Traceable for Value {
 }
 
 impl Finalizer for Value {}
+
+impl From<Handle<Cell>> for Value {
+    fn from(x: Handle<Cell>) -> Self {
+        Self {
+            u: EncodedValueDescriptor { cell: x },
+        }
+    }
+}
+
+use cgc::api::*;
+
+impl From<Rooted<Cell>> for Value {
+    fn from(x: Rooted<Cell>) -> Self {
+        Self {
+            u: EncodedValueDescriptor { cell: x.to_heap() },
+        }
+    }
+}
+impl From<&Rooted<Cell>> for Value {
+    fn from(x: &Rooted<Cell>) -> Self {
+        Self {
+            u: EncodedValueDescriptor { cell: x.to_heap() },
+        }
+    }
+}
