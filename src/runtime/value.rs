@@ -1,540 +1,548 @@
-/*
-*   Copyright (c) 2020 Adel Prokurov
-*   All rights reserved.
-
-*   Licensed under the Apache License, Version 2.0 (the "License");
-*   you may not use this file except in compliance with the License.
-*   You may obtain a copy of the License at
-
-*   http://www.apache.org/licenses/LICENSE-2.0
-
-*   Unless required by applicable law or agreed to in writing, software
-*   distributed under the License is distributed on an "AS IS" BASIS,
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-*   See the License for the specific language governing permissions and
-*   limitations under the License.
-*/
-
+//! Value implementation is exactly the same as in JSC and uses NaN-boxing.
 use super::cell::*;
-use super::process::*;
-use super::state::*;
-use super::RUNTIME;
-use crate::heap::rooting::*;
-use crate::util::arc::Arc;
-pub type EncodedValue = i64;
+use super::pure_nan::*;
+use cgc::api::Handle;
+#[cfg(all(target_pointer_width = "64", feature = "value32-64"))]
+compile_error!("Cannot use value32-64 feature on 64 target");
 
 #[derive(Copy, Clone)]
-#[repr(C)]
-pub union EncodedValueDescriptor {
-    pub as_int64: i64,
-    #[cfg(feature = "use-value64")]
-    pub ptr: CellPointer,
-    pub as_bits: AsBits,
+#[repr(C, align(8))]
+union EncodedValueDescriptor {
+    as_int64: i64,
+    #[cfg(feature = "value32-64")]
+    as_double: f64,
+    cell: Handle<Cell>,
+    as_bits: AsBits,
 }
-
-/// TODO: Big endian support
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(C)]
+#[cfg(target_endian = "big")]
+pub struct AsBits {
+    pub tag: i32,
+    pub payload: i32,
+}
+#[derive(Copy, Clone, PartialEq, Eq)]
+#[repr(C)]
+#[cfg(target_endian = "little")]
 pub struct AsBits {
     pub payload: i32,
     pub tag: i32,
 }
-pub const TAG_OFFSET: usize = 4;
-pub const PAYLOAD_OFFSET: usize = 0;
 
-#[cfg(feature = "use-value64")]
-pub const CELL_PAYLOAD_OFFSET: usize = 0;
-#[cfg(not(feature = "use-value64"))]
-pub const CELL_PAYLOAD_OFFSET: usize = PAYLOAD_OFFSET;
+pub fn tag_offset() -> usize {
+    offset_of!(AsBits, tag)
+}
+pub fn payload_offset() -> usize {
+    offset_of!(AsBits, payload)
+}
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+pub fn cell_payload_offset() -> usize {
+    #[cfg(feature = "value64")]
+    {
+        0
+    }
+    #[cfg(not(feature = "value64"))]
+    {
+        payload_offset()
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum WhichValueWord {
-    TagWord,
-    PayloadWord,
+    Tag = 0,
+    Payload,
 }
-/*
+#[cfg(feature = "value32-64")]
+pub const INT32_TAG: i32 = 0xffffffffu32 as i32;
+#[cfg(feature = "value32-64")]
+pub const BOOL_TAG: i32 = 0xfffffffeu32 as i32;
+#[cfg(feature = "value32-64")]
+pub const UNDEFINED_TAG: i32 = 0xfffffffdu32 as i32;
+#[cfg(feature = "value32-64")]
+pub const NULL_TAG: i32 = 0xfffffffcu32 as i32;
+#[cfg(feature = "value32-64")]
+pub const CELL_TAG: i32 = 0xfffffffbu32 as i32;
+#[cfg(feature = "value32-64")]
+pub const EMPTY_TAG: i32 = 0xfffffffau32 as i32;
+#[cfg(feature = "value32-64")]
+pub const DELETED_TAG: i32 = 0xfffffff9u32 as i32;
+#[cfg(feature = "value32-64")]
+pub const LOWEST_TAG: i32 = DELETED_TAG;
+
 #[derive(Copy, Clone, PartialEq, Eq)]
-#[repr(C)]
-pub enum VTag {
+pub enum JSTag {
     Null,
     Undefined,
     True,
     False,
     Cell,
-    EncodeAsDouble,
-}*/
-
-#[cfg(feature = "use-value64")]
-#[allow(non_snake_case)]
-#[allow(non_upper_case_globals)]
-pub mod VTag {
-    use super::*;
-
-    pub const True: i32 = Value::VALUE_TRUE;
-    pub const False: i32 = Value::VALUE_FALSE;
-    pub const Undefined: i32 = Value::VALUE_UNDEFINED;
-    pub const Null: i32 = Value::VALUE_NULL;
+    AsDouble,
 }
 
-#[cfg(feature = "use-slow-value")]
-#[derive(Copy, Clone, PartialEq, Eq)]
-#[repr(C)]
-pub enum VTag {
-    Null,
-    Undefined,
-    True,
-    False,
-    Cell,
-}
-#[cfg(feature = "use-value64")]
 #[derive(Copy, Clone)]
-#[repr(C)]
 pub struct Value {
-    pub u: EncodedValueDescriptor,
+    u: EncodedValueDescriptor,
 }
-#[cfg(feature = "use-slow-value")]
-#[derive(Copy, Clone, PartialEq)]
-pub enum Value {
-    Int32(i32),
-    Double(f64),
-    Cell(CellPointer),
-    True,
-    False,
-    Null,
-    Undefined,
-    Empty,
-}
-pub const NOT_INT52: usize = 1 << 52;
+
+#[cfg(feature = "value32-64")]
 impl Value {
-    cfg_if::cfg_if! {
-        if #[cfg(feature="use-value64")] {
-            pub const DOUBLE_ENCODE_OFFSET_BIT: usize = 49;
-            pub const DOUBLE_ENCODE_OFFSET: i64 = 1i64 << 49i64;
-            pub const NUMBER_TAG: i64 = 0xfffe000000000000u64 as i64;
-            pub const OTHER_TAG: i32 = 0x2;
-            pub const BOOL_TAG: i32 = 0x4;
-            pub const UNDEFINED_TAG: i32 = 0x8;
-            pub const VALUE_FALSE: i32 = Self::OTHER_TAG | Self::BOOL_TAG | false as i32;
-            pub const VALUE_TRUE: i32 = Self::OTHER_TAG | Self::BOOL_TAG | true as i32;
-            pub const VALUE_UNDEFINED: i32 = Self::OTHER_TAG | Self::UNDEFINED_TAG;
-            pub const VALUE_NULL: i32 = Self::OTHER_TAG;
-            pub const MISC_TAG: i32 = Self::OTHER_TAG | Self::BOOL_TAG | Self::UNDEFINED_TAG;
-            /// NOT_CELL_MASK is used to check for all types of immediate values (either number or 'other').
-            pub const NOT_CELL_MASK: i64 = Self::NUMBER_TAG | Self::OTHER_TAG as i64;
-            pub const VALUE_EMPTY: i32 = 0x0;
-            pub const VALUE_DELETED: i32 = 0x4;
-                #[inline(always)]
-            pub fn empty() -> Self {
-                Self {
-                    u: EncodedValueDescriptor {
-                        as_int64: Self::VALUE_EMPTY as _,
-                    },
-                }
-            }
-            #[inline(always)]
-            pub fn new_double(x: f64) -> Self {
-                Self {
-                    u: EncodedValueDescriptor {
-                        as_int64: Self::reinterpret_double_to_int64(x) + Self::DOUBLE_ENCODE_OFFSET as i64,
-                    },
-                }
-            }
-            #[inline(always)]
-            pub fn new_int(x: i32) -> Self {
-                Self {
-                    u: EncodedValueDescriptor {
-                        as_int64: Self::NUMBER_TAG | unsafe { std::mem::transmute::<i32, u32>(x) as i64 },
-                    },
-                }
-            }
+    /*
+     * On 32-bit platforms `value32-64` feature should be enabled, and we use a NaN-encoded
+     * form for immediates.
+     *
+     * The encoding makes use of unused NaN space in the IEEE754 representation.  Any value
+     * with the top 13 bits set represents a QNaN (with the sign bit set).  QNaN values
+     * can encode a 51-bit payload.  Hardware produced and C-library payloads typically
+     * have a payload of zero.  We assume that non-zero payloads are available to encode
+     * pointer and integer values.  Since any 64-bit bit pattern where the top 15 bits are
+     * all set represents a NaN with a non-zero payload, we can use this space in the NaN
+     * ranges to encode other values (however there are also other ranges of NaN space that
+     * could have been selected).
+     *
+     * For Values that do not contain a double value, the high 32 bits contain the tag
+     * values listed in the enums below, which all correspond to NaN-space. In the case of
+     * cell, integer and bool values the lower 32 bits (the 'payload') contain the pointer
+     * integer or boolean value; in the case of all other tags the payload is 0.
+     */
+    pub fn tag(self) -> u32 {
+        unsafe { self.u.as_bits.tag }
+    }
+    pub fn payload(self) -> i32 {
+        unsafe { self.u.as_bits.payload }
+    }
 
-            #[inline(always)]
-            pub fn is_empty(&self) -> bool {
-                unsafe { self.u.as_int64 == Self::VALUE_EMPTY as _ }
-            }
-            #[inline(always)]
-            pub fn is_undefined(&self) -> bool {
-                *self == Self::from(VTag::Undefined)
-            }
-            #[inline(always)]
-            pub fn is_null(&self) -> bool {
-                *self == Self::from(VTag::Null)
-            }
-            #[inline(always)]
-            pub fn is_true(&self) -> bool {
-                *self == Self::from(VTag::True)
-            }
-            #[inline(always)]
-            pub fn is_false(&self) -> bool {
-                *self == Self::from(VTag::False)
-            }
-            #[inline(always)]
-            pub fn as_bool(&self) -> bool {
-                return *self == Self::from(VTag::True);
-            }
-
-            #[inline(always)]
-            pub fn is_bool(&self) -> bool {
-                unsafe { (self.u.as_int64 & !1) == Self::VALUE_FALSE as _ }
-            }
-            #[inline(always)]
-            pub fn is_null_or_undefined(&self) -> bool {
-                unsafe { (self.u.as_int64 & !Self::UNDEFINED_TAG as i64) == Self::VALUE_NULL as _ }
-            }
-            #[inline(always)]
-            pub fn is_cell(&self) -> bool {
-                //let x = unsafe { !(self.u.as_int64 & Self::NOT_CELL_MASK as i64) != 0 };
-                //x && !self.is_number() && !self.is_any_int()
-                let result = unsafe { self.u.as_int64 & Self::NOT_CELL_MASK as i64 };
-                result == 0 && !self.is_empty() && !self.is_null_or_undefined()
-            }
-            #[inline(always)]
-            pub fn is_number(&self) -> bool {
-                unsafe { (self.u.as_int64 & Self::NUMBER_TAG) != 0 }
-            }
-            #[inline(always)]
-            pub fn is_double(&self) -> bool {
-                !self.is_int32() && self.is_number()
-            }
-            #[inline(always)]
-            pub fn is_int32(&self) -> bool {
-                unsafe { (self.u.as_int64 & Self::NUMBER_TAG as i64) == Self::NUMBER_TAG as i64 }
-            }
-            #[inline(always)]
-            pub fn reinterpret_double_to_int64(x: f64) -> i64 {
-                return x.to_bits() as i64;
-            }
-            #[inline(always)]
-            pub fn reinterpret_int64_to_double(x: i64) -> f64 {
-                f64::from_bits(x as u64)
-            }
-
-            #[inline(always)]
-            pub fn as_cell(&self) -> CellPointer {
-                assert!(self.is_cell());
-                unsafe { self.u.ptr }
-            }
-            #[inline(always)]
-            pub fn as_double(&self) -> f64 {
-                assert!(self.is_double());
-                Self::reinterpret_int64_to_double(unsafe { self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET })
-            }
-            #[inline(always)]
-            pub fn as_int32(&self) -> i32 {
-                unsafe { self.u.as_int64 as i32 }
-            }
-
-        } else if #[cfg(feature="use-slow-value")] {
-
-            pub fn is_int32(&self) -> bool {
-                match self {
-                    Value::Int32(_) => true,
-                    _ => false
-                }
-            }
-
-            pub fn is_double(&self) -> bool {
-                match self {
-                    Value::Double(_) => true,
-                    _ => false
-                }
-            }
-
-            pub fn is_cell(&self) -> bool {
-                match self {
-                    Value::Cell(_) => true,
-                    _ => false
-                }
-            }
-
-            pub fn as_cell(&self) -> CellPointer {
-                assert!(self.is_cell());
-                match self {
-                    Value::Cell(c) => *c,
-                    _ => unreachable!()
-                }
-            }
-
-            pub fn as_double(&self) -> f64 {
-                match self {
-                    Value::Double(x) => *x,
-                    _ => unreachable!()
-                }
-            }
-
-            pub fn is_number(&self) -> bool {
-                match self {
-                    Value::Int32(_) | Value::Double(_) => true,
-                    _ => false
-                }
-            }
-
-            pub fn is_empty(&self) -> bool {
-                *self == Self::Empty
-            }
-
-            pub fn is_true(&self) -> bool {
-                *self == Self::True
-            }
-
-            pub fn is_false(&self) -> bool {
-                *self == Self::False
-            }
-
-            pub fn new_double(x: f64) -> Self {
-                Self::Double(x)
-            }
-
-            pub fn new_int(x: i32) -> Self {
-                Self::Int(x)
-            }
-
-            pub fn is_undefined(&self) -> bool {
-                *self == Self::Undefined
-            }
-
-            pub fn is_null(&self) -> bool {
-                *self == Self::Null
-            }
-
-            pub fn is_null_or_undefined(&self) -> bool {
-                self.is_null() | self.is_undefined()
-            }
-
-            pub fn is_bool(&self) -> bool {
-                self.is_true() | self.is_false()
-            }
-
-            pub fn empty() -> Self {
-                Self::Empty
-            }
-
-
-
+    pub(crate) fn with_tag_payload(tag: i32, payload: i32) -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_bits: AsBits { tag, payload },
+            },
         }
     }
 
-    pub fn is_int52(number: f64) -> bool {
-        try_convert_to_i52(number) != NOT_INT52 as i64
+    pub fn default() -> Self {
+        Self::with_tag_payload(EMPTY_TAG, 0)
+    }
+
+    pub fn null() -> Self {
+        Self::with_tag_payload(NULL_TAG, 0)
+    }
+
+    pub fn undefined() -> Self {
+        Self::with_tag_payload(UNDEFINED_TAG, 0)
+    }
+    pub fn true_() -> Self {
+        Self::with_tag_payload(BOOL_TAG, 1)
+    }
+    pub fn false_() -> Self {
+        Self::with_tag_payload(BOOL_TAG, 0)
+    }
+
+    pub fn cell(cell: Handle<Cell>) -> Self {
+        Self::with_tag_payload(CELL_TAG, unsafe {
+            std::mem::transmute::<i32>(cell) /* sizeof(void*) == sizeof(i32) on 32 bit machines,this cast is safe*/
+        })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tag() == EMPTY_TAG
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.tag() == NULL_TAG
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        self.tag() == UNDEFINED_TAG
+    }
+
+    pub fn is_undefined_or_null(&self) -> bool {
+        self.is_undefined() || self.is_null()
+    }
+    pub fn is_cell(&self) -> bool {
+        self.tag() == CELL_TAG
+    }
+
+    pub fn is_int32(&self) -> bool {
+        self.tag() == INT32_TAG
+    }
+
+    pub fn is_double(&self) -> bool {
+        self.tag() < LOWEST_TAG
+    }
+
+    pub fn is_true(&self) -> bool {
+        self.tag() == BOOL_TAG && self.payload() != 0
+    }
+
+    pub fn is_false(&self) -> bool {
+        self.tag() == BOOL_TAG && self.payload() == 0
+    }
+
+    pub fn as_int32(&self) -> bool {
+        self.payload()
+    }
+
+    pub fn as_double(&self) -> bool {
+        unsafe { self.u.as_double }
+    }
+
+    pub fn as_cell(&self) -> Handle<Cell> {
+        assert!(self.is_cell(), "Value payload is not a cell!");
+        unsafe { std::mem::transmute(self.payload()) }
+    }
+    pub fn as_cell_ref(&self) -> &Handle<Cell> {
+        assert!(self.is_cell(), "Value payload is not a cell!");
+        unsafe { std::mem::transmute(&self.payload()) }
+    }
+
+    pub fn new_double(f: f64) -> Self {
+        assert!(!is_impure_nan(f));
+        Self {
+            u: EncodedValueDescriptor { as_double: f },
+        }
+    }
+
+    pub fn new_int(x: i32) -> Self {
+        Self::with_tag_payload(INT32_TAG, x)
+    }
+
+    pub fn is_number(&self) -> bool {
+        self.is_int32() || self.is_double()
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        self.tag() == BOOL_TAG
+    }
+
+    pub fn as_boolean(&self) -> bool {
+        assert!(self.is_boolean());
+        self.payload() != 0
+    }
+
+    const _XX: () = {
+        impl PartialEq for Value {
+            fn eq(&self, other: &Self) -> bool {
+                unsafe { self.u.as_int64 == other.u.as_int64 }
+            }
+        }
+
+        impl Eq for Value {}
+    };
+}
+
+#[cfg(feature = "value64")]
+impl Value {
+    /*
+     * On 64-bit platforms `value64` feature should be enabled, and we use a NaN-encoded
+     * form for immediates.
+     *
+     * The encoding makes use of unused NaN space in the IEEE754 representation.  Any value
+     * with the top 13 bits set represents a QNaN (with the sign bit set).  QNaN values
+     * can encode a 51-bit payload.  Hardware produced and C-library payloads typically
+     * have a payload of zero.  We assume that non-zero payloads are available to encode
+     * pointer and integer values.  Since any 64-bit bit pattern where the top 15 bits are
+     * all set represents a NaN with a non-zero payload, we can use this space in the NaN
+     * ranges to encode other values (however there are also other ranges of NaN space that
+     * could have been selected).
+     *
+     * This range of NaN space is represented by 64-bit numbers begining with the 15-bit
+     * hex patterns 0xFFFC and 0xFFFE - we rely on the fact that no valid double-precision
+     * numbers will fall in these ranges.
+     *
+     * The top 15-bits denote the type of the encoded Value:
+     *
+     *     Pointer {  0000:PPPP:PPPP:PPPP
+     *              / 0002:****:****:****
+     *     Double  {         ...
+     *              \ FFFC:****:****:****
+     *     Integer {  FFFE:0000:IIII:IIII
+     *
+     * The scheme we have implemented encodes double precision values by performing a
+     * 64-bit integer addition of the value 2^49 to the number. After this manipulation
+     * no encoded double-precision value will begin with the pattern 0x0000 or 0xFFFE.
+     * Values must be decoded by reversing this operation before subsequent floating point
+     * operations may be peformed.
+     *
+     * 32-bit signed integers are marked with the 16-bit tag 0xFFFE.
+     *
+     * The tag 0x0000 denotes a pointer, or another form of tagged immediate. Boolean,
+     * null and undefined values are represented by specific, invalid pointer values:
+     *
+     *     False:     0x06
+     *     True:      0x07
+     *     Undefined: 0x0a
+     *     Null:      0x02
+     *
+     * These values have the following properties:
+     * - Bit 1 (OtherTag) is set for all four values, allowing real pointers to be
+     *   quickly distinguished from all immediate values, including these invalid pointers.
+     * - With bit 3 masked out (UndefinedTag), Undefined and Null share the
+     *   same value, allowing null & undefined to be quickly detected.
+     *
+     * No valid Value will have the bit pattern 0x0, this is used to represent array
+     * holes, and as a C++ 'no value' result (e.g. Value() has an internal value of 0).
+     *
+     * This representation works because of the following things:
+     * - It cannot be confused with a Double or Integer thanks to the top bits
+     * - It cannot be confused with a pointer to a Cell, thanks to bit 1 which is set to true
+     * - It cannot be confused with a pointer to wasm thanks to bit 0 which is set to false
+     * - It cannot be confused with true/false because bit 2 is set to false
+     * - It cannot be confused for null/undefined because bit 4 is set to true
+     */
+
+    /// This value is 2^49, used to encode doubles such that the encoded value will begin
+    /// with a 15-bit pattern within the range 0x0002..0xFFFC.
+    pub const DOUBLE_ENCODE_OFFSET_BIT: i64 = 49;
+    pub const DOUBLE_ENCODE_OFFSET: i64 = 1 << Self::DOUBLE_ENCODE_OFFSET_BIT;
+    /// If all bits in the mask are set, this indicates an integer number,
+    /// if any but not all are set this value is a double precision number.
+    pub const NUMBER_TAG: i64 = 0xfffe000000000000u64 as i64;
+    /// The following constant is used for a trick in the implementation of strictEq, to detect if either of the arguments is a double
+    pub const LOWEST_OF_HIGH_BITS: i64 = 1 << 49;
+    /// All non-numeric (bool, null, undefined) immediates have bit 2 set.
+    pub const OTHER_TAG: i64 = 0x2;
+    pub const BOOL_TAG: i64 = 0x4;
+    pub const UNDEFINED_TAG: i64 = 0x8;
+    pub const VALUE_FALSE: i64 = Self::OTHER_TAG | Self::BOOL_TAG | 0; // `0` stands for `false`.
+    pub const VALUE_TRUE: i64 = Self::OTHER_TAG | Self::BOOL_TAG | 1; // `1` stands for `true`.
+    pub const VALUE_UNDEFINED: i64 = Self::OTHER_TAG | Self::UNDEFINED_TAG;
+    pub const VALUE_NULL: i64 = Self::OTHER_TAG;
+    pub const MISC_TAG: i64 = Self::OTHER_TAG | Self::BOOL_TAG | Self::UNDEFINED_TAG;
+    /// NOT_CELL_MASK is used to check for all types of immediate values (either number or 'other').
+    pub const NOT_CELL_MASK: i64 = Self::NUMBER_TAG | Self::OTHER_TAG;
+    /// These special values are never visible to JavaScript code; Empty is used to represent
+    /// Array holes, and for uninitialized Values. Deleted is used in hash table code.
+    /// These values would map to cell types in the Value encoding, but not valid GC cell
+    /// pointer should have either of these values (Empty is null, deleted is at an invalid
+    /// alignment for a GC cell, and in the zero page).
+    pub const VALUE_EMPTY: i64 = 0x0;
+    pub const VALUE_DELETED: i64 = 0x4;
+    // 0x0 can never occur naturally because it has a tag of 00, indicating a pointer value, but a payload of 0x0, which is in the (invalid) zero page.
+    pub fn default() -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Self::VALUE_EMPTY,
+            },
+        }
+    }
+
+    pub fn cell(x: Handle<Cell>) -> Self {
+        Self {
+            u: EncodedValueDescriptor { cell: x },
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        unsafe { self.u.as_int64 == Self::VALUE_EMPTY }
+    }
+
+    pub fn undefined() -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Self::VALUE_UNDEFINED,
+            },
+        }
+    }
+
+    pub fn null() -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Self::VALUE_NULL,
+            },
+        }
+    }
+    pub fn false_() -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Self::VALUE_TRUE,
+            },
+        }
+    }
+    pub fn true_() -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Self::VALUE_FALSE,
+            },
+        }
+    }
+
+    pub fn is_number(&self) -> bool {
+        unsafe { self.u.as_int64 & Self::NUMBER_TAG != 0 }
+    }
+
+    pub fn is_int32(&self) -> bool {
+        unsafe { (self.u.as_int64 & Self::NUMBER_TAG) == Self::NUMBER_TAG }
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        *self == Self::undefined()
+    }
+
+    pub fn is_null(&self) -> bool {
+        *self == Self::null()
+    }
+
+    pub fn is_true(&self) -> bool {
+        *self == Self::true_()
+    }
+
+    pub fn is_false(&self) -> bool {
+        *self == Self::false_()
+    }
+
+    pub fn is_undefined_or_null(&self) -> bool {
+        unsafe { (self.u.as_int64 & !Self::UNDEFINED_TAG) == Self::VALUE_NULL }
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        unsafe { self.u.as_int64 & !Self::UNDEFINED_TAG == Self::VALUE_FALSE }
+    }
+    pub fn is_cell(&self) -> bool {
+        unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK) != 0 }
+    }
+
+    pub fn new_double(x: f64) -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: x.to_bits() as i64 + Self::DOUBLE_ENCODE_OFFSET,
+            },
+        }
+    }
+
+    pub fn new_int(x: i32) -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                as_int64: Value::NUMBER_TAG | (x as u32 as i64),
+            },
+        }
+    }
+    pub fn is_double(&self) -> bool {
+        !self.is_int32() && self.is_number()
+    }
+    pub fn as_double(&self) -> f64 {
+        assert!(self.is_double());
+        unsafe { f64::from_bits((self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET) as u64) }
+    }
+
+    pub fn as_cell(&self) -> Handle<Cell> {
+        assert!(self.is_cell());
+        unsafe { self.u.cell }
+    }
+    pub fn as_cell_ref(&self) -> &Handle<Cell> {
+        assert!(self.is_cell());
+        unsafe { &self.u.cell }
     }
 
     pub fn is_any_int(&self) -> bool {
         if self.is_int32() {
-            return true;
+            true
+        } else if !self.is_number() {
+            false
+        } else {
+            try_convert_to_i52(self.as_double()) != NOT_INT52 as i64
         }
-        if !self.is_number() {
+    }
+    pub fn as_int32(&self) -> i32 {
+        assert!(self.is_int32());
+        unsafe { self.u.as_int64 as i32 }
+    }
+    pub fn as_any_int(&self) -> i64 {
+        assert!(self.is_any_int());
+        if self.is_int32() {
+            return self.as_int32() as i64;
+        }
+        return self.as_double().trunc() as i64;
+    }
+
+    pub fn is_int32_as_any_int(&self) -> bool {
+        if !self.is_any_int() {
             return false;
         }
-        return Self::is_int52(self.as_double());
-    }
-    pub fn prototype(&self) -> Value {
-        if self.is_bool() {
-            RUNTIME.state.boolean_prototype
-        } else if self.is_number() {
-            RUNTIME.state.number_prototype
-        } else if self.is_cell() {
-            self.as_cell()
-                .prototype(&RUNTIME.state)
-                .map(|cell| Value::from(cell))
-                .unwrap_or(Value::from(VTag::Null))
-        } else {
-            Value::from(VTag::Null)
-        }
+        let value = self.as_any_int();
+        return value >= i32::min_value() as i64 && value <= i32::max_value() as i64;
     }
 
-    pub fn is_kind_of(&self, value: Value) -> bool {
-        if self.is_cell() && value.is_cell() {
-            self.as_cell().is_kind_of(&RUNTIME.state, value.as_cell())
-        } else {
-            let prototype = self.prototype();
-            if prototype.is_null_or_undefined() {
-                return false;
-            }
-            let proto = if value.is_cell() {
-                value.as_cell()
-            } else {
-                value.prototype().as_cell()
-            };
-            return prototype.is_kind_of(Value::from(proto));
+    pub fn as_int32_as_any_int(&self) -> i32 {
+        assert!(self.is_int32_as_any_int());
+        if self.is_int32() {
+            return self.as_int32();
         }
-    }
-    pub fn set_prototype(&self, value: Value) {
-        if value.is_cell() && self.is_cell() {
-            self.as_cell().get_mut().prototype = Some(value.as_cell());
-        }
+        self.as_double().trunc() as i32
     }
 
-    pub fn add_attribute_without_barrier(&self, state: &RcState, name: Arc<String>, value: Value) {
-        if self.is_number() {
-            state
-                .number_prototype
-                .add_attribute_without_barrier(state, name, value);
-        } else if self.is_bool() {
-            state
-                .boolean_prototype
-                .add_attribute_without_barrier(state, name, value);
-        } else if self.is_null_or_undefined() {
-            return;
-        } else {
-            self.as_cell().add_attribute_without_barrier(&name, value);
-        }
-    }
-
-    pub fn add_attribute_barriered(
-        &self,
-        state: &RcState,
-        proc: &Arc<Process>,
-        name: Arc<String>,
-        value: Value,
-    ) {
-        if self.is_number() {
-            if value.is_cell() {
-                if (value.as_cell().get().color & CELL_WHITES) != 0
-                    && !value.as_cell().is_permanent()
-                {
-                    value.as_cell().get_mut().color = CELL_GREY;
-                }
-            }
-            state
-                .number_prototype
-                .add_attribute_without_barrier(state, name, value);
-        } else if self.is_bool() {
-            if value.is_cell() {
-                if (value.as_cell().get().color & CELL_WHITES) != 0
-                    && !value.as_cell().is_permanent()
-                {
-                    value.as_cell().get_mut().color = CELL_GREY;
-                }
-            }
-            state
-                .boolean_prototype
-                .add_attribute_without_barrier(state, name, value);
-        } else if self.is_null_or_undefined() {
-            return;
-        } else {
-            self.as_cell().add_attribute(proc, &name, value);
-        }
-    }
-
-    pub fn lookup_attribute_in_self(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
-        if self.is_number() {
-            state.number_prototype.lookup_attribute_in_self(state, name)
-        } else if self.is_bool() {
-            state
-                .boolean_prototype
-                .lookup_attribute_in_self(state, name)
-        } else if self.is_null_or_undefined() {
-            return Some(Value::from(VTag::Undefined));
-        } else {
-            return self.as_cell().lookup_attribute_in_self(state, name);
-        }
-    }
-
-    pub fn lookup_attribute(&self, state: &RcState, name: &Arc<String>) -> Option<Value> {
-        if self.is_number() {
-            state
-                .number_prototype
-                .as_cell()
-                .lookup_attribute(state, name)
-        } else if self.is_bool() {
-            state
-                .boolean_prototype
-                .as_cell()
-                .lookup_attribute(state, name)
-        } else if self.is_null_or_undefined() {
-            return Some(Value::from(VTag::Undefined));
-        } else {
-            return self.as_cell().lookup_attribute(state, name);
-        }
-    }
-
-    pub fn to_boolean(&self) -> bool {
-        if self.is_null_or_undefined() {
+    pub fn is_uint32_as_any_int(&self) -> bool {
+        if !self.is_any_int() {
             return false;
         }
-        if self.is_number() {
-            return self.to_number() == 1.0;
-        }
-        if self.is_bool() {
-            return self.is_true();
-        }
-        return !self.as_cell().is_false();
+        let value = self.as_any_int();
+        return value >= 0 as i64 && value <= u32::max_value() as i64;
     }
 
+    pub fn as_uint32_as_any_int(&self) -> u32 {
+        assert!(self.is_int32_as_any_int());
+        if self.is_int32() {
+            return self.as_int32() as u32;
+        }
+        self.as_double().trunc() as u32
+    }
+
+    const _XX: () = {
+        impl PartialEq for Value {
+            fn eq(&self, other: &Self) -> bool {
+                unsafe { self.u.as_int64 == other.u.as_int64 }
+            }
+        }
+
+        impl Eq for Value {}
+    };
+}
+
+impl Value {
+    pub fn is_uint32(&self) -> bool {
+        self.is_int32() && self.as_int32() >= 0
+    }
+
+    pub fn to_int32(&self) -> i32 {
+        let d = self.to_number();
+        d as i32
+    }
+    pub fn to_uint32(&self) -> u32 {
+        // The only difference between to_int32 and to_uint32 is that to_uint32 reinterprets resulted i32 value as u32.
+        // https://tc39.es/ecma262/#sec-touint32
+        self.to_int32() as u32
+    }
+    #[inline(always)]
     pub fn to_number(&self) -> f64 {
         if self.is_int32() {
-            return self.as_int32() as _;
+            return self.as_int32() as f64;
         }
         if self.is_double() {
             return self.as_double();
         }
-
-        self.to_number_slow()
+        self.to_number_slow_case()
     }
-
-    pub fn to_number_slow(&self) -> f64 {
+    pub fn to_number_slow_case(&self) -> f64 {
+        assert!(!self.is_int32() && !self.is_double());
+        if self.is_cell() {
+            unimplemented!()
+        }
         if self.is_true() {
             return 1.0;
         }
-        if self.is_false() {
-            return 0.0;
-        }
-
-        std::f64::NAN
-    }
-    pub fn process_value(&self) -> Result<Arc<Process>, String> {
-        if !self.is_cell() {
-            panic!("{}", self);
-            //return Err(format!("Value '{}' not a process", self.to_string()).to_owned());
-        }
-        let cell = self.as_cell();
-        if !cell.is_process() {
-            return Err("Value not a process".to_owned());
+        if self.is_undefined() {
+            return pure_nan();
         } else {
-            match &cell.get().value {
-                CellValue::Process(proc) => Ok(proc.clone()),
-                _ => unsafe { std::hint::unreachable_unchecked() },
-            }
+            0.0 // null and false both convert to 0.
         }
     }
-    pub fn function_value(&self) -> Result<Arc<Function>, String> {
-        self.as_cell().function_value().map(|x| x.clone())
-    }
-    pub fn to_string(&self) -> String {
-        if self.is_bool() {
-            if self.is_true() {
-                String::from("true")
-            } else {
-                String::from("false")
-            }
-        } else if self.is_number() && !self.is_cell() {
-            self.to_number().to_string()
-        } else if self.is_null_or_undefined() {
-            if self.is_undefined() {
-                String::from("undefined")
-            } else {
-                String::from("null")
-            }
-        } else if self.is_cell() {
-            self.as_cell().to_string()
-        } else if self.is_empty() {
-            panic!()
+
+    pub fn as_number(&self) -> f64 {
+        assert!(self.is_number());
+        if self.is_int32() {
+            self.as_int32() as f64
         } else {
-            panic!()
+            self.as_double()
         }
-    }
-}
-
-use std::fmt;
-
-impl fmt::Debug for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.to_string())
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
     }
 }
 
@@ -547,6 +555,8 @@ macro_rules! signbit {
         }
     }};
 }
+
+pub const NOT_INT52: usize = 1 << 52;
 
 #[inline]
 pub fn try_convert_to_i52(number: f64) -> i64 {
@@ -575,83 +585,14 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
     as_int64
 }
 
-cfg_if::cfg_if! {
-if #[cfg(feature="use-value64")] {
-impl From<CellPointer> for Value {
-    fn from(x: CellPointer) -> Self {
-        Self {
-            u: EncodedValueDescriptor {
-                as_int64: x.raw.raw as usize as i64,
-            },
+use cgc::api::{Finalizer, Traceable, Tracer};
+
+impl Traceable for Value {
+    fn trace_with(&self, tracer: &mut Tracer) {
+        if self.is_cell() {
+            tracer.trace(self.as_cell_ref());
         }
     }
 }
 
-impl From<i32> for Value {
-    fn from(x: i32) -> Self {
-        Self {
-            u: EncodedValueDescriptor {
-                as_int64: x as u8 as _,
-            },
-        }
-    }
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe { self.u.as_int64 == other.u.as_int64 }
-    }
-}
-
-impl Eq for Value {}
-
-impl From<bool> for Value {
-    fn from(x: bool) -> Self {
-        if x {
-            Self::from(VTag::True)
-        } else {
-            Self::from(VTag::False)
-        }
-    }
-}
-} else if #[cfg(feature="use-slow-value")] {
-
-impl From<VTag> for Value {
-    fn from(x: VTag) -> Self {
-        match x {
-            VTag::True => Self::True,
-            VTag::False => Self::False,
-            VTag::Undefined => Self::Undefined,
-            VTag::Null => Self::Null,
-            _ => unreachable!()
-        }
-    }
-}
-
-impl From<bool> for Value {
-    fn from(x: bool) -> Self {
-        if x {
-            Self::True
-        } else {
-            Self::False
-        }
-    }
-}
-
-impl From<CellPointer> for Value {
-    fn from(x: CellPointer) -> Self {
-        Self::Cell(x)
-    }
-}
-
-}
-}
-
-unsafe impl Send for Value {}
-unsafe impl Sync for Value {}
-
-impl From<RootedCell> for Value {
-    fn from(c: RootedCell) -> Self {
-        Self::from(c.as_cell())
-    }
-}
+impl Finalizer for Value {}
