@@ -110,6 +110,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "0.99.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2323f3f47db9a0e77ce7a300605d8d2098597fc451ed1a97bb1f6411bb550a7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "discard"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -489,6 +500,7 @@ name = "waffle2"
 version = "0.1.0"
 dependencies = [
  "cgc-single-threaded",
+ "derive_more",
  "fancy-regex",
  "hashlink",
 ]

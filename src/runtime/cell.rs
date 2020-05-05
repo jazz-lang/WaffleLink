@@ -5,6 +5,22 @@ use fancy_regex::Regex;
 use hashlink::*;
 use value::*;
 
+pub enum Function {
+    Native {
+        name: Value,
+        native: fn(&mut Runtime, Value, &[Value]) -> Result<Value, Value>,
+    },
+    Regular(RegularFunction),
+}
+
+pub struct RegularFunction {
+    pub name: Value,
+    pub source: String,
+    pub arguments: Vec<String>,
+    pub env: Value,
+    pub code: Handle<crate::bytecode::CodeBlock>,
+}
+
 pub enum CellValue {
     None,
     String(Box<String>),
