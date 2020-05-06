@@ -6,9 +6,17 @@ use hashlink::*;
 use value::*;
 
 pub enum Function {
+    AsyncNative {
+        name: Value,
+        native: fn(
+            &mut Runtime,
+            Value,
+            &[Value],
+        ) -> Box<dyn std::future::Future<Output = crate::interpreter::Return>>,
+    },
     Native {
         name: Value,
-        native: fn(&mut Runtime, Value, &[Value]) -> Result<Value, Value>,
+        native: fn(&mut Runtime, Value, &[Value]) -> crate::interpreter::Return,
     },
     Regular(RegularFunction),
 }
@@ -24,10 +32,12 @@ pub struct RegularFunction {
 pub enum CellValue {
     None,
     String(Box<String>),
-    Array(Box<Vec<Value>>),
+    Array(Vec<Value>),
     ByteArray(Box<Vec<u8>>),
-    RegEx(Box<Regex>),
-    File(Box<std::fs::File>),
+    RegEx(Regex),
+    File(std::fs::File),
+    Future(std::pin::Pin<Box<dyn std::future::Future<Output = crate::interpreter::Return>>>),
+    Function(Function),
 }
 
 pub struct Cell {
@@ -37,6 +47,9 @@ pub struct Cell {
 }
 
 impl Cell {
+    pub fn take_value(&mut self) -> CellValue {
+        std::mem::replace(&mut self.value, CellValue::None)
+    }
     pub fn new(val: CellValue, proto: Option<Handle<Cell>>) -> Self {
         Self {
             value: val,

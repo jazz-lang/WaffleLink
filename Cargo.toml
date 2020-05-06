@@ -11,6 +11,7 @@ cgc-single-threaded = "0.1"
 hashlink = "0.5"
 fancy-regex = "0.3"
 derive_more = "0.99"
+futures = "0.3"
 [features]
 value64 = []
 value32-64 = []

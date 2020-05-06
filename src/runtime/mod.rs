@@ -23,6 +23,7 @@ pub struct Runtime {
     pub boolean_prototype: Value,
     pub byte_array_prototype: Value,
     pub globals: HashMap<String, Value>,
+    pub stack: crate::interpreter::callstack::CallStack,
 }
 
 impl Runtime {

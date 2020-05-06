@@ -33,6 +33,14 @@ pub enum Ins {
         begin: VirtualRegister,
         end: VirtualRegister,
     },
+    #[display(fmt = "tailcall {},{},{},{}-{}", dst, function, this, begin, end)]
+    TailCall {
+        dst: VirtualRegister,
+        function: VirtualRegister,
+        this: VirtualRegister,
+        begin: VirtualRegister,
+        end: VirtualRegister,
+    },
     // dst = yield res
     #[display(fmt = "yield {},{}", dst, res)]
     Yield {
