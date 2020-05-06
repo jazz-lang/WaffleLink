@@ -35,6 +35,7 @@ pub struct CodeBlock {
     pub arg_regs_count: u32,
     pub tmp_regs_count: u32,
     pub code: Vec<BasicBlock>,
+    pub hotness: usize,
     pub jit_stub: Option<extern "C" fn(&mut Runtime, Value, &[Value]) -> Result<Value, Value>>,
 }
 

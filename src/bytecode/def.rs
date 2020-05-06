@@ -102,6 +102,13 @@ pub enum Ins {
         src: VirtualRegister,
         fdbk: u32,
     },
+    /// Creates string from two values
+    #[display(fmt = "concat {},{},{}", dst, lhs, src)]
+    Concat {
+        dst: VirtualRegister,
+        lhs: VirtualRegister,
+        src: VirtualRegister,
+    },
     #[display(fmt = "shr {},{},{}", dst, lhs, src)]
     Shr {
         dst: VirtualRegister,

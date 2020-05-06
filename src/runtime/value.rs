@@ -545,23 +545,52 @@ impl Value {
             self.as_double()
         }
     }
-
-    pub fn to_string(&self, rt: &mut Runtime) -> String {
+    pub fn to_boolean(&self) -> bool {
         if self.is_number() {
-            self.to_number().to_string()
+            if self.is_int32() {
+                self.as_int32() != 0
+            } else {
+                self.to_number() != 0.0
+            }
+        } else if self.is_boolean() {
+            self.is_true()
+        } else if self.is_undefined_or_null() {
+            false
+        } else if self.is_cell() {
+            match self.as_cell().value {
+                CellValue::String(ref x) => x.len() != 0,
+                CellValue::Array(ref x) => x.len() != 0,
+                CellValue::ByteArray(ref x) => x.len() != 0,
+                _ => true,
+            }
+        } else {
+            false
+        }
+    }
+    pub fn to_string(&self, rt: &mut Runtime) -> Result<String, Self> {
+        if self.is_number() {
+            Ok(self.to_number().to_string())
         } else if self.is_true() || self.is_false() {
             if self.is_true() {
-                "true".to_string()
+                Ok("true".to_string())
             } else {
-                "false".to_string()
+                Ok("false".to_string())
             }
         } else if self.is_null() {
-            "null".to_string()
+            Ok("null".to_string())
         } else if self.is_undefined() {
-            "undefined".to_string()
+            Ok("undefined".to_string())
         } else {
             // TODO: Get current value prototype and invoke `toString(self)` on it.
-            String::new()
+            Ok(String::new())
+        }
+    }
+
+    pub fn number(x: f64) -> Self {
+        if x as i32 as f64 == x {
+            Self::new_int(x as i32)
+        } else {
+            Self::new_double(x)
         }
     }
 }

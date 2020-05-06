@@ -1,10 +1,10 @@
 use super::*;
+use crate::interpreter::callstack::CallFrame;
 use cgc::api::*;
 use cgc::heap::*;
 use fancy_regex::Regex;
 use hashlink::*;
 use value::*;
-
 pub enum Function {
     AsyncNative {
         name: Value,
@@ -27,6 +27,13 @@ pub struct RegularFunction {
     pub arguments: Vec<String>,
     pub env: Value,
     pub code: Handle<crate::bytecode::CodeBlock>,
+    /// Generator functions compiled to simple state machine
+    pub kind: RegularFunctionKind,
+}
+
+pub enum RegularFunctionKind {
+    Ordinal,
+    Generator,
 }
 
 pub enum CellValue {
@@ -86,7 +93,7 @@ impl Cell {
             _ => None,
         }
     }
-    pub fn put(&mut self, rt: &mut Runtime, key: Value, value: Value) {
+    pub fn put(&mut self, rt: &mut Runtime, key: Value, value: Value) -> Result<(), Value> {
         if key.is_number() {
             let idx = key.to_number().floor() as usize;
             if let CellValue::Array(ref mut arr) = self.value {
@@ -99,7 +106,7 @@ impl Cell {
             } else if let CellValue::ByteArray(ref mut arr) = self.value {
                 if idx < arr.len() {
                     arr[idx] = value.to_int32() as u8;
-                    return;
+                    return Ok(());
                 }
             } else if let CellValue::String(ref mut s) = self.value {
                 if idx < s.len() {
@@ -108,7 +115,8 @@ impl Cell {
             }
         }
 
-        self.put_named(value, &key.to_string(rt));
+        self.put_named(value, &key.to_string(rt)?);
+        Ok(())
     }
     pub fn put_named(&mut self, value: Value, name: &str) -> bool {
         if self.properties.contains_key(name) {
@@ -172,23 +180,23 @@ impl Cell {
         }
     }
 
-    pub fn lookup(&mut self, rt: &mut Runtime, value: Value) -> Option<Value> {
+    pub fn lookup(&mut self, rt: &mut Runtime, value: Value) -> Result<Option<Value>, Value> {
         let try_index = value.is_number();
         use super::deref_ptr::DerefPointer;
         let mut object = Some(DerefPointer::new(self));
-        let name = value.to_string(rt);
+        let name = value.to_string(rt)?;
         while let Some(obj) = object {
             if try_index {
                 if let Some(val) = self._try_index(rt, value.to_int32()) {
-                    return Some(val);
+                    return Ok(Some(val));
                 }
             }
             if let Some(prop) = obj.lookup_in_self(&name) {
-                return Some(prop);
+                return Ok(Some(prop));
             }
             object = obj.prototype.map(|x| DerefPointer::new(x.get()));
         }
-        None
+        Ok(None)
     }
 }
 
