@@ -7,8 +7,18 @@ macro_rules! offset_of {
     };
 }
 
+#[macro_export]
+macro_rules! trace_if {
+    ($cond: expr, $($t: tt)*) => {
+        if $cond {
+            log::trace!($($t)*);
+        }
+    };
+}
+
 pub mod bytecode;
 pub mod bytecompiler;
+pub mod common;
 pub mod frontend;
 pub mod fullcodegen;
 pub mod interpreter;

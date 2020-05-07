@@ -235,12 +235,12 @@ pub enum Ins {
 }
 
 impl Ins {
-    pub fn get_defs(&self) -> std::collections::HashSet<VirtualRegister> {
-        let mut set = std::collections::HashSet::new();
+    pub fn get_defs(&self) -> Vec<VirtualRegister> {
+        let mut set = Vec::new();
         macro_rules! r {
             ($x: expr) => {{
                 if $x.is_local() {
-                    set.insert($x);
+                    set.push($x);
                 }
             }};
         }
@@ -286,12 +286,12 @@ impl Ins {
         set
     }
 
-    pub fn get_uses(&self) -> std::collections::HashSet<VirtualRegister> {
-        let mut set = std::collections::HashSet::new();
+    pub fn get_uses(&self) -> Vec<VirtualRegister> {
+        let mut set = Vec::new();
         macro_rules! r {
             ($x: expr) => {{
                 if $x.is_local() {
-                    set.insert($x);
+                    set.push($x);
                 }
             }};
             ($($x: expr),*) => {
@@ -333,5 +333,18 @@ impl Ins {
             _ => (),
         }
         set
+    }
+
+    pub fn branch_targets(&self) -> Vec<u32> {
+        match &self {
+            Ins::Jump { dst } => vec![*dst],
+            Ins::JumpConditional {
+                cond: _,
+                if_true,
+                if_false,
+            } => vec![*if_true, *if_false],
+            Ins::TryCatch { try_, catch, .. } => vec![*try_, *catch],
+            _ => vec![],
+        }
     }
 }

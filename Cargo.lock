@@ -636,6 +636,7 @@ dependencies = [
  "futures",
  "hashlink",
  "hmap",
+ "log",
 ]
 
 [[package]]

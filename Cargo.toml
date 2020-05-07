@@ -12,6 +12,7 @@ hashlink = "0.5"
 fancy-regex = "0.3"
 derive_more = "0.99"
 futures = "0.3"
+log = "0.4"
 hmap = "0.1"
 bv = "0.11"
 [features]
