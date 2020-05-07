@@ -233,3 +233,105 @@ pub enum Ins {
     #[display(fmt = "load_this {}", dst)]
     LoadThis { dst: VirtualRegister },
 }
+
+impl Ins {
+    pub fn get_defs(&self) -> std::collections::HashSet<VirtualRegister> {
+        let mut set = std::collections::HashSet::new();
+        macro_rules! r {
+            ($x: expr) => {{
+                if $x.is_local() {
+                    set.insert($x);
+                }
+            }};
+        }
+        use Ins::*;
+        match *self {
+            Mov { dst, .. } => r!(dst),
+            Add { dst, .. }
+            | Sub { dst, .. }
+            | Div { dst, .. }
+            | Mul { dst, .. }
+            | Greater { dst, .. }
+            | GreaterEq { dst, .. }
+            | Less { dst, .. }
+            | LessEq { dst, .. }
+            | Eq { dst, .. }
+            | NEq { dst, .. }
+            | LoadI32 { dst, .. }
+            | NewGeneratorFunction { dst, .. }
+            | Call { dst, .. }
+            | Yield { dst, .. }
+            | Await { dst, .. }
+            | TryCatch { reg: dst, .. }
+            | Concat { dst, .. }
+            | Shr { dst, .. }
+            | Shl { dst, .. }
+            | UShr { dst, .. }
+            | LoadUp { dst, .. }
+            | LoadGlobal { dst, .. }
+            | IteratorOpen { dst, .. }
+            | GetById { dst, .. }
+            | GetByVal { dst, .. }
+            | LoadThis { dst, .. }
+            | Mod { dst, .. } => r!(dst),
+            IteratorNext {
+                next, done, value, ..
+            } => {
+                r!(next);
+                r!(done);
+                r!(value);
+            }
+            _ => (),
+        }
+        set
+    }
+
+    pub fn get_uses(&self) -> std::collections::HashSet<VirtualRegister> {
+        let mut set = std::collections::HashSet::new();
+        macro_rules! r {
+            ($x: expr) => {{
+                if $x.is_local() {
+                    set.insert($x);
+                }
+            }};
+            ($($x: expr),*) => {
+                {$(r!($x);)*}
+            }
+        }
+        use Ins::*;
+        match *self {
+            Mov { src, .. } => r!(src),
+            NewGeneratorFunction { src, .. } => r!(src),
+            CloseEnv { function, .. } => r!(function),
+            Call { function, this, .. } => r!(function, this),
+            Ins::Yield { res, .. } => r!(res),
+            Throw { src } => r!(src),
+            Add { lhs, src, .. }
+            | Sub { lhs, src, .. }
+            | Div { lhs, src, .. }
+            | Mul { lhs, src, .. }
+            | Mod { lhs, src, .. }
+            | Shr { lhs, src, .. }
+            | Shl { lhs, src, .. }
+            | UShr { lhs, src, .. }
+            | Eq { lhs, src, .. }
+            | NEq { lhs, src, .. }
+            | Greater { lhs, src, .. }
+            | GreaterEq { lhs, src, .. }
+            | Less { lhs, src, .. }
+            | LessEq { lhs, src, .. }
+            | Concat { lhs, src, .. } => r!(lhs, src),
+            Ins::IteratorNext { iterator, .. } => r!(iterator),
+            IteratorOpen { iterable, .. } => r!(iterable),
+            GetById { base, id, .. } => r!(base, id),
+            GetByVal { base, val, .. } => r!(base, val),
+            PutById { base, id, .. } => r!(base, id),
+            PutByVal { base, val, .. } => r!(base, val),
+            Ins::JumpConditional { cond, .. } => r!(cond),
+            Return { val } => r!(val),
+            Await { on, .. } => r!(on),
+            _ => (),
+        }
+        set
+    }
+}

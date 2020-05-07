@@ -28,6 +28,7 @@ impl Finalizer for BasicBlock {
 impl Traceable for BasicBlock {
     fn trace_with(&self, _tracer: &mut Tracer) {}
 }
+use crate::jit::*;
 use crate::runtime::value::*;
 use crate::runtime::*;
 pub struct CodeBlock {
@@ -36,7 +37,8 @@ pub struct CodeBlock {
     pub tmp_regs_count: u32,
     pub code: Vec<BasicBlock>,
     pub hotness: usize,
-    pub jit_stub: Option<extern "C" fn(&mut Runtime, Value, &[Value]) -> Result<Value, Value>>,
+    pub jit_stub:
+        Option<extern "C" fn(&mut osr::OSREntry, &mut Runtime, Value, &[Value]) -> JITResult>,
 }
 
 impl CodeBlock {

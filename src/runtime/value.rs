@@ -581,11 +581,55 @@ impl Value {
         } else if self.is_undefined() {
             Ok("undefined".to_string())
         } else {
-            // TODO: Get current value prototype and invoke `toString(self)` on it.
-            Ok(String::new())
+            if self.is_cell() {
+                if let CellValue::String(ref s) = self.as_cell().value {
+                    return Ok((**s).clone());
+                }
+                let key = rt.allocate_string("toString");
+                let x = self.lookup(rt, Value::from(key.to_heap()))?;
+                if let Some(to_string) = x {
+                    if to_string.is_cell() {
+                        if let CellValue::Function(_) = to_string.as_cell().value {
+                            return match rt.call(to_string, *self, &[]) {
+                                Ok(x) => x.to_string(rt),
+                                Err(e) => Err(e),
+                            };
+                        } else {
+                            return Err(Value::from(
+                                rt.allocate_string("toString is not a function,expected function"),
+                            ));
+                        }
+                    }
+                }
+            }
+            unimplemented!()
         }
     }
 
+    pub fn lookup(&self, rt: &mut Runtime, key: Value) -> Result<Option<Value>, Value> {
+        let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
+        if self.is_cell() {
+            self.as_cell().lookup(r, key)
+        } else if self.is_number() {
+            rt.number_prototype.lookup(r, key)
+        } else if self.is_boolean() {
+            rt.boolean_prototype.lookup(r, key)
+        } else {
+            Ok(None)
+        }
+    }
+    pub fn put(&self, rt: &mut Runtime, key: Value, val: Value) -> Result<(), Value> {
+        let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
+        if self.is_cell() {
+            self.as_cell().put(rt, key, val)
+        } else if self.is_number() {
+            rt.number_prototype.put(r, key, val)
+        } else if self.is_boolean() {
+            rt.boolean_prototype.put(r, key, val)
+        } else {
+            Ok(())
+        }
+    }
     pub fn number(x: f64) -> Self {
         if x as i32 as f64 == x {
             Self::new_int(x as i32)

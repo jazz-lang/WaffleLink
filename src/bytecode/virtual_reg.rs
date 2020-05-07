@@ -1,42 +1,47 @@
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct VirtualRegister(pub i32);
 use super::*;
 impl VirtualRegister {
+    pub const FIRST_AVAILABLE_LOCAL_REG: Self = Self::tmp(512);
     pub const INVALID_VIRTUAL_REGISTER: i32 = 0x3fffffff;
-    pub fn is_local(self) -> bool {
+    pub const fn is_local(self) -> bool {
         self.0 < 0
     }
 
-    pub fn is_argument(self) -> bool {
+    pub const fn is_argument(self) -> bool {
         self.0 >= 0
     }
 
-    pub fn is_constant(self) -> bool {
+    pub const fn is_constant(self) -> bool {
         self.0 >= FIRST_CONSTNAT_REG_INDEX
     }
 
-    pub fn to_local(self) -> i32 {
+    pub const fn to_local(self) -> i32 {
         -1 - self.0
     }
 
-    pub fn to_argument(self) -> i32 {
+    pub const fn to_argument(self) -> i32 {
         self.0 - 0x80000000u32 as i32
     }
 
-    pub fn to_constant(self) -> i32 {
+    pub const fn to_constant(self) -> i32 {
         self.0 - FIRST_CONSTNAT_REG_INDEX
     }
 
-    pub fn tmp(x: i32) -> Self {
+    pub const fn tmp(x: i32) -> Self {
         Self(-1 - x)
     }
 
-    pub fn argument(x: i32) -> Self {
+    pub const fn argument(x: i32) -> Self {
         Self(x + 0x80000000u32 as i32)
     }
 
-    pub fn constant(x: i32) -> Self {
+    pub const fn constant(x: i32) -> Self {
         Self(x + FIRST_CONSTNAT_REG_INDEX)
+    }
+
+    pub fn is_real(self) -> bool {
+        self.is_local() && self.to_local() < Self::FIRST_AVAILABLE_LOCAL_REG.to_local()
     }
 }
 
@@ -51,5 +56,19 @@ impl fmt::Display for VirtualRegister {
         } else {
             write!(f, "id{}", self.to_constant())
         }
+    }
+}
+
+use std::ops::*;
+
+impl Add for VirtualRegister {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        if self.is_local() && rhs.is_local() {
+            return VirtualRegister::tmp(self.to_local() + rhs.to_local());
+        } else if self.is_argument() && rhs.is_argument() {
+            return VirtualRegister::argument(self.to_argument() + rhs.to_local());
+        }
+        panic!();
     }
 }

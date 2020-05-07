@@ -3,12 +3,13 @@ pub mod deref_ptr;
 
 pub mod pure_nan;
 pub mod value;
+use crate::jit::*;
 use cell::*;
 use cgc::api::*;
 use cgc::heap::Heap;
+use osr::*;
 use std::collections::HashMap;
 use value::*;
-
 pub struct Runtime {
     pub heap: Heap,
     pub string_prototype: Value,
@@ -76,7 +77,29 @@ impl Runtime {
                         }
                         _ => {
                             if let Some(jit) = regular.code.jit_stub {
-                                return jit(self, this, args);
+                                self.stack
+                                    .push(unsafe { &mut *ptr }, val, regular.code, this)?;
+                                // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
+                                // that will start interpreting.
+                                let mut entry = OSREntry {
+                                    to_bp: 0,
+                                    to_ip: jit as usize, // if `to_ip` points to current func then skip all jump tables and start execution.
+                                };
+                                match jit(&mut entry, self, this, args) {
+                                    JITResult::Err(e) => return Err(e),
+                                    JITResult::Ok(x) => return Ok(x),
+                                    JITResult::OSRExit => {
+                                        self.stack.current_frame().ip = entry.to_ip;
+                                        self.stack.current_frame().bp = entry.to_bp;
+                                        match self.interpret() {
+                                            Return::Return(val) => return Ok(val),
+                                            Return::Error(e) => return Err(e),
+                                            Return::Yield { .. } => {
+                                                unimplemented!("TODO: Generators")
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 regular.code.get_mut().hotness =
                                     regular.code.hotness.wrapping_add(1);
@@ -97,6 +120,10 @@ impl Runtime {
                 }
                 _ => unimplemented!("TODO: Async"),
             }
+        }
+        let key = self.allocate_string("call");
+        if let Some(call) = func.lookup(self, Value::from(key.to_heap()))? {
+            return self.call(call, this, args);
         }
         return Err(Value::from(self.allocate_string("not a function")));
     }

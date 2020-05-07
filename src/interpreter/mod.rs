@@ -332,6 +332,109 @@ impl Runtime {
                         Value::false_()
                     };
                 }
+                Ins::Shr { dst, lhs, src, .. } => {
+                    let lhs = current.r(lhs).to_int32();
+                    let rhs = current.r(src).to_int32();
+                    *current.r_mut(dst) = Value::new_int(lhs >> (rhs & 0x1f));
+                }
+                Ins::UShr { dst, lhs, src, .. } => {
+                    let lhs = current.r(lhs).to_uint32();
+                    let rhs = current.r(src).to_uint32();
+                    *current.r_mut(dst) = Value::new_int((lhs << rhs & 0x1f) as i32);
+                }
+                Ins::Shl { dst, lhs, src, .. } => {
+                    let lhs = current.r(lhs).to_int32();
+                    let rhs = current.r(src).to_int32();
+                    *current.r_mut(dst) = Value::new_int(lhs << (rhs & 0x1f));
+                }
+                Ins::Concat { dst, lhs, src } => {
+                    let lhs = current.r(lhs);
+                    let rhs = current.r(src);
+                    let s1 = lhs.to_string(self);
+                    let s2 = rhs.to_string(self);
+                    let s1 = match s1 {
+                        Ok(v) => v,
+                        Err(e) => return Return::Error(e),
+                    };
+                    let s2 = match s2 {
+                        Ok(v) => v,
+                        Err(e) => return Return::Error(e),
+                    };
+                    let s = format!("{}{}", s1, s2);
+                    *current.r_mut(dst) = Value::from(self.allocate_string(s));
+                }
+                Ins::LoadUp { dst, up } => {
+                    let func = current.func;
+                    if let CellValue::Array(ref arr) = func.as_cell().value {
+                        *current.r_mut(dst) = arr[up as usize];
+                    } else {
+                        panic!("Function does not have environment");
+                    }
+                }
+                Ins::Call {
+                    dst,
+                    function,
+                    this,
+                    begin,
+                    end,
+                } => {
+                    assert!(begin.is_argument());
+                    assert!(end.is_argument());
+                    let arguments = {
+                        let mut v = vec![];
+                        for x in begin.to_argument()..=end.to_argument() {
+                            v.push(current.r(VirtualRegister::argument(x)));
+                        }
+                        v
+                    };
+                    let function = current.r(function);
+                    let this = current.r(this);
+                    match self.call(function, this, &arguments) {
+                        Ok(val) => {
+                            *current.r_mut(dst) = val;
+                        }
+                        Err(e) => return Return::Error(e),
+                    }
+                }
+                Ins::GetById {
+                    dst,
+                    base,
+                    id,
+                    fdbk: _,
+                } => {
+                    let base = current.r(base);
+                    let id = current.r(id);
+                    *current.r_mut(dst) = match base.lookup(self, id) {
+                        Ok(val) => val.unwrap_or(Value::undefined()),
+                        Err(e) => return Return::Error(e),
+                    }
+                }
+                Ins::GetByVal { dst, base, val } => {
+                    let base = current.r(base);
+                    let id = current.r(val);
+                    *current.r_mut(dst) = match base.lookup(self, id) {
+                        Ok(val) => val.unwrap_or(Value::undefined()),
+                        Err(e) => return Return::Error(e),
+                    }
+                }
+                Ins::PutById { val, base, id } => {
+                    let base = current.r(base);
+                    let val = current.r(val);
+                    let key = current.r(id);
+                    match base.put(self, key, val) {
+                        Err(e) => return Return::Error(e),
+                        _ => (),
+                    }
+                }
+                Ins::PutByVal { src, base, val } => {
+                    let base = current.r(base);
+                    let key = current.r(val);
+                    let val = current.r(src);
+                    match base.put(self, key, val) {
+                        Err(e) => return Return::Error(e),
+                        _ => (),
+                    }
+                }
                 /*Ins::Await { dst, on } => {
                     let maybe_future = current.r(on);
                     if maybe_future.is_cell() {

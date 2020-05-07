@@ -8,5 +8,9 @@ macro_rules! offset_of {
 }
 
 pub mod bytecode;
+pub mod bytecompiler;
+pub mod frontend;
+pub mod fullcodegen;
 pub mod interpreter;
+pub mod jit;
 pub mod runtime;
