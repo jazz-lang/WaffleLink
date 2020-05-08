@@ -8,14 +8,13 @@ const MAX_REWRITE_ITERATIONS_ALLOWED: usize = 50;
 /// when using this with large workloads)
 const CHECK_INVARIANTS: bool = false;
 
-type ID = u32;
 use super::interference_graph::*;
 use super::loopanalysis::*;
 use crate::bytecode::*;
 use cgc::api::*;
-use def::*;
+
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
-use log::{debug, error, info, trace, warn};
+use log::{error, trace};
 use virtual_reg::*;
 /// GraphColoring algorithm
 /// based on Appel's book section 11.4

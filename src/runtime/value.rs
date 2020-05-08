@@ -714,3 +714,11 @@ impl From<&Rooted<Cell>> for Value {
         }
     }
 }
+use std::hash::{Hash, Hasher};
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, s: &mut H) {
+        unsafe {
+            self.u.as_int64.hash(s);
+        }
+    }
+}

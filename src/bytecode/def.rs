@@ -1,5 +1,6 @@
 use super::virtual_reg::*;
 use derive_more::Display;
+
 #[derive(Copy, Clone, Display)]
 pub enum Ins {
     // dst = src
@@ -20,6 +21,7 @@ pub enum Ins {
     #[display(fmt = "close_env {}, {}-{}", function, begin, end)]
     // function.env = registers[begin..end]
     CloseEnv {
+        dst: VirtualRegister,
         function: VirtualRegister,
         begin: VirtualRegister,
         end: VirtualRegister,
@@ -234,7 +236,46 @@ pub enum Ins {
     LoadThis { dst: VirtualRegister },
 }
 
+#[derive(Hash, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Div,
+    Mul,
+    Mod,
+    Eq,
+    NEq,
+    Greater,
+    GreaterEq,
+    Less,
+    LessEq,
+    UShr,
+    Shr,
+    Shl,
+}
+
 impl Ins {
+    /// Returns lhs and rhs registers, and hashable `BinaryOp`.
+    pub fn to_binary(&self) -> Option<(VirtualRegister, BinaryOp, VirtualRegister)> {
+        use Ins::*;
+        match *self {
+            Add { lhs, src, .. } => Some((lhs, BinaryOp::Add, src)),
+            Sub { lhs, src, .. } => Some((lhs, BinaryOp::Sub, src)),
+            Div { lhs, src, .. } => Some((lhs, BinaryOp::Div, src)),
+            Mul { lhs, src, .. } => Some((lhs, BinaryOp::Mul, src)),
+            Mod { lhs, src, .. } => Some((lhs, BinaryOp::Mod, src)),
+            Eq { lhs, src, .. } => Some((lhs, BinaryOp::Eq, src)),
+            NEq { lhs, src, .. } => Some((lhs, BinaryOp::NEq, src)),
+            Greater { lhs, src, .. } => Some((lhs, BinaryOp::Greater, src)),
+            GreaterEq { lhs, src, .. } => Some((lhs, BinaryOp::GreaterEq, src)),
+            Less { lhs, src, .. } => Some((lhs, BinaryOp::Less, src)),
+            LessEq { lhs, src, .. } => Some((lhs, BinaryOp::LessEq, src)),
+            UShr { lhs, src, .. } => Some((lhs, BinaryOp::UShr, src)),
+            Shr { lhs, src, .. } => Some((lhs, BinaryOp::Shr, src)),
+            Shl { lhs, src, .. } => Some((lhs, BinaryOp::Shl, src)),
+            _ => None,
+        }
+    }
     pub fn get_defs(&self) -> Vec<VirtualRegister> {
         let mut set = Vec::new();
         macro_rules! r {
@@ -281,6 +322,7 @@ impl Ins {
                 r!(done);
                 r!(value);
             }
+            CloseEnv { dst, .. } => r!(dst),
             _ => (),
         }
         set
@@ -333,6 +375,66 @@ impl Ins {
             _ => (),
         }
         set
+    }
+
+    pub fn replace_reg(&mut self, from: VirtualRegister, to: VirtualRegister) {
+        macro_rules! r {
+            ($x: expr) => {{
+                if *$x == from {
+                    *$x = to;
+                }
+            }};
+            ($($x: expr),*) => {
+                {$(r!($x);)*}
+            }
+        }
+        use Ins::*;
+        match self {
+            Mov { dst, src } => r!(dst, src),
+            Add { dst, lhs, src, .. }
+            | Sub { dst, lhs, src, .. }
+            | Div { dst, lhs, src, .. }
+            | Mul { dst, lhs, src, .. }
+            | Mod { dst, lhs, src, .. }
+            | Shr { dst, lhs, src, .. }
+            | Shl { dst, lhs, src, .. }
+            | UShr { dst, lhs, src, .. }
+            | Greater { dst, lhs, src, .. }
+            | GreaterEq { dst, lhs, src, .. }
+            | Less { dst, lhs, src, .. }
+            | LessEq { dst, lhs, src, .. }
+            | Eq { dst, lhs, src, .. }
+            | NEq { dst, lhs, src, .. } => r!(dst, lhs, src),
+            LoadGlobal { dst, .. } => r!(dst),
+            Yield { dst, res } => r!(dst, res),
+            Return { val } => r!(val),
+            Await { dst, on } => r!(dst, on),
+            JumpConditional { cond, .. } => r!(cond),
+            IteratorOpen { dst, iterable } => r!(dst, iterable),
+            IteratorNext {
+                done,
+                next,
+                value,
+                iterator,
+            } => r!(next, done, value, iterator),
+            LoadUp { dst, .. } => r!(dst),
+            GetById { dst, base, id, .. } => r!(dst, base, id),
+            PutById { val, base, id, .. } => r!(val, base, id),
+            GetByVal { dst, base, val, .. } => r!(dst, base, val),
+            PutByVal { src, base, val } => r!(src, base, val),
+            Call {
+                function,
+                dst,
+                this,
+                ..
+            } => r!(function, dst, this),
+            NewGeneratorFunction { dst, src } => r!(dst, src),
+            CloseEnv { dst, function, .. } => r!(dst, function),
+            Throw { src } => r!(src),
+            TryCatch { reg, .. } => r!(reg),
+            LoadThis { dst } => r!(dst),
+            _ => (),
+        }
     }
 
     pub fn branch_targets(&self) -> Vec<u32> {

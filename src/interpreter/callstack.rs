@@ -36,7 +36,7 @@ impl CallFrame {
         } else if r.is_argument() {
             self.entries[r.to_argument() as usize]
         } else if r.is_constant() {
-            self.code.constants[r.to_constant() as usize]
+            self.code.get_constant(r.to_constant())
         } else {
             unreachable!()
         }
@@ -48,7 +48,7 @@ impl CallFrame {
         } else if r.is_argument() {
             &mut self.entries[r.to_argument() as usize]
         } else if r.is_constant() {
-            &mut self.code.constants[r.to_constant() as usize]
+            self.code.get_constant_mut(r.to_constant())
         } else {
             unreachable!()
         }

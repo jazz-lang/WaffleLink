@@ -5,7 +5,6 @@ pub mod virtual_reg;
 //      0x00000000-0x3FFFFFFF  Forwards indices from the CallFrame pointer are local vars and temporaries with the function's callframe.
 //      0x40000000-0x7FFFFFFF  Positive indices from 0x40000000 specify entries in the constant pool on the CodeBlock.
 pub const FIRST_CONSTNAT_REG_INDEX: i32 = 0x40000000;
-
 use def::*;
 use hashlink::{LinkedHashMap, LinkedHashSet};
 pub struct BasicBlock {
@@ -39,7 +38,8 @@ use crate::jit::*;
 use crate::runtime::value::*;
 use crate::runtime::*;
 pub struct CodeBlock {
-    pub constants: Vec<Value>,
+    pub constants_: Vec<Value>,
+    pub constants: LinkedHashMap<Value, usize>,
     pub arg_regs_count: u32,
     pub tmp_regs_count: u32,
     pub code: Vec<BasicBlock>,
@@ -60,11 +60,31 @@ impl CodeBlock {
         }
         Ok(())
     }
+
+    pub fn new_constant(&mut self, val: Value) -> virtual_reg::VirtualRegister {
+        if let Some(x) = self.constants.get(&val) {
+            return virtual_reg::VirtualRegister::constant(*x as i32);
+        } else {
+            let vreg = self.constants_.len();
+            self.constants_.push(val);
+            self.constants.insert(val, vreg);
+            virtual_reg::VirtualRegister::constant(vreg as _)
+        }
+    }
+
+    pub fn get_constant(&self, x: i32) -> Value {
+        self.constants_[x as usize]
+    }
+    pub fn get_constant_mut(&mut self, x: i32) -> &mut Value {
+        &mut self.constants_[x as usize]
+    }
 }
 
 impl Traceable for CodeBlock {
     fn trace_with(&self, tracer: &mut Tracer) {
-        self.constants.trace_with(tracer);
+        self.constants
+            .iter()
+            .for_each(|(_, val)| val.trace_with(tracer));
     }
 }
 
