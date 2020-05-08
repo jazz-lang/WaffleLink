@@ -276,6 +276,15 @@ impl Ins {
             _ => None,
         }
     }
+    pub fn is_final(&self) -> bool {
+        use Ins::*;
+        match self {
+            Return { .. } => true,
+            Jump { .. } => true,
+            JumpConditional { .. } => true,
+            _ => false,
+        }
+    }
     pub fn get_defs(&self) -> Vec<VirtualRegister> {
         let mut set = Vec::new();
         macro_rules! r {

@@ -155,6 +155,7 @@ impl Runtime {
             let bp = current.bp;
             let ip = current.ip;
             let ins = current.code.code[bp].code[ip];
+            current.ip += 1;
             match ins {
                 Ins::Mov { dst, src } => {
                     let src = current.r(src);
@@ -163,7 +164,7 @@ impl Runtime {
                 }
                 Ins::Return { val } => {
                     let val = current.r(val);
-                    if current.exit_on_return || self.stack.is_empty() {
+                    if current.exit_on_return || self.stack.stack.len() == 1 {
                         return Return::Return(val);
                     }
                     self.stack.pop();

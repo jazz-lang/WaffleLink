@@ -647,6 +647,7 @@ dependencies = [
  "hmap",
  "indexmap",
  "log",
+ "simple_logger",
 ]
 
 [[package]]

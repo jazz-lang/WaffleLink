@@ -51,12 +51,26 @@ pub struct CodeBlock {
 }
 
 impl CodeBlock {
-    pub fn dump<W: std::fmt::Write>(&self, b: &mut W) -> std::fmt::Result {
+    pub fn dump<W: std::fmt::Write>(&self, b: &mut W, rt: &mut Runtime) -> std::fmt::Result {
         for bb in self.code.iter() {
             writeln!(b, "%{}: ", bb.id)?;
             for (i, ins) in bb.code.iter().enumerate() {
                 writeln!(b, "  [{:04}] {}", i, ins)?;
             }
+        }
+        writeln!(b, "Constant table: ")?;
+        for c in self.constants_.iter().enumerate() {
+            let i = c.0;
+            let c = c.1;
+            writeln!(
+                b,
+                "id{} = {}",
+                i,
+                match c.to_string(rt) {
+                    Ok(x) => x,
+                    Err(_) => unreachable!(),
+                }
+            )?;
         }
         Ok(())
     }

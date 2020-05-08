@@ -8,17 +8,27 @@ use crate::runtime::*;
 use cgc::api::*;
 use def::*;
 use std::collections::HashMap;
+use value::*;
 use virtual_reg::*;
 pub struct ByteCompiler {
-    code: Rooted<CodeBlock>,
-    vid: usize,
-    args: usize,
+    pub code: Rooted<CodeBlock>,
+    vid: i32,
+    args: i32,
     free_args: std::collections::VecDeque<VirtualRegister>,
     current: u32,
-    vars: HashMap<String, VirtualRegister>,
+    strings: HashMap<VirtualRegister, String>,
+    pub vars: HashMap<String, VirtualRegister>,
 }
 
 impl ByteCompiler {
+    pub fn new_constant(&mut self, val: Value) -> VirtualRegister {
+        self.code.new_constant(val)
+    }
+    pub fn new_string(&mut self, s: impl AsRef<str>) -> VirtualRegister {
+        let x = self.code.new_constant(Value::undefined());
+        self.strings.insert(x, s.as_ref().to_string());
+        x
+    }
     pub fn new(rt: &mut Runtime) -> Self {
         let block = rt.allocate(CodeBlock {
             constants: Default::default(),
@@ -33,10 +43,11 @@ impl ByteCompiler {
         });
         Self {
             code: block,
-            vid: 0,
+            vid: 256,
             args: 0,
             free_args: Default::default(),
             current: 0,
+            strings: Default::default(),
             vars: Default::default(),
         }
     }
@@ -111,9 +122,14 @@ impl ByteCompiler {
         VirtualRegister::tmp(x as _)
     }
     pub fn areg(&mut self) -> VirtualRegister {
-        let x = self.args;
-        self.args += 1;
-        VirtualRegister::argument(x as _)
+        if let Some(reg) = self.free_args.pop_front() {
+            return reg;
+        } else {
+            let x = self.args;
+            self.args += 1;
+            self.free_args.push_back(VirtualRegister::argument(x as _));
+            self.areg()
+        }
     }
 
     pub fn do_call(
@@ -211,4 +227,492 @@ impl ByteCompiler {
         strength_reduction::regalloc_and_reduce_strength(self.code.to_heap());
         self.code
     }
+}
+use crate::frontend;
+use crate::runtime::*;
+use deref_ptr::*;
+use frontend::ast::*;
+use frontend::msg::*;
+#[derive(Clone, Debug, PartialEq)]
+pub enum Access {
+    Env(i32),
+    Stack(String, VirtualRegister),
+    Global(i32, bool, String),
+    Field(Box<Expr>, String),
+    Index(i32),
+    Array(Box<Expr>, Box<Expr>),
+    This,
+}
+
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub struct Functions {}
+
+#[derive(Clone)]
+pub struct LoopControlInfo {
+    pub break_point: u16,
+    pub continue_point: u16,
+}
+
+pub struct Context<'a> {
+    pub rt: &'a mut Runtime,
+    pub builder: ByteCompiler,
+    pub parent: Option<DerefPointer<Self>>,
+    pub fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
+    pub functions: Rc<RefCell<Vec<(Rooted<CodeBlock>, VirtualRegister, String)>>>,
+    pub used_upvars: indexmap::IndexMap<String, i32>,
+}
+
+impl<'a> Context<'a> {
+    pub fn global(&self, name: &str) -> Option<VirtualRegister> {
+        self.fmap.borrow().get(name).copied()
+    }
+    pub fn scoped<R, T: FnMut(&mut Self) -> R>(&mut self, mut f: T) -> R {
+        let prev = self.builder.vars.clone();
+        let res = f(self);
+        self.builder.vars = prev;
+        res
+    }
+
+    pub fn access_get(&mut self, acc: Access) -> Result<VirtualRegister, MsgWithPos> {
+        match acc {
+            Access::Env { .. } => unreachable!(),
+            Access::Stack(_, r) => return Ok(r),
+            Access::Global(x, n, name) => {
+                let dst = self.builder.vreg();
+                if !n {
+                    self.builder.emit(Ins::Mov {
+                        dst,
+                        src: VirtualRegister::constant(x),
+                    });
+                    return Ok(dst);
+                } else {
+                    let key = self.builder.new_string(name);
+                    self.builder.emit(Ins::LoadGlobal { dst, name: key });
+                    return Ok(dst);
+                }
+            }
+            Access::Field(e, f) => {
+                let dst = self.builder.vreg();
+                let key = self.builder.new_string(f);
+                let o = self.compile(&e)?;
+                self.builder.emit(Ins::GetById {
+                    dst: dst,
+                    base: o,
+                    id: key,
+                    fdbk: 0,
+                });
+                return Ok(dst);
+            }
+            Access::This => {
+                let dst = self.builder.vreg();
+                self.builder.emit(Ins::LoadThis { dst });
+                Ok(dst)
+            }
+            _ => unimplemented!(),
+        }
+    }
+    fn access_env(&mut self, name: &str) -> Option<Access> {
+        let mut current = self.parent;
+        let mut prev = vec![DerefPointer::new(self)];
+        while let Some(mut ctx) = current {
+            let ctx: &mut Context = &mut *ctx;
+            if ctx.builder.has_var(name) {
+                let mut last_pos = 0;
+                for prev in prev.iter_mut().rev() {
+                    let pos = if !prev.used_upvars.contains_key(name) {
+                        let pos = prev.used_upvars.len();
+                        prev.used_upvars.insert(name.to_owned(), pos as _);
+                        pos as i32
+                    } else {
+                        *prev.used_upvars.get(name).unwrap() as i32
+                    };
+                    last_pos = pos;
+                }
+                return Some(Access::Env(last_pos));
+            }
+            current = ctx.parent;
+            prev.push(DerefPointer::new(ctx));
+        }
+        None
+    }
+    fn ident(&mut self, name: &str) -> VirtualRegister {
+        if self.builder.has_var(name) {
+            return self.builder.get_var(name);
+        } else {
+            if let Some(Access::Env(x)) = self.access_env(name) {
+                let dst = self.builder.vreg();
+                self.builder.emit(Ins::LoadUp { dst, up: x as _ });
+                self.builder.def_var(name.to_owned(), dst);
+                return dst;
+            } else {
+                if let Some(x) = self.global(name) {
+                    let dst = self.builder.vreg();
+                    self.builder.emit(Ins::Mov { dst, src: x });
+                    return dst;
+                } else {
+                    let dst = self.builder.vreg();
+                    let c = self.builder.new_string(name);
+                    self.builder.emit(Ins::LoadGlobal { dst, name: c });
+                    return dst;
+                }
+            }
+        }
+    }
+    pub fn compile_access(&mut self, e: &ExprKind) -> Access {
+        match e {
+            ExprKind::Ident(x) => {
+                let name = x;
+                if self.builder.has_var(name) {
+                    return Access::Stack(name.to_owned(), self.builder.get_var(name));
+                } else {
+                    if let Some(Access::Env(x)) = self.access_env(name) {
+                        let dst = self.builder.vreg();
+                        self.builder.emit(Ins::LoadUp { dst, up: x as _ });
+                        self.builder.def_var(name.to_owned(), dst);
+                        return Access::Stack(name.to_owned(), self.builder.get_var(name));
+                    } else {
+                        if let Some(x) = self.global(name) {
+                            /*self.builder.emit(Ins::Mov { dst, src: x });
+                            return dst;*/
+                            return Access::Global(x.to_constant(), true, name.to_string());
+                        } else {
+                            return Access::Global(0, false, name.to_string());
+                        }
+                    }
+                }
+            }
+            ExprKind::Access(e, f) => {
+                return Access::Field(e.clone(), f.clone());
+            }
+            ExprKind::This => Access::This,
+            ExprKind::ArrayIndex(a, i) => return Access::Array(a.clone(), i.clone()),
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn compile_function(
+        &mut self,
+        params: &[Arg],
+        e: &Box<Expr>,
+        vname: Option<String>,
+    ) -> Result<VirtualRegister, MsgWithPos> {
+        let rt = unsafe { &mut *(self.rt as *mut Runtime) };
+        let mut ctx = Context::new(
+            rt,
+            self.fmap.clone(),
+            self.functions.clone(),
+            Some(DerefPointer::new(self)),
+        );
+        //ctx.builder.fallthrough();
+        for p in params.iter() {
+            ctx.compile_arg(Position::new(0, 0), p)?;
+        }
+        let c = self.builder.new_constant(Value::undefined());
+        if vname.is_some() {
+            self.fmap
+                .borrow_mut()
+                .insert(vname.as_ref().unwrap().to_owned(), c);
+        }
+
+        let res = ctx.compile(e)?;
+        if res.is_local() && res.to_local() != 0 {
+            ctx.builder.emit(Ins::Return { val: res });
+        }
+        let reg = if ctx.used_upvars.is_empty() == false {
+            let mut args = vec![];
+            for (var, _) in ctx.used_upvars.iter() {
+                args.push(self.ident(var));
+            }
+            let dst = self.builder.vreg();
+            self.builder.emit(Ins::Mov { dst, src: c });
+
+            let dst = self.builder.close_env(dst, &args);
+            dst
+        } else {
+            let dst = self.builder.vreg();
+            self.builder.emit(Ins::Mov { dst, src: c });
+
+            dst
+        };
+        let mut code = ctx.builder.finish();
+        let f = function_from_codeblock(
+            self.rt,
+            code.to_heap(),
+            &vname
+                .as_ref()
+                .map(|x| x.to_string())
+                .unwrap_or("<anonymous>".to_string()),
+        );
+        self.builder.code.constants_[c.to_constant() as usize] = f;
+        Ok(reg)
+    }
+    pub fn access_set(&mut self, acc: Access, val: VirtualRegister) -> Result<(), MsgWithPos> {
+        match acc {
+            Access::Stack(name, _) => {
+                self.builder.def_var(name.to_owned(), val);
+                Ok(())
+            }
+            _ => unimplemented!(),
+        }
+    }
+    pub fn compile(&mut self, e: &Expr) -> Result<VirtualRegister, MsgWithPos> {
+        match &e.expr {
+            ExprKind::Function(name, params, body) => {
+                self.compile_function(params, body, name.clone())
+            }
+            ExprKind::Throw(e) => {
+                let x = self.compile(e)?;
+                self.builder.emit(Ins::Throw { src: x });
+                return Ok(VirtualRegister::tmp(0));
+            }
+            ExprKind::Block(v) => {
+                if v.is_empty() {
+                    let dst = self.builder.vreg();
+                    let x = self.builder.new_constant(Value::undefined());
+                    self.builder.emit(Ins::Mov { dst, src: x });
+                    return Ok(dst);
+                } else {
+                    self.builder.fallthrough();
+                    let (last, ret) = self.scoped(|this| {
+                        let mut last = None;
+                        for x in v.iter() {
+                            last = Some(this.compile(x)?);
+                        }
+                        let ret = if this.builder.code.code[this.builder.current as usize]
+                            .code
+                            .last()
+                            .unwrap()
+                            .is_final()
+                            == true
+                        {
+                            if let Ins::Return { .. } = this.builder.code.code
+                                [this.builder.current as usize]
+                                .code
+                                .last()
+                                .unwrap()
+                            {
+                                let bb = this.builder.create_new_block();
+                                this.builder.switch_to_block(bb);
+                                false
+                            } else {
+                                let bb = this.builder.create_new_block();
+                                this.builder.switch_to_block(bb);
+                                false
+                            }
+                        } else {
+                            false
+                        };
+                        Ok((last.unwrap(), ret))
+                    })?;
+                    if last.is_local() && last.to_local() == 0 {
+                        let dst = self.builder.vreg();
+                        let x = self.builder.new_constant(Value::undefined());
+                        self.builder.emit(Ins::Mov { dst, src: x });
+                        return Ok(dst);
+                    } else {
+                        return Ok(last);
+                    }
+                }
+            }
+            ExprKind::ConstInt(x) => {
+                let x = self.builder.new_constant(Value::number(*x as f64));
+                let dst = self.builder.vreg();
+                self.builder.emit(Ins::Mov { dst, src: x });
+                return Ok(dst);
+            }
+            ExprKind::ConstFloat(x) => {
+                let x = self.builder.new_constant(Value::number(*x as f64));
+                let dst = self.builder.vreg();
+                self.builder.emit(Ins::Mov { dst, src: x });
+                return Ok(dst);
+            }
+            ExprKind::ConstStr(x) => {
+                let x = self.builder.new_string(x);
+                let dst = self.builder.vreg();
+                self.builder.emit(Ins::Mov { dst, src: x });
+                return Ok(dst);
+            }
+            ExprKind::Ident(x) => {
+                return Ok(self.ident(x));
+            }
+            ExprKind::Return(Some(e)) => {
+                let val = self.compile(e)?;
+                self.builder.emit(Ins::Return { val });
+                return Ok(VirtualRegister::tmp(0));
+            }
+            ExprKind::Return(None) => unimplemented!(),
+            ExprKind::Let(_, pat, expr) => {
+                let val = self.compile(expr)?;
+                self.compile_var_pattern(e.pos, &pat, false, val)?;
+                return Ok(val);
+            }
+            ExprKind::Assign(lhs, rhs) => {
+                let acc = self.compile_access(&lhs.expr);
+                let val = self.compile(rhs)?;
+                self.access_set(acc, val);
+                Ok(val)
+            }
+            ExprKind::BinOp(lhs, op, rhs) => self.compile_binop(op, lhs, rhs),
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn compile_binop(
+        &mut self,
+        op: &str,
+        lhs: &Expr,
+        rhs: &Expr,
+    ) -> Result<VirtualRegister, MsgWithPos> {
+        let dst = self.builder.vreg();
+        let ins = match op {
+            "+" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Add {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
+            "-" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Sub {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
+            "*" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Mul {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
+            "/" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Div {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
+            _ => unimplemented!(),
+        };
+        self.builder.emit(ins);
+        Ok(dst)
+    }
+
+    pub fn compile_var_pattern(
+        &mut self,
+        pos: Position,
+        pat: &Box<Pattern>,
+        mutable: bool,
+        r: VirtualRegister,
+    ) -> Result<(), MsgWithPos> {
+        match &pat.decl {
+            PatternDecl::Ident(x) => {
+                self.builder.def_var(x.to_owned(), r);
+                return Ok(());
+            }
+            _ => unimplemented!("Other var patterns not yet implemented"),
+        }
+    }
+
+    pub fn compile_arg(&mut self, p: Position, arg: &Arg) -> Result<(), MsgWithPos> {
+        match arg {
+            Arg::Ident(_, name) => {
+                if self.builder.has_var(name) {
+                    return Err(MsgWithPos::new(
+                        p,
+                        Msg::Custom(format!("argument '{}' already defined", name)),
+                    ));
+                }
+                let r = self.builder.areg();
+                let dst = self.builder.vreg();
+                println!("{}", r.is_argument());
+                self.builder.emit(Ins::Mov { dst, src: r });
+                self.builder.def_var(name.to_owned(), dst);
+                Ok(())
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn new(
+        rt: &'a mut Runtime,
+        fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
+        functions: Rc<RefCell<Vec<(Rooted<CodeBlock>, VirtualRegister, String)>>>,
+        parent: Option<DerefPointer<Context<'_>>>,
+    ) -> Self {
+        let mut builder = ByteCompiler::new(rt);
+        builder.create_new_block();
+        Self {
+            builder,
+            parent: unsafe { std::mem::transmute(parent) },
+            fmap,
+            functions,
+            rt,
+            used_upvars: Default::default(),
+        }
+    }
+}
+
+pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>, MsgWithPos> {
+    let ast = Box::new(Expr {
+        pos: Position::new(0, 0),
+        expr: ExprKind::Block(ast.to_vec()),
+    });
+    let mut ctx = Context::new(
+        rt,
+        Rc::new(RefCell::new(Default::default())),
+        Rc::new(RefCell::new(Default::default())),
+        None,
+    );
+    let r = ctx.compile(&ast)?;
+    let r = if r.is_local() && r.to_local() == 0 {
+        let dst = ctx.builder.vreg();
+        let c = ctx.builder.new_constant(Value::undefined());
+        ctx.builder.emit(Ins::Mov { dst, src: c });
+        dst
+    } else {
+        r
+    };
+    ctx.builder.emit(Ins::Return { val: r });
+
+    Ok(ctx.builder.finish())
+}
+
+use frontend::token::*;
+
+pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: &str) -> Value {
+    let mut b = String::new();
+    code.dump(&mut b, rt).unwrap();
+    println!("\nfunction {}(...): \n{}", name, b);
+    use crate::runtime::cell::*;
+    let name = Value::from(rt.allocate_string(name));
+    let func = RegularFunction {
+        code,
+        name,
+        env: Value::undefined(),
+        kind: RegularFunctionKind::Ordinal,
+        arguments: vec![],
+        source: String::new(),
+    };
+    let proto = rt.function_prototype.to_heap();
+    let f = rt.allocate_cell(Cell::new(
+        CellValue::Function(Function::Regular(func)),
+        Some(proto),
+    ));
+    Value::from(f)
 }

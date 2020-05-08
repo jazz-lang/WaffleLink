@@ -7,8 +7,23 @@ use common::multi_map::*;
 use common::tree::*;
 use hashlink::*;
 pub const TRACE_LOOPANALYSIS: bool = false;
-pub fn loopanalysis(code: Handle<CodeBlock>) {
-    let cfg = &code.cfg;
+pub fn loopanalysis(mut code: Handle<CodeBlock>) {
+    let cfg = code.cfg.as_ref().unwrap();
+    let dominators = compute_dominators(code, cfg);
+    let idoms = compute_immediate_dominators(&dominators);
+    let domtree = compute_domtree(0, &idoms);
+    let loops = compute_loops(&domtree, cfg);
+    let merged_loops = compute_merged_loop(&loops);
+    let loop_nest_tree = compute_loop_nest_tree(0, &merged_loops);
+    let loop_depth = compute_loop_depth(&loop_nest_tree, &merged_loops);
+    let result = BCLoopAnalysisResult {
+        domtree,
+        loops,
+        loop_nest_tree,
+        loop_depth,
+    };
+    code.loopanalysis = Some(result);
+    
 }
 
 pub type BCDomTree = Tree<u32>;

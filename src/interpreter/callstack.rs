@@ -33,7 +33,7 @@ impl CallFrame {
     pub fn r(&self, r: VirtualRegister) -> Value {
         if r.is_local() {
             self.registers[r.to_local() as usize]
-        } else if r.is_argument() {
+        } else if r.is_argument() && !r.is_constant() {
             self.entries[r.to_argument() as usize]
         } else if r.is_constant() {
             self.code.get_constant(r.to_constant())
@@ -70,7 +70,7 @@ impl Finalizer for CallFrame {
 }
 
 pub struct CallStack {
-    stack: Vec<StackEntry>,
+    pub(crate) stack: Vec<StackEntry>,
     pub limit: usize,
 }
 
@@ -80,6 +80,12 @@ pub enum StackEntry {
 }
 
 impl CallStack {
+    pub fn new(limit: usize) -> Self {
+        Self {
+            stack: vec![],
+            limit,
+        }
+    }
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
@@ -108,6 +114,7 @@ impl CallStack {
     pub fn current_frame(&mut self) -> Handle<CallFrame> {
         match self.stack.last() {
             Some(StackEntry::Frame(frame)) => frame.to_heap(),
+            None => unreachable!("wtf"),
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }

@@ -12,22 +12,44 @@ use std::collections::HashMap;
 use value::*;
 pub struct Runtime {
     pub heap: Heap,
-    pub string_prototype: Value,
-    pub object_prototype: Value,
-    pub array_prototype: Value,
-    pub number_prototype: Value,
-    pub function_prototype: Value,
-    pub generator_prototype: Value,
-    pub process_prototype: Value,
-    pub file_prototype: Value,
-    pub module_prototype: Value,
-    pub boolean_prototype: Value,
-    pub byte_array_prototype: Value,
+    pub string_prototype: Rooted<Cell>,
+    pub object_prototype: Rooted<Cell>,
+    pub array_prototype: Rooted<Cell>,
+    pub number_prototype: Rooted<Cell>,
+    pub function_prototype: Rooted<Cell>,
+    pub generator_prototype: Rooted<Cell>,
+    pub process_prototype: Rooted<Cell>,
+    pub file_prototype: Rooted<Cell>,
+    pub module_prototype: Rooted<Cell>,
+    pub boolean_prototype: Rooted<Cell>,
+    pub byte_array_prototype: Rooted<Cell>,
     pub globals: HashMap<String, Value>,
     pub stack: crate::interpreter::callstack::CallStack,
 }
 
 impl Runtime {
+    pub fn new() -> Self {
+        let mut heap = Heap::new(32 * 1024, 64 * 1024, true);
+        let object = heap.allocate(Cell::new(CellValue::None, None));
+        let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
+
+        Self {
+            boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            process_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            generator_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            globals: HashMap::new(),
+            stack: crate::interpreter::callstack::CallStack::new(999),
+            module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            object_prototype: object,
+            function_prototype: func,
+            number_prototype: heap.allocate(Cell::new(CellValue::None, None)),
+            heap,
+        }
+    }
     #[inline]
     pub fn allocate_cell(&mut self, cell: Cell) -> Rooted<Cell> {
         self.heap.allocate(cell)
@@ -44,7 +66,7 @@ impl Runtime {
 
     pub fn allocate_string(&mut self, string: impl AsRef<str>) -> Rooted<Cell> {
         let s = string.as_ref().to_string();
-        let proto = self.string_prototype.as_cell();
+        let proto = self.string_prototype.to_heap();
         let cell = Cell::new(CellValue::String(Box::new(s)), Some(proto));
 
         self.allocate_cell(cell)

@@ -188,7 +188,7 @@ impl Value {
     }
 
     pub fn as_cell(&self) -> Handle<Cell> {
-        assert!(self.is_cell(), "Value payload is not a cell!");
+        //assert!(self.is_cell(), "Value payload is not a cell!");
         unsafe { std::mem::transmute(self.payload()) }
     }
     pub fn as_cell_ref(&self) -> &Handle<Cell> {
@@ -310,7 +310,7 @@ impl Value {
     pub const VALUE_NULL: i64 = Self::OTHER_TAG;
     pub const MISC_TAG: i64 = Self::OTHER_TAG | Self::BOOL_TAG | Self::UNDEFINED_TAG;
     /// NOT_CELL_MASK is used to check for all types of immediate values (either number or 'other').
-    pub const NOT_CELL_MASK: i64 = Self::NUMBER_TAG | Self::OTHER_TAG;
+    pub const NOT_CELL_MASK: i64 = (Self::NUMBER_TAG as u64 | Self::OTHER_TAG as u64) as i64;
     /// These special values are never visible to JavaScript code; Empty is used to represent
     /// Array holes, and for uninitialized Values. Deleted is used in hash table code.
     /// These values would map to cell types in the Value encoding, but not valid GC cell
@@ -399,7 +399,7 @@ impl Value {
         unsafe { self.u.as_int64 & !Self::UNDEFINED_TAG == Self::VALUE_FALSE }
     }
     pub fn is_cell(&self) -> bool {
-        unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK) != 0 }
+        unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK) == 0 }
     }
 
     pub fn new_double(x: f64) -> Self {
@@ -426,7 +426,7 @@ impl Value {
     }
 
     pub fn as_cell(&self) -> Handle<Cell> {
-        assert!(self.is_cell());
+        //assert!(self.is_cell());
         unsafe { self.u.cell }
     }
     pub fn as_cell_ref(&self) -> &Handle<Cell> {
@@ -576,14 +576,29 @@ impl Value {
             } else {
                 Ok("false".to_string())
             }
-        } else if self.is_null() {
-            Ok("null".to_string())
-        } else if self.is_undefined() {
-            Ok("undefined".to_string())
+        } else if self.is_undefined_or_null() {
+            if self.is_null() {
+                Ok("null".to_string())
+            } else {
+                Ok("undefined".to_string())
+            }
         } else {
             if self.is_cell() {
                 if let CellValue::String(ref s) = self.as_cell().value {
                     return Ok((**s).clone());
+                }
+                if let CellValue::Function(ref f) = self.as_cell().value {
+                    match f {
+                        Function::Native { name, .. } => {
+                            let name = name.to_string(rt)?;
+                            return Ok(format!("function {}(...)", name));
+                        }
+                        Function::Regular(regular) => {
+                            let name = regular.name.to_string(rt)?;
+                            return Ok(format!("function {}(...)", name));
+                        }
+                        _ => unimplemented!(),
+                    }
                 }
                 let key = rt.allocate_string("toString");
                 let x = self.lookup(rt, Value::from(key.to_heap()))?;
@@ -601,6 +616,9 @@ impl Value {
                         }
                     }
                 }
+            }
+            unsafe {
+                println!("0{:x}", self.u.as_int64);
             }
             unimplemented!()
         }

@@ -20,8 +20,9 @@ impl VirtualRegister {
         -1 - self.0
     }
 
-    pub const fn to_argument(self) -> i32 {
-        self.0 - 0x80000000u32 as i32
+    pub fn to_argument(self) -> i32 {
+        println!("0{:x}", self.0);
+        self.0
     }
 
     pub const fn to_constant(self) -> i32 {
@@ -33,7 +34,7 @@ impl VirtualRegister {
     }
 
     pub const fn argument(x: i32) -> Self {
-        Self(x + 0x80000000u32 as i32)
+        Self(x)
     }
 
     pub const fn constant(x: i32) -> Self {
@@ -51,10 +52,10 @@ impl fmt::Display for VirtualRegister {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.is_local() {
             write!(f, "loc{}", self.to_local())
-        } else if self.is_argument() {
-            write!(f, "arg{}", self.to_argument())
-        } else {
+        } else if self.is_constant() {
             write!(f, "id{}", self.to_constant())
+        } else {
+            write!(f, "arg{}", self.to_argument())
         }
     }
 }

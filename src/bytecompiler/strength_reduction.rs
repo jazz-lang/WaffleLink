@@ -228,6 +228,7 @@ pub struct LocalCSE;
 
 impl LocalCSE {
     pub fn run(code: Handle<CodeBlock>) {
+        //return;
         for bb in code.clone().code.iter_mut() {
             let mut map = HashMap::new();
             for i in 0..bb.code.len() {
