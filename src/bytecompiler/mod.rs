@@ -73,6 +73,13 @@ impl ByteCompiler {
             },
         )
     }
+
+    pub fn fallthrough(&mut self) {
+        let mut j = self.jmp();
+        let bb = self.create_new_block();
+        self.switch_to_block(bb);
+        j();
+    }
     pub fn jmp(&mut self) -> impl FnMut() {
         let p = self.current;
         let p2 = self.code.code[p as usize].code.len();
