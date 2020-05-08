@@ -286,6 +286,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92fbd0445bda1ac099b76a3fbad67668f915f1873cc1d9b47c02889211fa1ace"
 
 [[package]]
+name = "indexmap"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "076f042c5b7b98f31d205f1249267e12a6518c1481e9dae9764af19b707d2292"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -636,6 +645,7 @@ dependencies = [
  "futures",
  "hashlink",
  "hmap",
+ "indexmap",
  "log",
 ]
 
