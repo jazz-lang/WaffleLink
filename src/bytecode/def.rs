@@ -458,4 +458,11 @@ impl Ins {
             _ => vec![],
         }
     }
+
+    pub fn is_jump(self) -> bool {
+        match self {
+            Ins::Jump { .. } => true,
+            _ => false,
+        }
+    }
 }

@@ -1,7 +1,6 @@
 pub mod callstack;
 use crate::bytecode::*;
 use crate::runtime;
-use callstack::*;
 use cell::*;
 use cgc::api::*;
 use def::*;
@@ -151,7 +150,7 @@ impl Runtime {
     }
     pub fn interpret(&mut self) -> Return {
         let mut current = self.stack.current_frame();
-        'interp: loop {
+        loop {
             let bp = current.bp;
             let ip = current.ip;
             let ins = current.code.code[bp].code[ip];

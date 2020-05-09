@@ -21,7 +21,6 @@ impl VirtualRegister {
     }
 
     pub fn to_argument(self) -> i32 {
-        println!("0{:x}", self.0);
         self.0
     }
 

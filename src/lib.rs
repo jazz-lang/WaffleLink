@@ -16,6 +16,16 @@ macro_rules! trace_if {
     };
 }
 
+#[macro_export]
+macro_rules! unwrap {
+    ($e: expr) => {
+        match $e {
+            Ok(x) => x,
+            _ => unreachable!(),
+        }
+    };
+}
+
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod common;

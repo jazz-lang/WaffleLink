@@ -5,8 +5,9 @@ pub mod virtual_reg;
 //      0x00000000-0x3FFFFFFF  Forwards indices from the CallFrame pointer are local vars and temporaries with the function's callframe.
 //      0x40000000-0x7FFFFFFF  Positive indices from 0x40000000 specify entries in the constant pool on the CodeBlock.
 pub const FIRST_CONSTNAT_REG_INDEX: i32 = 0x40000000;
-use def::*;
+
 use hashlink::{LinkedHashMap, LinkedHashSet};
+use indexmap::IndexMap;
 pub struct BasicBlock {
     pub id: u32,
     pub code: Vec<def::Ins>,
@@ -22,6 +23,74 @@ impl BasicBlock {
             livein: vec![],
             liveout: vec![],
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.code.len()
+    }
+
+    pub fn last(&self) -> def::Ins {
+        *self.code.last().unwrap()
+    }
+    pub fn first(&self) -> def::Ins {
+        *self.code.first().unwrap()
+    }
+    pub fn join(&mut self, other: BasicBlock) {
+        self.code.pop();
+        for ins in other.code {
+            self.code.push(ins);
+        }
+    }
+
+    pub fn try_replace_branch_targets(&mut self, from: u32, to: u32) -> bool {
+        assert!(!self.code.is_empty());
+        use def::*;
+        let last_ins_id = self.code.len() - 1;
+        let last_ins = &mut self.code[last_ins_id];
+        match *last_ins {
+            Ins::JumpConditional {
+                cond,
+                if_true,
+                if_false,
+            } => {
+                if if_true == from || if_false == from {
+                    let if_true = if if_true == from { to } else { if_true };
+                    let if_false = if if_false == from { to } else { if_false };
+                    *last_ins = Ins::JumpConditional {
+                        cond,
+                        if_true,
+                        if_false,
+                    };
+                    true
+                } else {
+                    false
+                }
+            }
+            Ins::Jump { dst } => {
+                if dst == from {
+                    *last_ins = Ins::Jump { dst: to };
+                    true
+                } else {
+                    false
+                }
+            }
+            Ins::TryCatch { reg, try_, catch } => {
+                if try_ == from || catch == from {
+                    let catch = if catch == from { to } else { catch };
+                    let try_ = if try_ == from { to } else { try_ };
+                    *last_ins = Ins::TryCatch { reg, try_, catch };
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    pub fn branch_targets(&self) -> Vec<u32> {
+        assert!(self.code.len() >= 1);
+        self.code.last().unwrap().branch_targets()
     }
 }
 
@@ -39,18 +108,28 @@ use crate::runtime::value::*;
 use crate::runtime::*;
 pub struct CodeBlock {
     pub constants_: Vec<Value>,
-    pub constants: LinkedHashMap<Value, usize>,
+    pub constants: IndexMap<Value, usize>,
     pub arg_regs_count: u32,
     pub tmp_regs_count: u32,
     pub code: Vec<BasicBlock>,
     pub hotness: usize,
-    pub cfg: Option<CodeCFG>,
+    pub cfg: Option<Box<CodeCFG>>,
     pub loopanalysis: Option<crate::bytecompiler::loopanalysis::BCLoopAnalysisResult>,
     pub jit_stub:
         Option<extern "C" fn(&mut osr::OSREntry, &mut Runtime, Value, &[Value]) -> JITResult>,
 }
 
 impl CodeBlock {
+    pub fn trace_code(&self, x: bool) {
+        if x {
+            for bb in self.code.iter() {
+                log::trace!("%{}: ", bb.id);
+                for (i, ins) in bb.code.iter().enumerate() {
+                    log::trace!("  [{:04}] {}", i, ins);
+                }
+            }
+        }
+    }
     pub fn dump<W: std::fmt::Write>(&self, b: &mut W, rt: &mut Runtime) -> std::fmt::Result {
         for bb in self.code.iter() {
             writeln!(b, "%{}: ", bb.id)?;
@@ -92,6 +171,13 @@ impl CodeBlock {
     pub fn get_constant_mut(&mut self, x: i32) -> &mut Value {
         &mut self.constants_[x as usize]
     }
+
+    pub fn successors_of(&self, bb: u32) -> &[u32] {
+        self.cfg.as_ref().expect("CFG not computed").get_succs(&bb)
+    }
+    pub fn predecessors_of(&self, bb: u32) -> &[u32] {
+        self.cfg.as_ref().expect("CFG not computed").get_preds(&bb)
+    }
 }
 
 impl Traceable for CodeBlock {
@@ -102,7 +188,17 @@ impl Traceable for CodeBlock {
     }
 }
 
-impl Finalizer for CodeBlock {}
+impl Finalizer for CodeBlock {
+    fn finalize(&mut self) {
+        if let Some(mut cfg) = self.cfg.take() {
+            cfg.inner = IndexMap::new();
+        }
+        self.loopanalysis = None;
+        self.code.clear();
+        self.constants_.clear();
+        self.constants.clear();
+    }
+}
 
 #[derive(Clone)]
 pub struct CFGNode {
@@ -112,13 +208,13 @@ pub struct CFGNode {
 }
 
 pub struct CodeCFG {
-    inner: LinkedHashMap<u32, CFGNode>,
+    inner: IndexMap<u32, CFGNode>,
 }
 
 impl CodeCFG {
     fn empty() -> Self {
         Self {
-            inner: LinkedHashMap::new(),
+            inner: IndexMap::new(),
         }
     }
 
@@ -133,7 +229,34 @@ impl CodeCFG {
     pub fn get_succs(&self, block: &u32) -> &Vec<u32> {
         &self.inner.get(block).unwrap().succs
     }
+    pub fn add_pred(&mut self, block: u32, p: u32) {
+        self.inner.get_mut(&block).unwrap().preds.push(p);
+    }
 
+    pub fn add_succ(&mut self, block: u32, p: u32) {
+        self.inner.get_mut(&block).unwrap().succs.push(p);
+    }
+    pub fn replace_pred(&mut self, block: u32, p: u32, with: u32) {
+        *self
+            .inner
+            .get_mut(&block)
+            .unwrap()
+            .preds
+            .iter_mut()
+            .find(|x| **x == p)
+            .unwrap() = with;
+    }
+
+    pub fn replace_succ(&mut self, block: u32, p: u32, with: u32) {
+        *self
+            .inner
+            .get_mut(&block)
+            .unwrap()
+            .succs
+            .iter_mut()
+            .find(|x| **x == p)
+            .unwrap() = with;
+    }
     pub fn has_edge(&self, from: &u32, to: &u32) -> bool {
         if self.inner.contains_key(from) {
             let ref node = self.inner.get(from).unwrap();

@@ -1,6 +1,5 @@
 use crate::bytecode;
 use crate::common;
-use bytecode::def::*;
 use bytecode::*;
 use cgc::api::Handle;
 use common::multi_map::*;
@@ -23,7 +22,6 @@ pub fn loopanalysis(mut code: Handle<CodeBlock>) {
         loop_depth,
     };
     code.loopanalysis = Some(result);
-    
 }
 
 pub type BCDomTree = Tree<u32>;

@@ -2,7 +2,7 @@ use hashlink::{
     linked_hash_map::{Iter, Keys},
     LinkedHashMap, LinkedHashSet,
 };
-use std::collections::hash_map::RandomState;
+
 use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;

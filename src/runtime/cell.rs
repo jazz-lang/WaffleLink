@@ -1,7 +1,5 @@
 use super::*;
-use crate::interpreter::callstack::CallFrame;
 use cgc::api::*;
-use cgc::heap::*;
 use fancy_regex::Regex;
 use hashlink::*;
 use value::*;
@@ -46,11 +44,11 @@ pub enum CellValue {
     Future(std::pin::Pin<Box<dyn std::future::Future<Output = crate::interpreter::Return>>>),
     Function(Function),
 }
-
+use indexmap::IndexMap;
 pub struct Cell {
     pub value: CellValue,
     pub prototype: Option<Handle<Cell>>,
-    pub properties: Box<LinkedHashMap<String, Value>>,
+    pub properties: Box<IndexMap<String, Value>>,
 }
 
 impl Cell {
@@ -61,7 +59,7 @@ impl Cell {
         Self {
             value: val,
             prototype: proto,
-            properties: Box::new(LinkedHashMap::new()),
+            properties: Box::new(IndexMap::new()),
         }
     }
     pub fn is_string(&self) -> bool {

@@ -2,10 +2,13 @@ use super::loopanalysis::*;
 use crate::bytecode::*;
 use def::*;
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
-use log::{debug, info, trace, warn};
+use log::{debug, info, trace};
 use std::fmt;
 use virtual_reg::*;
 use NodeType::*;
+
+const VERBOSE: bool = false;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum NodeType {
     Def,
@@ -169,7 +172,7 @@ impl InterferenceGraph {
         };
 
         if !self.adj_set.contains(&(u, v)) && u != v {
-            trace!("  add edge ({}, {})", u, v);
+            trace_if!(VERBOSE, "  add edge ({}, {})", u, v);
 
             self.adj_set.insert((u, v));
             self.adj_set.insert((v, u));
@@ -178,13 +181,13 @@ impl InterferenceGraph {
                 self.adj_list.get_mut(&u).unwrap().insert(v);
                 let degree = self.get_degree_of(u);
                 self.set_degree_of(u, degree + 1);
-                trace!("    increase degree of {} to {}", u, degree + 1);
+                trace_if!(VERBOSE, "    increase degree of {} to {}", u, degree + 1);
             }
             if !is_precolored(v) {
                 self.adj_list.get_mut(&v).unwrap().insert(u);
                 let degree = self.get_degree_of(v);
                 self.set_degree_of(v, degree + 1);
-                trace!("    increase degree of {} to {}", v, degree + 1);
+                trace_if!(VERBOSE, "    increase degree of {} to {}", v, degree + 1);
             }
         }
     }
@@ -249,21 +252,21 @@ impl InterferenceGraph {
     }
 
     pub fn set_degree_of(&mut self, reg: VirtualRegister, degree: u32) {
-        trace!("  (set degree({}) = {})", reg, degree);
+        trace_if!(VERBOSE, "  (set degree({}) = {})", reg, degree);
         self.degree.insert(reg, degree);
     }
     /// prints current graph for debugging (via trace log)
     #[allow(unused_variables)]
     pub fn print(&self) {
-        trace!("");
-        trace!("Interference Graph");
+        trace_if!(VERBOSE, "");
+        trace_if!(VERBOSE, "Interference Graph");
 
-        trace!("nodes: ");
+        trace_if!(VERBOSE, "nodes: ");
         for node in self.nodes.values() {
-            trace!("{:?}", node);
+            trace_if!(VERBOSE, "{:?}", node);
         }
 
-        trace!("edges: ");
+        trace_if!(VERBOSE, "edges: ");
         for id in self.nodes.keys() {
             let mut s = String::new();
             s.push_str(&format!(
@@ -279,7 +282,7 @@ impl InterferenceGraph {
                     s.push_str(&format!("{:?}", i));
                 }
             }
-            trace!("{}", s);
+            trace_if!(VERBOSE, "{}", s);
         }
     }
     fn spillcost_heuristic(ty: NodeType, loop_depth: u32) -> f32 {
@@ -372,7 +375,7 @@ fn build_cfg_nodes(cf: &mut Vec<BasicBlock>) -> LinkedHashMap<ID, CFGBlockNode> 
         }
     }
     // collect info for each basic block
-    for (id, block) in cf.iter().enumerate() {
+    for (_id, block) in cf.iter().enumerate() {
         trace_if!(TRACE_LIVENESS, "---block {:?}---", block.id);
         // livein set of this block is what temps this block uses from other blocks
         // defs is what temps this block defines in the block
@@ -525,11 +528,11 @@ fn global_liveness_analysis(blocks: LinkedHashMap<ID, CFGBlockNode>, cf: &mut Ve
                 || !out_set_old.eq(liveout.get(node).unwrap());
 
             if TRACE_LIVENESS {
-                trace!("block {}", node);
-                trace!("in(old)  = {:?}", in_set_old);
-                trace!("in(new)  = {:?}", livein.get(node).unwrap());
-                trace!("out(old) = {:?}", out_set_old);
-                trace!("out(new) = {:?}", liveout.get(node).unwrap());
+                trace_if!(VERBOSE, "block {}", node);
+                trace_if!(VERBOSE, "in(old)  = {:?}", in_set_old);
+                trace_if!(VERBOSE, "in(new)  = {:?}", livein.get(node).unwrap());
+                trace_if!(VERBOSE, "out(old) = {:?}", out_set_old);
+                trace_if!(VERBOSE, "out(new) = {:?}", liveout.get(node).unwrap());
             }
 
             is_changed = is_changed || n_changed;
@@ -649,7 +652,7 @@ pub fn build_interference_graph_chaitin_briggs(
         for liveout in block.liveout.iter() {
             current_live.insert(*liveout);
         }
-        let print_set = |set: &LinkedHashSet<ID>| {
+        let _print_set = |set: &LinkedHashSet<ID>| {
             let mut s = String::new();
             let mut iter = set.iter();
             if let Some(first) = iter.next() {
@@ -659,11 +662,11 @@ pub fn build_interference_graph_chaitin_briggs(
                     s.push_str(&format!("{}", i));
                 }
             }
-            trace!("current live: {}", s);
+            trace_if!(VERBOSE, "current live: {}", s);
         };
 
         if TRACE_LIVENESS {
-            trace!("---Block {}: live out---", id);
+            trace_if!(VERBOSE, "---Block {}: live out---", id);
             //print_set(&current_live);
         }
 
@@ -702,7 +705,7 @@ pub fn build_interference_graph_chaitin_briggs(
                 current_live.insert(d);
             }
             if TRACE_LIVENESS {
-                trace!("after adding defines:");
+                trace_if!(VERBOSE, "after adding defines:");
                 //print_set(&current_live);
             }
 
@@ -746,7 +749,7 @@ pub fn build_interference_graph_chaitin_briggs(
                 current_live.remove(&d);
             }
             if TRACE_LIVENESS {
-                trace!("removing defines from current live...");
+                trace_if!(VERBOSE, "removing defines from current live...");
                 //print_set(&current_live);
             }
 
@@ -757,7 +760,7 @@ pub fn build_interference_graph_chaitin_briggs(
                 current_live.insert(u);
             }
             if TRACE_LIVENESS {
-                trace!("adding uses to current live...")
+                trace_if!(VERBOSE, "adding uses to current live...")
             }
         }
     }

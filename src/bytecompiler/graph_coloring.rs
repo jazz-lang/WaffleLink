@@ -16,6 +16,7 @@ use cgc::api::*;
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
 use log::{error, trace};
 use virtual_reg::*;
+const VERBOSE: bool = false;
 /// GraphColoring algorithm
 /// based on Appel's book section 11.4
 pub struct GraphColoring {
@@ -95,7 +96,7 @@ impl GraphColoring {
         );
         let iteration_count = iteration_count + 1;
 
-        trace!("Initializing coloring allocator...");
+        trace_if!(VERBOSE, "Initializing coloring allocator...");
 
         let ig = build_interference_graph_chaitin_briggs(&mut cf.get_mut().code, analysis);
 
@@ -156,7 +157,11 @@ impl GraphColoring {
         if !self.is_move_related(node)
             && self.ig.get_degree_of(node) < self.n_regs_for_node(node) as u32
         {
-            trace!("  move {} from worklistFreeze to worklistSimplify", node);
+            trace_if!(
+                VERBOSE,
+                "  move {} from worklistFreeze to worklistSimplify",
+                node
+            );
             self.worklist_freeze.remove(&node);
             self.worklist_simplify.insert(node);
         }
@@ -196,7 +201,7 @@ impl GraphColoring {
         // remove next element from worklist_simplify, we know its not empty
         let node = self.worklist_simplify.pop_front().unwrap();
 
-        trace!("Simplifying {}", node);
+        trace_if!(VERBOSE, "Simplifying {}", node);
 
         self.select_stack.push(node);
         for m in self.adjacent(node).iter() {
@@ -232,22 +237,32 @@ impl GraphColoring {
         let d = self.ig.get_degree_of(n);
         debug_assert!(d != 0);
         self.ig.set_degree_of(n, d - 1);
-        trace!("  decrement degree of {} from {} to {}", n, d, d - 1);
+        trace_if!(
+            VERBOSE,
+            "  decrement degree of {} from {} to {}",
+            n,
+            d,
+            d - 1
+        );
 
         if d == self.n_regs_for_node(n) as u32 {
-            trace!("  {}'s degree is K, no longer need to spill it", n);
+            trace_if!(VERBOSE, "  {}'s degree is K, no longer need to spill it", n);
             let mut nodes = self.adjacent(n);
             nodes.insert(n);
             self.enable_moves(nodes);
 
-            trace!("  remove {} from worklistSpill", n);
+            trace_if!(VERBOSE, "  remove {} from worklistSpill", n);
             self.worklist_spill.remove(&n);
 
             if self.is_move_related(n) {
-                trace!("  {} is move related, push to worklistFreeze", n);
+                trace_if!(VERBOSE, "  {} is move related, push to worklistFreeze", n);
                 self.worklist_freeze.insert(n);
             } else {
-                trace!("  {} is not move related, push to worklistSimplify", n);
+                trace_if!(
+                    VERBOSE,
+                    "  {} is not move related, push to worklistSimplify",
+                    n
+                );
                 self.worklist_simplify.insert(n);
             }
         }
@@ -256,13 +271,13 @@ impl GraphColoring {
     fn coalesce(&mut self) {
         let m = self.worklist_moves.pop_front().unwrap();
 
-        trace!("Coalescing on {:?}...", m);
-        trace!("  (pop {:?} form worklistMoves)", m);
+        trace_if!(VERBOSE, "Coalescing on {:?}...", m);
+        trace_if!(VERBOSE, "  (pop {:?} form worklistMoves)", m);
 
         let x = self.get_alias(m.from);
         let y = self.get_alias(m.to);
-        trace!("  resolve alias: {} -> {}", m.from, x);
-        trace!("  resolve alias: {} -> {}", m.to, y);
+        trace_if!(VERBOSE, "  resolve alias: {} -> {}", m.from, x);
+        trace_if!(VERBOSE, "  resolve alias: {} -> {}", m.to, y);
 
         let (u, v, precolored_u, precolored_v) = {
             if self.precolored.contains(&y) {
@@ -281,7 +296,8 @@ impl GraphColoring {
                 (u, v, precolored_u, precolored_v)
             }
         };
-        trace!(
+        trace_if!(
+            VERBOSE,
             "  u={}, v={}, precolored_u={}, precolroed_v={}",
             u,
             v,
@@ -314,7 +330,10 @@ impl GraphColoring {
                     self.add_worklist(v);
                 }
                 self.constrained_moves.insert(m);
-                trace!("  u is precolored but not a usable color, cannot coalesce");
+                trace_if!(
+                    VERBOSE,
+                    "  u is precolored but not a usable color, cannot coalesce"
+                );
                 return;
             }
         }
@@ -325,21 +344,27 @@ impl GraphColoring {
                     self.add_worklist(u);
                 }
                 self.constrained_moves.insert(m);
-                trace!("  v is precolored but not a usable color, cannot coalesce");
+                trace_if!(
+                    VERBOSE,
+                    "  v is precolored but not a usable color, cannot coalesce"
+                );
                 return;
             }
         }
 
         if u == v {
-            trace!("  u == v, coalesce the move");
+            trace_if!(VERBOSE, "  u == v, coalesce the move");
             self.coalesced_moves.insert(m);
             if !precolored_u {
                 self.add_worklist(u);
             }
         } else if precolored_v || self.ig.is_in_adj_set(u, v) {
-            trace!("  precolored_v: {}", precolored_v);
-            trace!("  is_adj(u, v): {}", self.ig.is_in_adj_set(u, v));
-            trace!("  v is precolored or u,v is adjacent, the move is constrained");
+            trace_if!(VERBOSE, "  precolored_v: {}", precolored_v);
+            trace_if!(VERBOSE, "  is_adj(u, v): {}", self.ig.is_in_adj_set(u, v));
+            trace_if!(
+                VERBOSE,
+                "  v is precolored or u,v is adjacent, the move is constrained"
+            );
             self.constrained_moves.insert(m);
             if !precolored_u {
                 self.add_worklist(u);
@@ -350,10 +375,15 @@ impl GraphColoring {
         } else if (precolored_u && self.check_ok(u, v))
             || (!precolored_u && self.check_conservative(u, v))
         {
-            trace!("  ok(u, v) = {}", self.check_ok(u, v));
-            trace!("  conservative(u, v) = {}", self.check_conservative(u, v));
+            trace_if!(VERBOSE, "  ok(u, v) = {}", self.check_ok(u, v));
+            trace_if!(
+                VERBOSE,
+                "  conservative(u, v) = {}",
+                self.check_conservative(u, v)
+            );
 
-            trace!(
+            trace_if!(
+                VERBOSE,
                 "  precolored_u&&ok(u,v) || !precolored_u&&conserv(u,v), \
                  coalesce and combine the move"
             );
@@ -363,18 +393,18 @@ impl GraphColoring {
                 self.add_worklist(u);
             }
         } else {
-            trace!("  cannot coalesce the move");
-            trace!("  insert {:?} to activeMoves", m);
+            trace_if!(VERBOSE, "  cannot coalesce the move");
+            trace_if!(VERBOSE, "  insert {:?} to activeMoves", m);
             self.active_moves.insert(m);
         }
     }
     fn combine(&mut self, u: VirtualRegister, v: VirtualRegister) {
-        trace!("  Combine temps {} and {}...", u, v);
+        trace_if!(VERBOSE, "  Combine temps {} and {}...", u, v);
         if self.worklist_freeze.contains(&v) {
-            trace!("  remove {} from worklistFreeze", v);
+            trace_if!(VERBOSE, "  remove {} from worklistFreeze", v);
             self.worklist_freeze.remove(&v);
         } else {
-            trace!("  remove {} from worklistSpill", v);
+            trace_if!(VERBOSE, "  remove {} from worklistSpill", v);
             self.worklist_spill.remove(&v);
         }
         self.coalesced_nodes.insert(v);
@@ -403,7 +433,7 @@ impl GraphColoring {
         if self.worklist_freeze.contains(&u)
             && self.ig.get_degree_of(u) >= self.n_regs_for_node(u) as u32
         {
-            trace!("  move {} from worklistFreeze to worklistSpill", u);
+            trace_if!(VERBOSE, "  move {} from worklistFreeze to worklistSpill", u);
             self.worklist_freeze.remove(&u);
             self.worklist_spill.insert(u);
         }
@@ -413,7 +443,7 @@ impl GraphColoring {
         reg: VirtualRegister,
         mov: Move,
     ) {
-        trace!("  add {:?} to movelist[{}]", mov, reg);
+        trace_if!(VERBOSE, "  add {:?} to movelist[{}]", mov, reg);
         if movelist.contains_key(&reg) {
             let list = movelist.get_mut(&reg).unwrap();
             list.insert(mov);
@@ -429,13 +459,17 @@ impl GraphColoring {
     }
 
     fn enable_moves(&mut self, nodes: LinkedHashSet<VirtualRegister>) {
-        trace!("  enable moves of: {:?}", nodes);
+        trace_if!(VERBOSE, "  enable moves of: {:?}", nodes);
         for n in nodes.iter() {
             let n = *n;
             for mov in self.node_moves(n).iter() {
                 let mov = *mov;
                 if self.active_moves.contains(&mov) {
-                    trace!("  move {:?} from activeMoves to worklistMoves", mov);
+                    trace_if!(
+                        VERBOSE,
+                        "  move {:?} from activeMoves to worklistMoves",
+                        mov
+                    );
                     self.active_moves.remove(&mov);
                     self.worklist_moves.insert(mov);
                 }
@@ -460,22 +494,28 @@ impl GraphColoring {
         255
     }
     fn make_work_list(&mut self) {
-        trace!("Making work list from initials...");
+        trace_if!(VERBOSE, "Making work list from initials...");
         while !self.initial.is_empty() {
             let node = self.initial.pop_front().unwrap();
 
             // degree >= K
             if self.ig.get_degree_of(node) >= self.n_regs_for_node(node) as u32 {
-                trace!(
+                trace_if!(
+                    VERBOSE,
                     "  {} 's degree >= reg number limit (K), push to worklistSpill",
                     node
                 );
                 self.worklist_spill.insert(node);
             } else if self.is_move_related(node) {
-                trace!("  {} is move related, push to worklistFreeze", node);
+                trace_if!(
+                    VERBOSE,
+                    "  {} is move related, push to worklistFreeze",
+                    node
+                );
                 self.worklist_freeze.insert(node);
             } else {
-                trace!(
+                trace_if!(
+                    VERBOSE,
                     "  {} has small degree and not move related, push to worklistSimplify",
                     node
                 );
@@ -563,9 +603,13 @@ impl GraphColoring {
     fn freeze(&mut self) {
         // it is not empty (checked before)
         let node = self.freeze_heuristics();
-        trace!("Freezing {}...", node);
+        trace_if!(VERBOSE, "Freezing {}...", node);
 
-        trace!("  move {} from worklistFreeze to worklistSimplify", node);
+        trace_if!(
+            VERBOSE,
+            "  move {} from worklistFreeze to worklistSimplify",
+            node
+        );
         self.worklist_freeze.remove(&node);
         self.worklist_simplify.insert(node);
         self.freeze_moves(node);
@@ -591,7 +635,7 @@ impl GraphColoring {
     }
 
     fn freeze_moves(&mut self, u: VirtualRegister) {
-        trace!("  freeze moves for {}", u);
+        trace_if!(VERBOSE, "  freeze moves for {}", u);
         for m in self.node_moves(u).iter() {
             let m = *m;
             //            let mut v = self.get_alias(m.from);
@@ -606,7 +650,7 @@ impl GraphColoring {
                 self.get_alias(y)
             };
 
-            trace!("  move {:?} from activeMoves to frozenMoves", m);
+            trace_if!(VERBOSE, "  move {:?} from activeMoves to frozenMoves", m);
             self.active_moves.remove(&m);
             self.frozen_moves.insert(m);
 
@@ -614,7 +658,11 @@ impl GraphColoring {
             // self.node_moves(v).is_empty() &&
             // self.ig.get_degree_of(v) < self.n_regs_for_node(v)
             if self.worklist_freeze.contains(&v) && self.node_moves(v).is_empty() {
-                trace!("  move {} from worklistFreeze to worklistSimplify", v);
+                trace_if!(
+                    VERBOSE,
+                    "  move {} from worklistFreeze to worklistSimplify",
+                    v
+                );
                 self.worklist_freeze.remove(&v);
                 self.worklist_simplify.insert(v);
             }
@@ -622,26 +670,26 @@ impl GraphColoring {
     }
 
     fn select_spill(&mut self) {
-        trace!("Selecting a node to spill...");
+        trace_if!(VERBOSE, "Selecting a node to spill...");
         let mut m: Option<VirtualRegister> = None;
 
         for n in self.worklist_spill.iter() {
             let n = *n;
             // if a node is not spillable, we guarantee that we do not spill it
             if !self.is_spillable(n) {
-                trace!("  {} is not spillable", n);
+                trace_if!(VERBOSE, "  {} is not spillable", n);
                 continue;
             }
 
             if m.is_none() {
-                trace!("  {} is the initial choice", n);
+                trace_if!(VERBOSE, "  {} is the initial choice", n);
                 m = Some(n);
             } else {
                 let cur_m = m.unwrap();
                 let cost_m = self.ig.get_spill_cost(cur_m);
                 let cost_n = self.ig.get_spill_cost(n);
                 if cost_n < cost_m {
-                    trace!("  {} is preferred: ({} < {})", n, cost_n, cost_m);
+                    trace_if!(VERBOSE, "  {} is preferred: ({} < {})", n, cost_n, cost_m);
                     m = Some(n);
                 }
             }
@@ -650,8 +698,12 @@ impl GraphColoring {
         // m is not none
         assert!(m.is_some(), "failed to select any node to spill");
         let m = m.unwrap();
-        trace!("  Spilling {}...", m);
-        trace!("  move {:?} from worklistSpill to worklistSimplify", m);
+        trace_if!(VERBOSE, "  Spilling {}...", m);
+        trace_if!(
+            VERBOSE,
+            "  move {:?} from worklistSpill to worklistSimplify",
+            m
+        );
         self.waiting_for_spill.insert(m);
         self.worklist_spill.remove(&m);
         self.worklist_simplify.insert(m);
@@ -659,24 +711,25 @@ impl GraphColoring {
     }
 
     fn assign_colors(&mut self) {
-        trace!("---coloring done---");
+        trace_if!(VERBOSE, "---coloring done---");
 
         let mut coloring_queue: Vec<VirtualRegister> = self.coloring_queue_heuristic();
         while !coloring_queue.is_empty() {
             let n = coloring_queue.pop().unwrap();
-            trace!("Assigning color to {}", n);
+            trace_if!(VERBOSE, "Assigning color to {}", n);
 
             let mut ok_colors: LinkedHashSet<VirtualRegister> =
                 self.colors.get(&0).unwrap().clone();
 
-            trace!("  all the colors for this temp: {:?}", ok_colors);
+            trace_if!(VERBOSE, "  all the colors for this temp: {:?}", ok_colors);
 
             for w in self.ig.get_adj_list(n).iter() {
                 let w_alias = self.get_alias(*w);
                 match self.ig.get_color_of(w_alias) {
                     None => {} // do nothing
                     Some(color) => {
-                        trace!(
+                        trace_if!(
+                            VERBOSE,
                             "  color {} is used for its neighbor {:?} (aliasing to {:?})",
                             color,
                             w,
@@ -686,14 +739,14 @@ impl GraphColoring {
                     }
                 }
             }
-            trace!("  available colors: {:?}", ok_colors);
+            trace_if!(VERBOSE, "  available colors: {:?}", ok_colors);
 
             if ok_colors.is_empty() {
-                trace!("  {} is a spilled node", n);
+                trace_if!(VERBOSE, "  {} is a spilled node", n);
                 self.spilled_nodes.insert(n);
             } else {
                 let color = self.color_heuristic(n, &mut ok_colors);
-                trace!("  Color {} as {}", n, color);
+                trace_if!(VERBOSE, "  Color {} as {}", n, color);
 
                 self.colored_nodes.insert(n);
                 self.ig.color_node(n, color);
@@ -704,8 +757,13 @@ impl GraphColoring {
             let n = *n;
             let alias = self.get_alias(n);
             if let Some(alias_color) = self.ig.get_color_of(alias) {
-                trace!("  Assign color to {} based on aliased {}", n, alias);
-                trace!("  Color {} as {}", n, alias_color);
+                trace_if!(
+                    VERBOSE,
+                    "  Assign color to {} based on aliased {}",
+                    n,
+                    alias
+                );
+                trace_if!(VERBOSE, "  Color {} as {}", n, alias_color);
                 self.ig.color_node(n, alias_color);
             }
         }
@@ -720,19 +778,19 @@ impl GraphColoring {
     //    }
     fn build(&mut self) {
         if COALESCING {
-            trace!("Coalescing enabled, build move list...");
+            trace_if!(VERBOSE, "Coalescing enabled, build move list...");
             let ref ig = self.ig;
             for m in ig.moves().iter() {
-                trace!("  add {:?} to worklistMoves", m);
+                trace_if!(VERBOSE, "  add {:?} to worklistMoves", m);
                 self.worklist_moves.insert(*m);
                 GraphColoring::add_to_movelist(&mut self.movelist, m.from, *m);
                 GraphColoring::add_to_movelist(&mut self.movelist, m.to, *m);
             }
         } else {
-            trace!("Coalescing disabled...");
+            trace_if!(VERBOSE, "Coalescing disabled...");
         }
 
-        trace!("Build freeze cost for each node...");
+        trace_if!(VERBOSE, "Build freeze cost for each node...");
         // we try to avoid freeze a node that is involved in many moves
         for n in self.ig.nodes() {
             // freeze_cost(n) = SUM ((spill_cost(src) + spill_cost(dst)) for m
@@ -765,8 +823,8 @@ impl GraphColoring {
             }
 
             self.ig.set_freeze_cost(n, freeze_cost);
-            trace!("  {} closure: {:?}", n, closure);
-            trace!("     freeze cost = {}", freeze_cost);
+            trace_if!(VERBOSE, "  {} closure: {:?}", n, closure);
+            trace_if!(VERBOSE, "     freeze cost = {}", freeze_cost);
         }
     }
 
@@ -781,7 +839,12 @@ impl GraphColoring {
         reg: VirtualRegister,
         available_colors: &mut LinkedHashSet<VirtualRegister>,
     ) -> VirtualRegister {
-        trace!("  Find color for {} in {:?}", reg, available_colors);
+        trace_if!(
+            VERBOSE,
+            "  Find color for {} in {:?}",
+            reg,
+            available_colors
+        );
 
         // we use spill cost as weight.
         // A node that has higher spill cost is used more frequently, and has a
@@ -805,7 +868,8 @@ impl GraphColoring {
                         other_weight
                     };
                     candidate_weight.insert(other_color, total_weight);
-                    trace!(
+                    trace_if!(
+                        VERBOSE,
                         "    favor {} to eliminate {:?} (weight={})",
                         other_color,
                         mov,
@@ -816,7 +880,7 @@ impl GraphColoring {
         }
 
         if candidate_weight.is_empty() {
-            trace!("    no candidate, use first avaiable color");
+            trace_if!(VERBOSE, "    no candidate, use first avaiable color");
             available_colors.pop_front().unwrap()
         } else {
             let mut c = None;
@@ -830,14 +894,14 @@ impl GraphColoring {
             assert!(c.is_some());
             let color = c.unwrap();
             assert!(available_colors.contains(&color));
-            trace!("    pick candidate of most weight: {}", color);
+            trace_if!(VERBOSE, "    pick candidate of most weight: {}", color);
             color
         }
     }
 
     /// does coloring register allocation
     fn regalloc(mut self, a: &BCLoopAnalysisResult) -> GraphColoring {
-        trace!("---InterenceGraph---");
+        trace_if!(VERBOSE, "---InterenceGraph---");
         self.ig.print();
 
         // precolor for all machine registers
@@ -892,11 +956,11 @@ impl GraphColoring {
         // finish
         // if we need to spill
         if !self.spilled_nodes.is_empty() {
-            trace!("spill required");
+            trace_if!(VERBOSE, "spill required");
             if cfg!(debug_assertions) {
-                trace!("nodes to be spilled:");
+                trace_if!(VERBOSE, "nodes to be spilled:");
                 for node in self.spilled_nodes.iter() {
-                    trace!("{}", *node);
+                    trace_if!(VERBOSE, "{}", *node);
                 }
             }
 
@@ -940,7 +1004,7 @@ impl GraphColoring {
     }
 
     fn checkinv_degree(&self) {
-        trace!("Check invariant: degree...");
+        trace_if!(VERBOSE, "Check invariant: degree...");
         // degree invariant
         // for u in simplifyWorklist \/ freezeWorklist \/ spillWorklist =>
         //   degree(u) = |adjList(u) /\
@@ -984,7 +1048,7 @@ impl GraphColoring {
     }
 
     fn checkinv_simplify_worklist(&self) {
-        trace!("Check invariant: worklistSimplify...");
+        trace_if!(VERBOSE, "Check invariant: worklistSimplify...");
         // for u in simplifyWorkList
         //   either u is 'selected for spilling', otherwise
         //   degree(u) < K &&
@@ -1027,7 +1091,7 @@ impl GraphColoring {
     }
 
     fn checkinv_freeze_worklist(&self) {
-        trace!("Check invariant: worklistFreeze...");
+        trace_if!(VERBOSE, "Check invariant: worklistFreeze...");
         // for u in freezeWorklist
         //   degree(u) < K &&
         //   moveList(u) /\ (activeMoves \/ worklistMoves) != {} (non empty)
@@ -1061,7 +1125,7 @@ impl GraphColoring {
     }
 
     fn checkinv_spill_worklist(&self) {
-        trace!("Check invariant: worklistSpill...");
+        trace_if!(VERBOSE, "Check invariant: worklistSpill...");
         // for u in spillWorklist
         //    degree(u) >= K
         for u in self.worklist_spill.iter() {
@@ -1078,17 +1142,22 @@ impl GraphColoring {
             error!("{}", msg);
 
             // dump current state
-            trace!("Current state:");
+            trace_if!(VERBOSE, "Current state:");
 
-            trace!("simplifyWorklist: {:?}", self.worklist_simplify);
-            trace!("freezeWorklist: {:?}", self.worklist_freeze);
-            trace!("spillWorklist: {:?}", self.worklist_spill);
-            trace!("worklistMoves: {:?}", self.worklist_moves);
+            trace_if!(VERBOSE, "simplifyWorklist: {:?}", self.worklist_simplify);
+            trace_if!(VERBOSE, "freezeWorklist: {:?}", self.worklist_freeze);
+            trace_if!(VERBOSE, "spillWorklist: {:?}", self.worklist_spill);
+            trace_if!(VERBOSE, "worklistMoves: {:?}", self.worklist_moves);
 
             for node in self.ig.nodes() {
-                trace!("Node {}: degree={}", node, self.ig.get_degree_of(node));
-                trace!("         adjList={:?}", self.ig.get_adj_list(node));
-                trace!("         moveList={:?}", self.get_movelist(node));
+                trace_if!(
+                    VERBOSE,
+                    "Node {}: degree={}",
+                    node,
+                    self.ig.get_degree_of(node)
+                );
+                trace_if!(VERBOSE, "         adjList={:?}", self.ig.get_adj_list(node));
+                trace_if!(VERBOSE, "         moveList={:?}", self.get_movelist(node));
             }
 
             panic!()

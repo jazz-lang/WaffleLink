@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cgc-single-threaded = "0.1"
+cgc-single-threaded = {path = "cgc",features = ["trace-gc"]}
 hashlink = "0.5"
 fancy-regex = "0.3"
 indexmap = "1.3"
@@ -21,3 +21,6 @@ simple_logger = "1.6"
 value64 = []
 value32-64 = []
 default = ["value64"]
+
+[profile.release]
+debug = true

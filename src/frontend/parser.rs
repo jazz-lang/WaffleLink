@@ -630,19 +630,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn plit_char(&mut self) -> Result<Box<Pattern>, MsgWithPos> {
-        let tok = self.advance_token()?;
-        let pos = tok.position;
-        if let TokenKind::LitChar(c) = tok.kind {
-            Ok(Pattern {
-                decl: PatternDecl::ConstChar(c),
-                pos,
-            })
-            .map(|x| Box::new(x))
-        } else {
-            unreachable!()
-        }
-    }
     fn plit_float(&mut self) -> Result<Box<Pattern>, MsgWithPos> {
         let tok = self.advance_token()?;
         let pos = tok.position;

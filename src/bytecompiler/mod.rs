@@ -1,8 +1,8 @@
 pub mod graph_coloring;
 pub mod interference_graph;
 pub mod loopanalysis;
-pub mod strength_reduction;
 
+pub mod strength_reduction;
 use crate::bytecode::*;
 use crate::runtime::*;
 use cgc::api::*;
@@ -220,16 +220,15 @@ impl ByteCompiler {
     pub fn set_var(&mut self, name: String, new: VirtualRegister) {
         self.def_var(name, new);
     }
-    pub fn finish(mut self) -> Rooted<CodeBlock> {
+    pub fn finish(mut self, rt: &mut Runtime) -> Rooted<CodeBlock> {
         self.code.arg_regs_count = self.args as _;
         self.code.tmp_regs_count = 255;
 
-        strength_reduction::regalloc_and_reduce_strength(self.code.to_heap());
+        strength_reduction::regalloc_and_reduce_strength(self.code.to_heap(), rt);
         self.code
     }
 }
 use crate::frontend;
-use crate::runtime::*;
 use deref_ptr::*;
 use frontend::ast::*;
 use frontend::msg::*;
@@ -436,7 +435,7 @@ impl<'a> Context<'a> {
 
             dst
         };
-        let mut code = ctx.builder.finish();
+        let code = ctx.builder.finish(self.rt);
         let f = function_from_codeblock(
             self.rt,
             code.to_heap(),
@@ -475,7 +474,7 @@ impl<'a> Context<'a> {
                     return Ok(dst);
                 } else {
                     self.builder.fallthrough();
-                    let (last, ret) = self.scoped(|this| {
+                    let (last, _ret) = self.scoped(|this| {
                         let mut last = None;
                         for x in v.iter() {
                             last = Some(this.compile(x)?);
@@ -483,7 +482,11 @@ impl<'a> Context<'a> {
                         let ret = if this.builder.code.code[this.builder.current as usize]
                             .code
                             .last()
-                            .unwrap()
+                            .expect(&format!("{}", {
+                                let mut b = String::new();
+                                let _ = this.builder.code.dump(&mut b, this.rt);
+                                b
+                            }))
                             .is_final()
                             == true
                         {
@@ -540,7 +543,7 @@ impl<'a> Context<'a> {
             ExprKind::Return(Some(e)) => {
                 let val = self.compile(e)?;
                 self.builder.emit(Ins::Return { val });
-                return Ok(VirtualRegister::tmp(0));
+                return Ok(val);
             }
             ExprKind::Return(None) => unimplemented!(),
             ExprKind::Let(_, pat, expr) => {
@@ -551,8 +554,37 @@ impl<'a> Context<'a> {
             ExprKind::Assign(lhs, rhs) => {
                 let acc = self.compile_access(&lhs.expr);
                 let val = self.compile(rhs)?;
-                self.access_set(acc, val);
+                self.access_set(acc, val)?;
                 Ok(val)
+            }
+            ExprKind::If(cond, if_true, if_false) => {
+                let dst = self.builder.vreg();
+                let res = self.compile(cond)?;
+                let (mut x, mut y) = self.builder.cjmp(res);
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                x();
+                let x = self.compile(if_true)?;
+                self.builder.mov(dst, x);
+                /*let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                y();*/
+                match if_false {
+                    Some(expr) => {
+                        let mut jend = self.builder.jmp();
+                        let bb = self.builder.create_new_block();
+                        self.builder.switch_to_block(bb);
+                        y();
+                        let x = self.compile(expr)?;
+                        self.builder.mov(dst, x);
+                        jend();
+                    }
+                    _ => {
+                        y();
+                    }
+                }
+
+                return Ok(dst);
             }
             ExprKind::BinOp(lhs, op, rhs) => self.compile_binop(op, lhs, rhs),
             _ => unimplemented!(),
@@ -615,9 +647,9 @@ impl<'a> Context<'a> {
 
     pub fn compile_var_pattern(
         &mut self,
-        pos: Position,
+        _pos: Position,
         pat: &Box<Pattern>,
-        mutable: bool,
+        _mutable: bool,
         r: VirtualRegister,
     ) -> Result<(), MsgWithPos> {
         match &pat.decl {
@@ -640,7 +672,6 @@ impl<'a> Context<'a> {
                 }
                 let r = self.builder.areg();
                 let dst = self.builder.vreg();
-                println!("{}", r.is_argument());
                 self.builder.emit(Ins::Mov { dst, src: r });
                 self.builder.def_var(name.to_owned(), dst);
                 Ok(())
@@ -690,15 +721,15 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>,
     };
     ctx.builder.emit(Ins::Return { val: r });
 
-    Ok(ctx.builder.finish())
+    Ok(ctx.builder.finish(rt))
 }
 
 use frontend::token::*;
 
 pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: &str) -> Value {
-    let mut b = String::new();
-    code.dump(&mut b, rt).unwrap();
-    println!("\nfunction {}(...): \n{}", name, b);
+    //let mut b = String::new();
+    //code.dump(&mut b, rt).unwrap();
+    //println!("\nfunction {}(...): \n{}", name, b);
     use crate::runtime::cell::*;
     let name = Value::from(rt.allocate_string(name));
     let func = RegularFunction {
