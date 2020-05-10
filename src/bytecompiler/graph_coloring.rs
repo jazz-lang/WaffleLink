@@ -14,7 +14,7 @@ use crate::bytecode::*;
 use cgc::api::*;
 
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
-use log::{error, trace};
+use log::error;
 use virtual_reg::*;
 const VERBOSE: bool = false;
 /// GraphColoring algorithm

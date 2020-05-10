@@ -10,6 +10,7 @@ pub struct OSR {
 /// or some specific code in assembly.
 ///
 pub struct OSREntry {
+    pub throw: bool,
     pub to_bp: usize,
     pub to_ip: usize,
 }

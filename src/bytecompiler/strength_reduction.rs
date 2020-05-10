@@ -27,7 +27,7 @@ use virtual_reg::*;
 ///
 /// This pass tries to execute some instructions before interpreting.
 /// Example:
-/// ```
+/// ```must_fail
 /// mov loc0, id0
 /// mov loc1, id1
 /// add loc0,loc0,loc1
@@ -36,7 +36,7 @@ use virtual_reg::*;
 /// id1: Int32 = 2
 /// ```
 /// Will become:
-/// ```
+/// ```must_fail
 /// mov loc0, id2
 ///
 /// id0: Int32 = 3
@@ -187,14 +187,14 @@ impl ConstantFolding {
 /// holding the computed value.
 ///
 /// Example:
-/// ```
+/// ```must_fail
 /// add loc0,arg0,arg1
 /// mov loc1,id1
 /// add loc0,arg0,arg1
 /// add loc2,loc1,loc0
 /// ```
 /// Will become:
-/// ```
+/// ```must_fail
 /// add loc0,arg0,arg1
 /// mov loc1,id1
 /// add loc2,loc1,loc0
@@ -231,14 +231,14 @@ impl LocalCSE {
 ///
 ///  Remove blocks with a single jump in it.
 ///  code:
-/// ```
+/// ```must_fail
 ///            jump A
 ///            A:
 ///            jump B
 ///            B:
 /// ```
-///            Transforms into:
-/// ```
+/// Transforms into:
+/// ```must_fail
 ///            jump B
 ///            B:
 /// ```
@@ -346,7 +346,10 @@ impl CleanPass {
     }
 }
 
-pub fn regalloc_and_reduce_strength(mut code: Handle<CodeBlock>, rt: &mut crate::runtime::Runtime) {
+pub fn regalloc_and_reduce_strength(
+    mut code: Handle<CodeBlock>,
+    _rt: &mut crate::runtime::Runtime,
+) {
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
     // replace jumps
     CleanPass::remove_empty_blocks(code);
@@ -368,7 +371,7 @@ pub fn regalloc_and_reduce_strength(mut code: Handle<CodeBlock>, rt: &mut crate:
             }
         }
     }
-    //CleanPass::run(code);
+
     code.code.iter_mut().for_each(|bb| {
         bb.code.retain(|ins| {
             if let Ins::Mov { dst, src } = ins {

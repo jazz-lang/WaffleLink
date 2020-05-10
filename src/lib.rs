@@ -26,6 +26,7 @@ macro_rules! unwrap {
     };
 }
 
+pub mod assembler;
 pub mod bytecode;
 pub mod bytecompiler;
 pub mod common;

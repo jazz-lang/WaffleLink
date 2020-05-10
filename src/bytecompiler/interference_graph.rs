@@ -2,7 +2,7 @@ use super::loopanalysis::*;
 use crate::bytecode::*;
 use def::*;
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
-use log::{debug, info, trace};
+use log::{debug, info};
 use std::fmt;
 use virtual_reg::*;
 use NodeType::*;
