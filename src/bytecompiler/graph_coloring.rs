@@ -99,7 +99,29 @@ impl GraphColoring {
         trace_if!(VERBOSE, "Initializing coloring allocator...");
 
         let ig = build_interference_graph_chaitin_briggs(&mut cf.get_mut().code, analysis);
+        //ig.print();
+        /*for bb in cf.code.iter_mut() {
+            bb.code.retain(|item| {
+                if item.is_final() {
+                    return true;
+                }
 
+                //item.get_defs().iter().filter(|x| x.is_local()).all(|x| ig.get_degree_of(*x) == 0)
+                for item in item.get_defs() {
+                    if item.is_local() {
+                        if ig.get_degree_of(item) == 0 {
+                            continue;
+                        } else {
+                            return true;
+                        }
+                    } else {
+                        return true;
+                    }
+
+                }
+                false
+            });
+        }*/
         let coloring = GraphColoring {
             cf: cf,
             ig: ig,

@@ -155,16 +155,22 @@ impl CodeBlock {
     }
 
     pub fn new_constant(&mut self, val: Value) -> virtual_reg::VirtualRegister {
-        if let Some(x) = self.constants.get(&val) {
-            return virtual_reg::VirtualRegister::constant(*x as i32);
-        } else {
-            let vreg = self.constants_.len();
-            self.constants_.push(val);
-            self.constants.insert(val, vreg);
-            virtual_reg::VirtualRegister::constant(vreg as _)
-        }
-    }
 
+            if let Some(x) = self.constants.get(&val) {
+                return virtual_reg::VirtualRegister::constant(*x as i32);
+            }
+
+        let vreg = self.constants_.len();
+        self.constants_.push(val);
+        self.constants.insert(val, vreg);
+        virtual_reg::VirtualRegister::constant(vreg as _)
+    }
+    /// Creates new empty constant without inserting it into a constant map.
+    pub fn creg(&mut self) -> virtual_reg::VirtualRegister {
+        let vreg = self.constants_.len();
+        self.constants_.push(Value::undefined());
+        virtual_reg::VirtualRegister::constant(vreg as _)
+    }
     pub fn get_constant(&self, x: i32) -> Value {
         self.constants_[x as usize]
     }

@@ -19,6 +19,8 @@ function foo(x) {
         return 0
     }
 }
+
+log(2 + 3)
 ",
         );
         let mut ast = vec![];
@@ -40,7 +42,7 @@ function foo(x) {
                 Ok(x) => println!("{}", x),
                 _ => unreachable!(),
             },
-            _ => unreachable!(),
+            Err(e) => println!("{}",waffle2::unwrap!(e.to_string(&mut rt))),
         }
     }
 

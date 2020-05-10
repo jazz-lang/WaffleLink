@@ -195,7 +195,9 @@ impl Runtime {
                     if_true,
                     if_false,
                 } => {
+
                     let cond = current.r(cond);
+
                     if cond.to_boolean() {
                         current.bp = if_true as _;
                     } else {
@@ -213,7 +215,7 @@ impl Runtime {
                         Ok(x) => x,
                         Err(e) => return Return::Error(e),
                     };
-                    let global = self.globals.get(&name).copied();
+                    let global = self.globals.get().get(&name).copied();
                     if global.is_none() {
                         return Return::Error(Value::from(
                             self.allocate_string(format!("Global '{}' not found", name)),
@@ -369,6 +371,19 @@ impl Runtime {
                         *current.r_mut(dst) = arr[up as usize];
                     } else {
                         panic!("Function does not have environment");
+                    }
+                }
+                Ins::CallNoArgs {
+                    dst,function,
+                    this
+                } => {
+                    let function = current.r(function);
+                    let this = current.r(this);
+                    match self.call(function, this, &[]) {
+                        Ok(val) => {
+                            *current.r_mut(dst) = val;
+                        }
+                        Err(e) => return Return::Error(e),
                     }
                 }
                 Ins::Call {

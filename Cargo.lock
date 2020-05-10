@@ -692,6 +692,7 @@ dependencies = [
  "bv",
  "byteorder",
  "cgc-single-threaded",
+ "chrono",
  "derive_more",
  "fancy-regex",
  "futures",

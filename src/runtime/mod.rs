@@ -3,6 +3,7 @@ pub mod deref_ptr;
 pub mod pure_nan;
 pub mod tld;
 pub mod value;
+pub mod builtins;
 use crate::common::*;
 use crate::jit::*;
 use cell::*;
@@ -64,7 +65,7 @@ pub struct Runtime {
     pub module_prototype: Rooted<Cell>,
     pub boolean_prototype: Rooted<Cell>,
     pub byte_array_prototype: Rooted<Cell>,
-    pub globals: HashMap<String, Value>,
+    pub globals: Rooted<HashMap<String, Value>>,
     pub stack: crate::interpreter::callstack::CallStack,
     pub code_space: CodeAllocator,
 }
@@ -75,13 +76,13 @@ impl Runtime {
         let object = heap.allocate(Cell::new(CellValue::None, None));
         let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
 
-        Self {
+        let mut this = Self {
             boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             process_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             generator_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            globals: HashMap::new(),
+            globals: heap.allocate(HashMap::new()),
             stack: crate::interpreter::callstack::CallStack::new(999),
             module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
@@ -91,7 +92,10 @@ impl Runtime {
             number_prototype: heap.allocate(Cell::new(CellValue::None, None)),
             heap,
             code_space: CodeAllocator::new(),
-        }
+        };
+
+        builtins::initialize(&mut this);
+        this
     }
     #[inline]
     pub fn allocate_cell(&mut self, cell: Cell) -> Rooted<Cell> {
@@ -175,6 +179,13 @@ impl Runtime {
                                 // unsafe code block is actually safe,we just access heap.
                                 self.stack
                                     .push(unsafe { &mut *ptr }, val, regular.code, this)?;
+                                for (i,arg) in args.iter().enumerate() {
+                                    if i >= self.stack.current_frame().entries.len() {
+                                        break;
+                                    }
+                                    self.stack.current_frame().entries[i] = *arg;
+                                }
+                                self.stack.current_frame().exit_on_return = true;
                                 match self.interpret() {
                                     Return::Return(val) => return Ok(val),
                                     Return::Error(e) => return Err(e),

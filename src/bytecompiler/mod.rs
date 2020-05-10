@@ -139,6 +139,14 @@ impl ByteCompiler {
         arguments: &[VirtualRegister],
     ) -> VirtualRegister {
         let dst = self.vreg();
+        if arguments.is_empty() {
+            self.emit(Ins::CallNoArgs {
+                function: func,
+                this,
+                dst
+            });
+            return dst;
+        }
         let mut used = std::collections::VecDeque::new();
         for arg in arguments.iter() {
             if let Some(reg) = self.free_args.pop_front() {
@@ -352,7 +360,8 @@ impl<'a> Context<'a> {
                     return dst;
                 } else {
                     let dst = self.builder.vreg();
-                    let c = self.builder.new_string(name);
+                    let x = self.rt.allocate_string(name);
+                    let c = self.builder.new_constant(Value::from(x));
                     self.builder.emit(Ins::LoadGlobal { dst, name: c });
                     return dst;
                 }
@@ -400,19 +409,26 @@ impl<'a> Context<'a> {
         let rt = unsafe { &mut *(self.rt as *mut Runtime) };
         let mut ctx = Context::new(
             rt,
-            self.fmap.clone(),
-            self.functions.clone(),
+            Rc::new(RefCell::new(Default::default())),
+            Rc::new(RefCell::new(Default::default())),
             Some(DerefPointer::new(self)),
         );
-        //ctx.builder.fallthrough();
+        let mut used = vec![];
         for p in params.iter() {
-            ctx.compile_arg(Position::new(0, 0), p)?;
+            used.push(ctx.compile_arg(Position::new(0, 0), p)?);
         }
-        let c = self.builder.new_constant(Value::undefined());
+        while let Some(x) = used.pop() {
+            ctx.builder.free_args.push_front(x);
+        }
+        let c = self.builder.code.creg();
+        let c2 = ctx.builder.code.creg();
         if vname.is_some() {
             self.fmap
                 .borrow_mut()
                 .insert(vname.as_ref().unwrap().to_owned(), c);
+            ctx.fmap
+                .borrow_mut()
+                .insert(vname.as_ref().unwrap().to_owned(), c2);
         }
 
         let res = ctx.compile(e)?;
@@ -444,6 +460,12 @@ impl<'a> Context<'a> {
                 .map(|x| x.to_string())
                 .unwrap_or("<anonymous>".to_string()),
         );
+        use crate::runtime::cell::*;
+        if let CellValue::Function(Function::Regular(ref mut reg)) = f.as_cell().value {
+            reg.code.constants_[c2.to_constant() as usize] = f;
+        } else {
+            unreachable!();
+        }
         self.builder.code.constants_[c.to_constant() as usize] = f;
         Ok(reg)
     }
@@ -532,7 +554,8 @@ impl<'a> Context<'a> {
                 return Ok(dst);
             }
             ExprKind::ConstStr(x) => {
-                let x = self.builder.new_string(x);
+                let x = self.rt.allocate_string(x);
+                let x = self.builder.new_constant(Value::from(x));
                 let dst = self.builder.vreg();
                 self.builder.emit(Ins::Mov { dst, src: x });
                 return Ok(dst);
@@ -587,6 +610,26 @@ impl<'a> Context<'a> {
                 return Ok(dst);
             }
             ExprKind::BinOp(lhs, op, rhs) => self.compile_binop(op, lhs, rhs),
+            ExprKind::Call(func,parameters) => {
+                let (func,this) = match func.expr {
+                    ExprKind::Access(ref obj,_) => {
+                        let this = self.compile(obj)?;
+                        (self.compile(func)?,this)
+                    }
+                    _ => {
+
+                        let this = self.builder.vreg();
+                        self.builder.emit(Ins::LoadThis {dst: this});
+                        (self.compile(func)?,this)
+                    }
+                };
+
+                let mut arguments = vec![];
+                for x in parameters.iter() {
+                    arguments.push(self.compile(x)?);
+                }
+                Ok(self.builder.do_call(func,this,&arguments))
+            }
             _ => unimplemented!(),
         }
     }
@@ -661,7 +704,7 @@ impl<'a> Context<'a> {
         }
     }
 
-    pub fn compile_arg(&mut self, p: Position, arg: &Arg) -> Result<(), MsgWithPos> {
+    pub fn compile_arg(&mut self, p: Position, arg: &Arg) -> Result<VirtualRegister, MsgWithPos> {
         match arg {
             Arg::Ident(_, name) => {
                 if self.builder.has_var(name) {
@@ -674,7 +717,7 @@ impl<'a> Context<'a> {
                 let dst = self.builder.vreg();
                 self.builder.emit(Ins::Mov { dst, src: r });
                 self.builder.def_var(name.to_owned(), dst);
-                Ok(())
+                Ok(r)
             }
             _ => unimplemented!(),
         }
@@ -727,9 +770,9 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>,
 use frontend::token::*;
 
 pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: &str) -> Value {
-    //let mut b = String::new();
-    //code.dump(&mut b, rt).unwrap();
-    //println!("\nfunction {}(...): \n{}", name, b);
+    let mut b = String::new();
+    code.dump(&mut b, rt).unwrap();
+    println!("\nfunction {}(...): \n{}", name, b);
     use crate::runtime::cell::*;
     let name = Value::from(rt.allocate_string(name));
     let func = RegularFunction {

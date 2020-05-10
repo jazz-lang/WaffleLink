@@ -683,7 +683,7 @@ pub fn build_interference_graph_chaitin_briggs(
                     if false {
                         None
                     } else {
-                        if src.len() == 1 {
+                        if src.len() == 1 && !dst.is_empty() {
                             let src = c(src[0]);
                             let dst = c(dst[0]);
                             trace_if!(TRACE_LIVENESS, "add move {} -> {}", src, dst);

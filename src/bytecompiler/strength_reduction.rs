@@ -346,6 +346,19 @@ impl CleanPass {
     }
 }
 
+
+use indexmap::IndexMap;
+
+pub struct DCE;
+
+use super::interference_graph::InterferenceGraph;
+
+impl DCE {
+
+
+
+}
+
 pub fn regalloc_and_reduce_strength(
     mut code: Handle<CodeBlock>,
     _rt: &mut crate::runtime::Runtime,
@@ -360,10 +373,12 @@ pub fn regalloc_and_reduce_strength(
 
     LocalCSE::run(code);
     ConstantFolding::run(code);
+
     super::loopanalysis::loopanalysis(code);
 
     let ra =
         super::graph_coloring::GraphColoring::start(code, &code.loopanalysis.as_ref().unwrap());
+
     for (temp, real) in ra.get_assignments() {
         for bb in code.code.iter_mut() {
             for ins in bb.code.iter_mut() {

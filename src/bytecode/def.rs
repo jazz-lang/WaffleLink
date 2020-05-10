@@ -35,6 +35,12 @@ pub enum Ins {
         begin: VirtualRegister,
         end: VirtualRegister,
     },
+    #[display(fmt = "call {},{},{}",dst,function,this)]
+    CallNoArgs {
+        dst: VirtualRegister,
+        function: VirtualRegister,
+        this: VirtualRegister,
+    },
     #[display(fmt = "tailcall {},{},{},{}-{}", dst, function, this, begin, end)]
     TailCall {
         dst: VirtualRegister,
@@ -310,6 +316,7 @@ impl Ins {
             | LoadI32 { dst, .. }
             | NewGeneratorFunction { dst, .. }
             | Call { dst, .. }
+            | CallNoArgs {dst,..}
             | Yield { dst, .. }
             | Await { dst, .. }
             | TryCatch { reg: dst, .. }
@@ -324,6 +331,7 @@ impl Ins {
             | GetByVal { dst, .. }
             | LoadThis { dst, .. }
             | Mod { dst, .. } => r!(dst),
+
             IteratorNext {
                 next, done, value, ..
             } => {
@@ -354,7 +362,7 @@ impl Ins {
             Mov { src, .. } => r!(src),
             NewGeneratorFunction { src, .. } => r!(src),
             CloseEnv { function, .. } => r!(function),
-            Call { function, this, .. } => r!(function, this),
+            Call { function, this, .. } | CallNoArgs {function,this,..} => r!(function, this),
             Ins::Yield { res, .. } => r!(res),
             Throw { src } => r!(src),
             Add { lhs, src, .. }
@@ -436,7 +444,7 @@ impl Ins {
                 dst,
                 this,
                 ..
-            } => r!(function, dst, this),
+            } | Ins::CallNoArgs {function,dst,this,..} => r!(function, dst, this),
             NewGeneratorFunction { dst, src } => r!(dst, src),
             CloseEnv { dst, function, .. } => r!(dst, function),
             Throw { src } => r!(src),
