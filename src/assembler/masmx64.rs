@@ -64,9 +64,11 @@ pub struct ForwardJump {
 
 impl MacroAssembler {
     pub fn is_int32(&mut self, src: Reg, dst: Reg) {
-        self.asm.movslq_rr(RAX.into(), src.into());
-        self.asm.cmpq_rr(RAX.into(), src.into());
-        self.set(dst, CondCode::Equal);
+        let r = self.get_scratch().reg();
+        self.load_int_const(MachineMode::Int64,r.into(),crate::runtime::value::Value::NUMBER_TAG as _);
+        self.int_and(MachineMode::Int64,dst.into(),src.into(),r.into());
+        self.cmp_reg(MachineMode::Int64,dst.into(),r.into());
+        self.set(dst.into(),CondCode::Equal);
     }
 
     pub fn is_number(&mut self, src: Reg, dst: Reg) {

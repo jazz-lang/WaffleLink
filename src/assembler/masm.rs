@@ -226,6 +226,7 @@ impl MacroAssembler {
             try_end: span.1,
             catch,
             offset,
+            native: true
         });
     }
 }

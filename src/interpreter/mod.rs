@@ -7,6 +7,7 @@ use def::*;
 use runtime::value::*;
 use runtime::*;
 use virtual_reg::*;
+use crate::jit::func::Handler;
 
 #[derive(Copy, Clone)]
 pub enum Return {
@@ -327,7 +328,13 @@ impl Runtime {
                 Ins::TryCatch { try_, catch, reg } => {
                     current.bp = try_ as _;
                     current.ip = 0;
-                    current.handlers.push((catch as _, reg));
+                    current.handlers.push(Handler {
+                        try_start: try_ as usize,
+                        catch: catch as usize,
+                        offset: None,
+                        try_end: 0,
+                        native: false
+                    });
                 }
                 Ins::Add { dst, lhs, src, .. } => {
                     let y = current.r(src);

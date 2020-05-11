@@ -176,6 +176,7 @@ impl Code {
             handler.try_start = instruction_start.offset(handler.try_start).to_usize();
             handler.try_end = instruction_start.offset(handler.try_end).to_usize();
             handler.catch = instruction_start.offset(handler.catch).to_usize();
+            handler.native = true;
         }
 
         //flush_icache(ptr.to_ptr(), size);
@@ -428,4 +429,5 @@ pub struct Handler {
     pub try_end: usize,
     pub catch: usize,
     pub offset: Option<i32>,
+    pub native: bool
 }

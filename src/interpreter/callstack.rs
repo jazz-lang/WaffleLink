@@ -2,7 +2,9 @@ use crate::bytecode::*;
 use crate::runtime;
 use cgc::api::*;
 use runtime::value::*;
+use crate::jit::func::Handler;
 use virtual_reg::*;
+
 pub struct CallFrame {
     pub func: Value,
     pub registers: Vec<Value>,
@@ -12,7 +14,7 @@ pub struct CallFrame {
     pub ip: usize,
     pub bp: usize,
     pub code: Handle<CodeBlock>,
-    pub handlers: Vec<(u32, VirtualRegister)>,
+    pub handlers: Vec<Handler>,
     pub exit_on_return: bool,
     pub rreg: VirtualRegister,
 }
@@ -64,6 +66,7 @@ impl Traceable for CallFrame {
         self.entries.trace_with(tracer);
         self.func.trace_with(tracer);
         self.this.trace_with(tracer);
+
     }
 }
 
@@ -111,6 +114,17 @@ impl CallStack {
 
     pub fn pop(&mut self) -> Option<StackEntry> {
         self.stack.pop()
+    }
+
+    pub fn unwind(&self) -> Option<(Handler,Handle<CallFrame>)> {
+        for frame in self.stack.iter() {
+            if let StackEntry::Frame(frame) = frame {
+                if let Some(hndlr) = frame.to_heap().handlers.pop() {
+                    return Some((hndlr,frame.to_heap()));
+                }
+            }
+        }
+        None
     }
 
     pub fn current_frame(&mut self) -> Handle<CallFrame> {
