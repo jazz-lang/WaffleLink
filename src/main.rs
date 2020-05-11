@@ -7,20 +7,25 @@ use waffle2::bytecompiler::*;
 use waffle2::frontend::*;
 use waffle2::runtime::*;
 fn main() {
-    let mut rt = Runtime::new();
     //simple_logger::init().unwrap();
-    {
+    let mut heap = {
+        let mut rt = Runtime::new();
         let reader = Reader::from_string(
             "
-function foo(x) {
-    if x {
-        return 1
-    } else {
-        return 0
+function fib(n) {
+    var prev = 0
+    var next = 1
+    var i = 0
+    while i < n {
+        var temp = next
+        next = prev + next
+        prev = temp
+        i = i + 1
     }
+  
+    return prev
 }
-
-log(2 + 3)
+fib(100)
 ",
         );
         let mut ast = vec![];
@@ -39,12 +44,14 @@ log(2 + 3)
         let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
         match rt.call(f, Value::undefined(), &[]) {
             Ok(x) => match x.to_string(&mut rt) {
-                Ok(x) => println!("{}", x),
+                Ok(x) => println!("Result: {}", x),
                 _ => unreachable!(),
             },
-            Err(e) => println!("{}",waffle2::unwrap!(e.to_string(&mut rt))),
+            Err(e) => println!("Err {}", waffle2::unwrap!(e.to_string(&mut rt))),
         }
-    }
+        rt.perf.print_perf();
+        rt.heap
+    };
 
-    rt.heap.collect();
+    heap.collect();
 }

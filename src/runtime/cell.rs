@@ -211,3 +211,8 @@ impl Traceable for Cell {
     }
 }
 impl Finalizer for Cell {}
+// A simple helper for getting the address of a value
+pub fn address_of<T>(t: &T) -> usize {
+    let my_ptr: *const T = t;
+    my_ptr as usize
+}

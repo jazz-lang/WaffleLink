@@ -14,6 +14,7 @@ pub struct CallFrame {
     pub code: Handle<CodeBlock>,
     pub handlers: Vec<(u32, VirtualRegister)>,
     pub exit_on_return: bool,
+    pub rreg: VirtualRegister,
 }
 
 impl CallFrame {
@@ -28,6 +29,7 @@ impl CallFrame {
             handlers: vec![],
             bp: 0,
             exit_on_return: false,
+            rreg: VirtualRegister::tmp(0),
         }
     }
     pub fn r(&self, r: VirtualRegister) -> Value {
@@ -54,8 +56,6 @@ impl CallFrame {
         }
     }
 }
-
-
 
 impl Traceable for CallFrame {
     fn trace_with(&self, tracer: &mut Tracer) {

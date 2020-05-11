@@ -63,6 +63,61 @@ pub struct ForwardJump {
 }
 
 impl MacroAssembler {
+    pub fn is_int32(&mut self, src: Reg, dst: Reg) {
+        self.asm.movslq_rr(RAX.into(), src.into());
+        self.asm.cmpq_rr(RAX.into(), src.into());
+        self.set(dst, CondCode::Equal);
+    }
+
+    pub fn is_number(&mut self, src: Reg, dst: Reg) {
+        self.asm.shrq_ri(src.into(), Immediate(0x49));
+        self.set(dst, CondCode::NotEqual);
+    }
+
+    pub fn is_undefined(&mut self, src: Reg, dst: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x10));
+        self.set(dst, CondCode::Equal);
+    }
+
+    pub fn is_null(&mut self, src: Reg, dst: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x2));
+        self.set(dst, CondCode::Equal);
+    }
+
+    pub fn as_int32(&mut self, src: Reg, dst: Reg) {
+        self.mov_rr(true, dst.into(), src.into());
+    }
+
+    pub fn as_number(&mut self, src: Reg, dst: FReg) {
+        self.load_int_const(
+            MachineMode::Int64,
+            RAX.into(),
+            runtime::value::Value::DOUBLE_ENCODE_OFFSET,
+        );
+        self.int_sub(MachineMode::Int64, RAX.into(), src.into(), RAX.into());
+        self.asm.movq_xr(dst.into(), RAX.into());
+    }
+
+    pub fn new_int(&mut self, src: Reg, dst: Reg) {
+        self.load_int_const(
+            MachineMode::Int64,
+            RAX.into(),
+            runtime::value::Value::NUMBER_TAG,
+        );
+        self.asm.orq_rr(src.into(), RAX.into());
+        self.mov_rr(true, dst.into(), src.into());
+    }
+
+    pub fn new_double(&mut self, src: FReg, dst: Reg) {
+        self.asm.movq_rx(RAX.into(), src.into());
+        self.int_add_imm(
+            MachineMode::Int64,
+            dst.into(),
+            RAX.into(),
+            runtime::value::Value::DOUBLE_ENCODE_OFFSET,
+        );
+    }
+
     pub fn prolog_size(&mut self, stacksize: i32) {
         self.asm.pushq_r(RBP.into());
         self.asm.movq_rr(RBP.into(), RSP.into());

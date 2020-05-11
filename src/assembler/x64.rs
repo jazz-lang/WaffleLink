@@ -208,6 +208,11 @@ impl Assembler {
         self.emit_modrm_registers(dest, src);
     }
 
+    pub fn movslq_rr(&mut self, dest: Register, src: Register) {
+        self.emit_rex64();
+        self.emit_modrm_registers(dest, src);
+    }
+
     pub fn movsxbq_ra(&mut self, dest: Register, src: Address) {
         self.emit_rex64_modrm_address(dest, src);
         self.emit_u8(0x0f);

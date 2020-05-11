@@ -6,7 +6,6 @@ use data_segment::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::ptr;
-use std::sync::Arc;
 pub enum JitFct {
     Compiled(Code),
     Uncompiled,
@@ -409,7 +408,7 @@ pub enum LazyCompilationSite {
     /// 1..5: nop
     /// ```
     /// becomes:
-    /// ```
+    /// ```must_fail
     /// 0: cmpq %rax, <cached_object>
     /// 1: je slow_path
     /// 2: movq <field_offset>(%rax), %rax

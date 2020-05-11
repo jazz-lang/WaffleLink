@@ -4,6 +4,8 @@ pub enum Type {
     Float64,
     Undefined,
     Null,
+    Array,
+    String,
     /// Native function, this allows invoking it by just doing `call *(%rax + 8)`
     NativeFunction(usize),
     /// Regular function is bytecode function.
@@ -179,4 +181,8 @@ impl TypeLists {
     pub fn get(&self, id: TypeListId) -> TypeList {
         self.values[id.idx()].clone()
     }
+}
+
+pub enum FeedBack {
+    TypeList(TypeList),
 }

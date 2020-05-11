@@ -18,13 +18,19 @@ pub enum Ins {
         dst: VirtualRegister,
         src: VirtualRegister,
     },
-    #[display(fmt = "close_env {}, {}-{}", function, begin, end)]
+    #[display(fmt = "close_env {}, {}, {}-{}", dst, function, begin, end)]
     // function.env = registers[begin..end]
     CloseEnv {
         dst: VirtualRegister,
         function: VirtualRegister,
         begin: VirtualRegister,
         end: VirtualRegister,
+    },
+    #[display(fmt = "close_env {},{}", dst, function)]
+    // function.env = registers[begin..end]
+    CloseEnvNoArgs {
+        dst: VirtualRegister,
+        function: VirtualRegister,
     },
     // dst = function.apply(this,registers[begin..end])
     #[display(fmt = "call {},{},{},{}-{}", dst, function, this, begin, end)]
@@ -35,7 +41,7 @@ pub enum Ins {
         begin: VirtualRegister,
         end: VirtualRegister,
     },
-    #[display(fmt = "call {},{},{}",dst,function,this)]
+    #[display(fmt = "call {},{},{}", dst, function, this)]
     CallNoArgs {
         dst: VirtualRegister,
         function: VirtualRegister,
@@ -240,7 +246,68 @@ pub enum Ins {
     LoopHint { fdbk: u32 },
     #[display(fmt = "load_this {}", dst)]
     LoadThis { dst: VirtualRegister },
+    #[display(fmt = "new_object {}", dst)]
+    NewObject { dst: VirtualRegister },
+    #[display(fmt = "construct {},{},{}-{}", dst, obj, begin, end)]
+    Construct {
+        dst: VirtualRegister,
+        obj: VirtualRegister,
+        begin: VirtualRegister,
+        end: VirtualRegister,
+    },
+    #[display(fmt = "construct {},{}", dst, obj)]
+    ConstructNoArgs {
+        dst: VirtualRegister,
+        obj: VirtualRegister,
+    },
 }
+#[rustfmt::skip]
+pub static INS_NAME: [&'static str; 44] = [
+    "mov", 
+    "load_i32", 
+    "new_generator_func", 
+    "close_env",
+    "close_env_no_args",
+    "call",
+    "call_no_args",
+    "tail_call",
+    "yield",
+    "return",
+    "await",
+    "try_catch",
+    "throw",
+    "add",
+    "sub",
+    "div",
+    "mul",
+    "mod",
+    "concat",
+    "shr",
+    "shl",
+    "ushr",
+    "eq",
+    "neq",
+    "greater",
+    "greatereq",
+    "less",
+    "lesseq",
+    "load_global",
+    "jmp",
+    "jmp_cond",
+    "iterator_open",
+    "iterator_next",
+    "load_up",
+    "get_by_id",
+    "put_by_id",
+    "get_by_val",
+    "put_by_val",
+    "safepoint",
+    "loophint",
+    "load_this",
+    "new_object",
+    "construct",
+    "construct_no_args"
+];
 
 #[derive(Hash, PartialEq, Eq)]
 pub enum BinaryOp {
@@ -261,6 +328,12 @@ pub enum BinaryOp {
 }
 
 impl Ins {
+    pub fn name(self) -> &'static str {
+        INS_NAME[unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(&self)) } as usize]
+    }
+    pub fn discriminant(self) -> usize {
+        unsafe { std::mem::transmute::<_, u64>(std::mem::discriminant(&self)) as usize }
+    }
     /// Returns lhs and rhs registers, and hashable `BinaryOp`.
     pub fn to_binary(&self) -> Option<(VirtualRegister, BinaryOp, VirtualRegister)> {
         use Ins::*;
@@ -316,7 +389,7 @@ impl Ins {
             | LoadI32 { dst, .. }
             | NewGeneratorFunction { dst, .. }
             | Call { dst, .. }
-            | CallNoArgs {dst,..}
+            | CallNoArgs { dst, .. }
             | Yield { dst, .. }
             | Await { dst, .. }
             | TryCatch { reg: dst, .. }
@@ -339,7 +412,8 @@ impl Ins {
                 r!(done);
                 r!(value);
             }
-            CloseEnv { dst, .. } => r!(dst),
+            ConstructNoArgs { dst, .. } | Construct { dst, .. } => r!(dst),
+            CloseEnv { dst, .. } | CloseEnvNoArgs { dst, .. } => r!(dst),
             _ => (),
         }
         set
@@ -359,10 +433,11 @@ impl Ins {
         }
         use Ins::*;
         match *self {
+            Construct { obj, .. } | Ins::ConstructNoArgs { obj, .. } => r!(obj),
             Mov { src, .. } => r!(src),
             NewGeneratorFunction { src, .. } => r!(src),
-            CloseEnv { function, .. } => r!(function),
-            Call { function, this, .. } | CallNoArgs {function,this,..} => r!(function, this),
+            CloseEnvNoArgs { function, .. } | CloseEnv { function, .. } => r!(function),
+            Call { function, this, .. } | CallNoArgs { function, this, .. } => r!(function, this),
             Ins::Yield { res, .. } => r!(res),
             Throw { src } => r!(src),
             Add { lhs, src, .. }
@@ -407,6 +482,8 @@ impl Ins {
         }
         use Ins::*;
         match self {
+            NewObject { dst } => r!(dst),
+            ConstructNoArgs { dst, obj, .. } | Construct { dst, obj, .. } => r!(dst, obj),
             Mov { dst, src } => r!(dst, src),
             Add { dst, lhs, src, .. }
             | Sub { dst, lhs, src, .. }
@@ -444,9 +521,17 @@ impl Ins {
                 dst,
                 this,
                 ..
-            } | Ins::CallNoArgs {function,dst,this,..} => r!(function, dst, this),
+            }
+            | Ins::CallNoArgs {
+                function,
+                dst,
+                this,
+                ..
+            } => r!(function, dst, this),
             NewGeneratorFunction { dst, src } => r!(dst, src),
-            CloseEnv { dst, function, .. } => r!(dst, function),
+            CloseEnvNoArgs { dst, function, .. } | CloseEnv { dst, function, .. } => {
+                r!(dst, function)
+            }
             Throw { src } => r!(src),
             TryCatch { reg, .. } => r!(reg),
             LoadThis { dst } => r!(dst),

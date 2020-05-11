@@ -15,6 +15,12 @@ pub enum Return {
     Yield(VirtualRegister, Value),
 }
 
+enum C {
+    Ok(Value),
+    Err(Value),
+    Continue,
+}
+
 impl Runtime {
     pub extern "C" fn compare_greater(&mut self, lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
@@ -148,6 +154,101 @@ impl Runtime {
             false
         }
     }
+    extern "C" fn call_interp(&mut self, func: Value, this: Value, args: &[Value]) -> C {
+        let ptr = self as *mut Self;
+        if func.is_cell() == false {
+            return C::Err(Value::from(self.allocate_string("not a function")));
+        }
+        let val = func;
+        use crate::jit::*;
+        use osr::*;
+        if let CellValue::Function(ref mut func) = func.as_cell().value {
+            match func {
+                Function::Native { name: _, native } => match native(self, this, args) {
+                    Return::Error(e) => return C::Err(e),
+                    Return::Return(x) => return C::Ok(x),
+                    _ => unimplemented!("TODO: Generators"),
+                },
+                Function::Regular(ref mut regular) => {
+                    let regular: &mut RegularFunction = regular;
+                    match regular.kind {
+                        RegularFunctionKind::Generator => {
+                            unimplemented!("TODO: Instantiat generator");
+                        }
+                        _ => {
+                            if let Some(jit) = regular.code.jit_stub {
+                                let _ =
+                                    self.stack
+                                        .push(unsafe { &mut *ptr }, val, regular.code, this);
+                                // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
+                                // that will start interpreting.
+                                let mut entry = OSREntry {
+                                    throw: false,
+                                    to_bp: 0,
+                                    to_ip: jit as usize, // if `to_ip` points to current func then skip all jump tables and start execution.
+                                };
+                                match jit(&mut entry, self, this, args) {
+                                    JITResult::Err(e) => return C::Err(e),
+                                    JITResult::Ok(x) => return C::Ok(x),
+                                    JITResult::OSRExit => {
+                                        self.stack.current_frame().ip = entry.to_ip;
+                                        self.stack.current_frame().bp = entry.to_bp;
+                                        /*match self.interpret() {
+                                            Return::Return(val) => return Ok(val),
+                                            Return::Error(e) => return Err(e),
+                                            Return::Yield { .. } => {
+                                                unimplemented!("TODO: Generators")
+                                            }
+                                        }*/
+                                        return C::Continue;
+                                    }
+                                }
+                            } else {
+                                regular.code.get_mut().hotness =
+                                    regular.code.hotness.wrapping_add(1);
+                                if regular.code.hotness >= 10000 {
+                                    // TODO: FullCodegen
+                                }
+                                // unsafe code block is actually safe,we just access heap.
+                                match self
+                                    .stack
+                                    .push(unsafe { &mut *ptr }, val, regular.code, this)
+                                {
+                                    Err(e) => return C::Err(e),
+                                    _ => (),
+                                }
+                                for (i, arg) in args.iter().enumerate() {
+                                    if i >= self.stack.current_frame().entries.len() {
+                                        break;
+                                    }
+                                    self.stack.current_frame().entries[i] = *arg;
+                                }
+                                self.stack.current_frame().exit_on_return = false;
+                                /* match self.interpret() {
+                                    Return::Return(val) => return Ok(val),
+                                    Return::Error(e) => return Err(e),
+                                    Return::Yield { .. } => unimplemented!("TODO: Generators"),
+                                }*/
+                                return C::Continue;
+                            }
+                        }
+                    }
+                }
+                _ => unimplemented!("TODO: Async"),
+            }
+        }
+        let key = self.allocate_string("call");
+        if let Some(call) = match func.lookup(self, Value::from(key.to_heap())) {
+            Ok(x) => x,
+            Err(e) => return C::Err(e),
+        } {
+            return match self.call(call, this, args) {
+                Ok(v) => C::Ok(v),
+                Err(e) => C::Err(e),
+            };
+        }
+        return C::Err(Value::from(self.allocate_string("not a function")));
+    }
     pub fn interpret(&mut self) -> Return {
         let mut current = self.stack.current_frame();
         loop {
@@ -155,19 +256,15 @@ impl Runtime {
             let ip = current.ip;
             let ins = current.code.code[bp].code[ip];
             current.ip += 1;
+            #[cfg(feature = "perf")]
+            {
+                self.perf.get_perf(ins.discriminant() as u8);
+            }
             match ins {
                 Ins::Mov { dst, src } => {
                     let src = current.r(src);
                     let r = current.r_mut(dst);
                     *r = src;
-                }
-                Ins::Return { val } => {
-                    let val = current.r(val);
-                    if current.exit_on_return || self.stack.stack.len() == 1 {
-                        return Return::Return(val);
-                    }
-                    self.stack.pop();
-                    current = self.stack.current_frame();
                 }
                 Ins::Yield { dst, res } => {
                     return Return::Yield(dst, current.r(res));
@@ -195,7 +292,6 @@ impl Runtime {
                     if_true,
                     if_false,
                 } => {
-
                     let cond = current.r(cond);
 
                     if cond.to_boolean() {
@@ -237,37 +333,41 @@ impl Runtime {
                     let y = current.r(src);
                     let x = current.r(lhs);
                     if x.is_int32() && y.is_int32() {
-                        *current.r_mut(dst) = Value::new_int(x.as_int32() + y.as_int32());
-                    } else {
-                        *current.r_mut(dst) = Value::number(x.to_number() + y.to_number());
+                        if let (val, false) = x.as_int32().overflowing_add(y.as_int32()) {
+                            *current.r_mut(dst) = Value::new_int(val);
+                            continue;
+                        }
                     }
+
+                    *current.r_mut(dst) = Value::number(x.to_number() + y.to_number());
                 }
                 Ins::Sub { dst, lhs, src, .. } => {
                     let y = current.r(src);
                     let x = current.r(lhs);
                     if x.is_int32() && y.is_int32() {
-                        *current.r_mut(dst) = Value::new_int(x.as_int32() - y.as_int32());
-                    } else {
-                        *current.r_mut(dst) = Value::number(x.to_number() - y.to_number());
+                        if let (val, false) = x.as_int32().overflowing_sub(y.as_int32()) {
+                            *current.r_mut(dst) = Value::new_int(val);
+                            continue;
+                        }
                     }
+                    *current.r_mut(dst) = Value::number(x.to_number() - y.to_number());
                 }
                 Ins::Div { dst, lhs, src, .. } => {
                     let y = current.r(src);
                     let x = current.r(lhs);
-                    if (x.is_int32() && y.is_int32()) && (y.as_int32() != 0 && x.as_int32() != 0) {
-                        *current.r_mut(dst) = Value::new_int(x.as_int32() / y.as_int32());
-                    } else {
-                        *current.r_mut(dst) = Value::number(x.to_number() / y.to_number());
-                    }
+
+                    *current.r_mut(dst) = Value::number(x.to_number() / y.to_number());
                 }
                 Ins::Mul { dst, lhs, src, .. } => {
                     let y = current.r(src);
                     let x = current.r(lhs);
                     if x.is_int32() && y.is_int32() {
-                        *current.r_mut(dst) = Value::new_int(x.as_int32() * y.as_int32());
-                    } else {
-                        *current.r_mut(dst) = Value::number(x.to_number() * y.to_number());
+                        if let (val, false) = x.as_int32().overflowing_mul(y.as_int32()) {
+                            *current.r_mut(dst) = Value::new_int(val);
+                            continue;
+                        }
                     }
+                    *current.r_mut(dst) = Value::number(x.to_number() * y.to_number());
                 }
                 Ins::Mod { dst, lhs, src, .. } => {
                     let y = current.r(src);
@@ -367,23 +467,61 @@ impl Runtime {
                 }
                 Ins::LoadUp { dst, up } => {
                     let func = current.func;
-                    if let CellValue::Array(ref arr) = func.as_cell().value {
+                    /*if let CellValue::Array(ref arr) = func.as_cell().value {
                         *current.r_mut(dst) = arr[up as usize];
                     } else {
                         panic!("Function does not have environment");
+                    }*/
+                    if let CellValue::Function(Function::Regular(ref r)) = func.as_cell().value {
+                        if let CellValue::Array(ref arr) = r.env.as_cell().value {
+                            *current.r_mut(dst) = arr[up as usize];
+                        }
+                    }
+                }
+                Ins::CloseEnv {
+                    dst,
+                    function,
+                    begin,
+                    end,
+                } => {
+                    assert!(begin.is_argument());
+                    assert!(end.is_argument());
+                    let arguments = {
+                        let mut v = vec![];
+                        for x in begin.to_argument()..=end.to_argument() {
+                            v.push(current.r(VirtualRegister::argument(x)));
+                        }
+                        v
+                    };
+
+                    let func = current.r(function);
+                    match func.as_cell().value {
+                        CellValue::Function(Function::Regular(ref mut r)) => {
+                            let arr =
+                                self.allocate_cell(Cell::new(CellValue::Array(arguments), None));
+                            r.env = Value::from(arr);
+                            *current.r_mut(dst) = func;
+                        }
+                        _ => unreachable!(),
                     }
                 }
                 Ins::CallNoArgs {
-                    dst,function,
-                    this
+                    dst,
+                    function,
+                    this,
                 } => {
                     let function = current.r(function);
                     let this = current.r(this);
-                    match self.call(function, this, &[]) {
-                        Ok(val) => {
+                    match self.call_interp(function, this, &[]) {
+                        C::Ok(val) => {
                             *current.r_mut(dst) = val;
                         }
-                        Err(e) => return Return::Error(e),
+                        C::Err(e) => return Return::Error(e),
+                        C::Continue => {
+                            current = self.stack.current_frame();
+                            current.rreg = dst;
+                            continue;
+                        }
                     }
                 }
                 Ins::Call {
@@ -404,12 +542,37 @@ impl Runtime {
                     };
                     let function = current.r(function);
                     let this = current.r(this);
-                    match self.call(function, this, &arguments) {
-                        Ok(val) => {
+                    /*if function.is_cell() {
+                        if let CellValue::Function(Function::Regular(ref r)) =
+                            function.as_cell().value
+                        {
+                            let rt = unsafe { &mut *(self as *mut Self) };
+                            unwrap!(self.stack.push(rt, function, r.code, this));
+                            current = self.stack.current_frame();
+                            continue;
+                        }
+                    }*/
+                    match self.call_interp(function, this, &arguments) {
+                        C::Ok(val) => {
                             *current.r_mut(dst) = val;
                         }
-                        Err(e) => return Return::Error(e),
+                        C::Err(e) => return Return::Error(e),
+                        C::Continue => {
+                            current = self.stack.current_frame();
+                            current.rreg = dst;
+                            continue;
+                        }
                     }
+                }
+                Ins::Return { val } => {
+                    let val = current.r(val);
+                    let r = current.rreg;
+                    if current.exit_on_return {
+                        return Return::Return(val);
+                    }
+                    self.stack.pop();
+                    current = self.stack.current_frame();
+                    *current.r_mut(r) = val;
                 }
                 Ins::GetById {
                     dst,
@@ -450,6 +613,11 @@ impl Runtime {
                         _ => (),
                     }
                 }
+                Ins::NewObject { dst } => {
+                    let proto = Some(self.object_prototype.to_heap());
+                    let cell = Cell::new(CellValue::None, proto);
+                    *current.r_mut(dst) = Value::from(self.allocate_cell(cell));
+                }
                 /*Ins::Await { dst, on } => {
                     let maybe_future = current.r(on);
                     if maybe_future.is_cell() {
@@ -473,7 +641,7 @@ impl Runtime {
                         return Return::Error(Value::from(self.allocate_string("Future expected")));
                     }
                 }*/
-                _ => unimplemented!("TODO!"),
+                _ => unimplemented!("TODO: {}", ins),
             }
         }
     }

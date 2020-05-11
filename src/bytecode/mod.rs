@@ -1,5 +1,6 @@
 pub mod def;
 pub mod virtual_reg;
+use crate::jit::types::FeedBack;
 // Register numbers used in bytecode operations have different meaning according to their ranges:
 //      0x80000000-0xFFFFFFFF  Negative indices from the CallFrame pointer are entries in the call frame.
 //      0x00000000-0x3FFFFFFF  Forwards indices from the CallFrame pointer are local vars and temporaries with the function's callframe.
@@ -117,6 +118,7 @@ pub struct CodeBlock {
     pub loopanalysis: Option<crate::bytecompiler::loopanalysis::BCLoopAnalysisResult>,
     pub jit_stub:
         Option<extern "C" fn(&mut osr::OSREntry, &mut Runtime, Value, &[Value]) -> JITResult>,
+    pub feedback: Vec<FeedBack>,
 }
 
 impl CodeBlock {
@@ -129,6 +131,10 @@ impl CodeBlock {
                 }
             }
         }
+    }
+
+    pub fn get_feedback(&self, x: u32) -> Option<&FeedBack> {
+        self.feedback.get(x as usize)
     }
     pub fn dump<W: std::fmt::Write>(&self, b: &mut W, rt: &mut Runtime) -> std::fmt::Result {
         for bb in self.code.iter() {
@@ -155,10 +161,9 @@ impl CodeBlock {
     }
 
     pub fn new_constant(&mut self, val: Value) -> virtual_reg::VirtualRegister {
-
-            if let Some(x) = self.constants.get(&val) {
-                return virtual_reg::VirtualRegister::constant(*x as i32);
-            }
+        if let Some(x) = self.constants.get(&val) {
+            return virtual_reg::VirtualRegister::constant(*x as i32);
+        }
 
         let vreg = self.constants_.len();
         self.constants_.push(val);

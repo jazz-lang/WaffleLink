@@ -1,9 +1,10 @@
+pub mod builtins;
 pub mod cell;
 pub mod deref_ptr;
+pub mod perf;
 pub mod pure_nan;
 pub mod tld;
 pub mod value;
-pub mod builtins;
 use crate::common::*;
 use crate::jit::*;
 use cell::*;
@@ -53,6 +54,8 @@ impl CodeAllocator {
 }
 
 pub struct Runtime {
+    #[cfg(feature = "perf")]
+    pub perf: perf::Perf,
     pub heap: Heap,
     pub string_prototype: Rooted<Cell>,
     pub object_prototype: Rooted<Cell>,
@@ -68,6 +71,7 @@ pub struct Runtime {
     pub globals: Rooted<HashMap<String, Value>>,
     pub stack: crate::interpreter::callstack::CallStack,
     pub code_space: CodeAllocator,
+    pub strings: Rooted<HashMap<String, Value>>,
 }
 
 impl Runtime {
@@ -77,18 +81,21 @@ impl Runtime {
         let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
 
         let mut this = Self {
+            #[cfg(feature = "perf")]
+            perf: perf::Perf::new(),
             boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             process_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             generator_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             globals: heap.allocate(HashMap::new()),
-            stack: crate::interpreter::callstack::CallStack::new(999),
+            stack: crate::interpreter::callstack::CallStack::new(999 * 2),
             module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             object_prototype: object,
             function_prototype: func,
+            strings: heap.allocate(HashMap::new()),
             number_prototype: heap.allocate(Cell::new(CellValue::None, None)),
             heap,
             code_space: CodeAllocator::new(),
@@ -110,7 +117,14 @@ impl Runtime {
     pub fn allocate<T: Traceable + 'static>(&mut self, val: T) -> Rooted<T> {
         self.heap.allocate(val)
     }
-
+    pub fn intern(&mut self, str: impl AsRef<str>) -> Value {
+        if let Some(x) = self.strings.get().get(str.as_ref()) {
+            return *x;
+        }
+        let val = Value::from(self.allocate_string(str.as_ref()));
+        self.strings.insert(str.as_ref().to_string(), val);
+        return val;
+    }
     pub fn allocate_string(&mut self, string: impl AsRef<str>) -> Rooted<Cell> {
         let s = string.as_ref().to_string();
         let proto = self.string_prototype.to_heap();
@@ -179,7 +193,7 @@ impl Runtime {
                                 // unsafe code block is actually safe,we just access heap.
                                 self.stack
                                     .push(unsafe { &mut *ptr }, val, regular.code, this)?;
-                                for (i,arg) in args.iter().enumerate() {
+                                for (i, arg) in args.iter().enumerate() {
                                     if i >= self.stack.current_frame().entries.len() {
                                         break;
                                     }

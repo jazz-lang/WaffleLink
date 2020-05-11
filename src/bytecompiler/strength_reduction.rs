@@ -346,18 +346,13 @@ impl CleanPass {
     }
 }
 
-
 use indexmap::IndexMap;
 
 pub struct DCE;
 
 use super::interference_graph::InterferenceGraph;
 
-impl DCE {
-
-
-
-}
+impl DCE {}
 
 pub fn regalloc_and_reduce_strength(
     mut code: Handle<CodeBlock>,
@@ -372,7 +367,7 @@ pub fn regalloc_and_reduce_strength(
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
 
     LocalCSE::run(code);
-    ConstantFolding::run(code);
+    //ConstantFolding::run(code);
 
     super::loopanalysis::loopanalysis(code);
 

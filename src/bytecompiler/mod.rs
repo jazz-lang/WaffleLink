@@ -17,6 +17,7 @@ pub struct ByteCompiler {
     free_args: std::collections::VecDeque<VirtualRegister>,
     current: u32,
     strings: HashMap<VirtualRegister, String>,
+    strs: HashMap<String, VirtualRegister>,
     pub vars: HashMap<String, VirtualRegister>,
 }
 
@@ -24,9 +25,13 @@ impl ByteCompiler {
     pub fn new_constant(&mut self, val: Value) -> VirtualRegister {
         self.code.new_constant(val)
     }
-    pub fn new_string(&mut self, s: impl AsRef<str>) -> VirtualRegister {
-        let x = self.code.new_constant(Value::undefined());
-        self.strings.insert(x, s.as_ref().to_string());
+    pub fn new_string(&mut self, rt: &mut Runtime, s: impl AsRef<str>) -> VirtualRegister {
+        if let Some(x) = self.strs.get(s.as_ref()) {
+            return *x;
+        }
+        let x = rt.intern(s.as_ref());
+        let x = self.new_constant(Value::from(x));
+        self.strs.insert(s.as_ref().to_string(), x);
         x
     }
     pub fn new(rt: &mut Runtime) -> Self {
@@ -40,6 +45,7 @@ impl ByteCompiler {
             cfg: None,
             loopanalysis: None,
             jit_stub: None,
+            feedback: vec![],
         });
         Self {
             code: block,
@@ -49,6 +55,7 @@ impl ByteCompiler {
             current: 0,
             strings: Default::default(),
             vars: Default::default(),
+            strs: Default::default(),
         }
     }
 
@@ -143,7 +150,7 @@ impl ByteCompiler {
             self.emit(Ins::CallNoArgs {
                 function: func,
                 this,
-                dst
+                dst,
             });
             return dst;
         }
@@ -169,6 +176,47 @@ impl ByteCompiler {
             dst,
             function: func,
             this,
+            begin: *used.front().unwrap(),
+            end: *used.back().unwrap(),
+        });
+        while let Some(x) = used.pop_front() {
+            self.free_args.push_front(x);
+        }
+
+        dst
+    }
+
+    pub fn do_construct(
+        &mut self,
+        obj: VirtualRegister,
+        arguments: &[VirtualRegister],
+    ) -> VirtualRegister {
+        let dst = self.vreg();
+        if arguments.is_empty() {
+            self.emit(Ins::ConstructNoArgs { obj, dst });
+            return dst;
+        }
+        let mut used = std::collections::VecDeque::new();
+        for arg in arguments.iter() {
+            if let Some(reg) = self.free_args.pop_front() {
+                self.emit(Ins::Mov {
+                    dst: reg,
+                    src: *arg,
+                });
+                used.push_back(reg);
+            } else {
+                let reg = self.areg();
+                used.push_back(reg);
+                self.emit(Ins::Mov {
+                    dst: reg,
+                    src: *arg,
+                });
+            }
+        }
+
+        self.emit(Ins::Construct {
+            dst,
+            obj,
             begin: *used.front().unwrap(),
             end: *used.back().unwrap(),
         });
@@ -295,14 +343,14 @@ impl<'a> Context<'a> {
                     });
                     return Ok(dst);
                 } else {
-                    let key = self.builder.new_string(name);
+                    let key = self.builder.new_string(self.rt, name);
                     self.builder.emit(Ins::LoadGlobal { dst, name: key });
                     return Ok(dst);
                 }
             }
             Access::Field(e, f) => {
                 let dst = self.builder.vreg();
-                let key = self.builder.new_string(f);
+                let key = self.builder.new_string(self.rt, f);
                 let o = self.compile(&e)?;
                 self.builder.emit(Ins::GetById {
                     dst: dst,
@@ -432,6 +480,7 @@ impl<'a> Context<'a> {
         }
 
         let res = ctx.compile(e)?;
+        ctx.builder.emit(Ins::Safepoint);
         if res.is_local() && res.to_local() != 0 {
             ctx.builder.emit(Ins::Return { val: res });
         }
@@ -471,8 +520,9 @@ impl<'a> Context<'a> {
     }
     pub fn access_set(&mut self, acc: Access, val: VirtualRegister) -> Result<(), MsgWithPos> {
         match acc {
-            Access::Stack(name, _) => {
-                self.builder.def_var(name.to_owned(), val);
+            Access::Stack(name, x) => {
+                self.builder.mov(x, val);
+                //self.builder.def_var(name.to_owned(), val);
                 Ok(())
             }
             _ => unimplemented!(),
@@ -565,6 +615,7 @@ impl<'a> Context<'a> {
             }
             ExprKind::Return(Some(e)) => {
                 let val = self.compile(e)?;
+                self.builder.emit(Ins::Safepoint);
                 self.builder.emit(Ins::Return { val });
                 return Ok(val);
             }
@@ -610,17 +661,16 @@ impl<'a> Context<'a> {
                 return Ok(dst);
             }
             ExprKind::BinOp(lhs, op, rhs) => self.compile_binop(op, lhs, rhs),
-            ExprKind::Call(func,parameters) => {
-                let (func,this) = match func.expr {
-                    ExprKind::Access(ref obj,_) => {
+            ExprKind::Call(func, parameters) => {
+                let (func, this) = match func.expr {
+                    ExprKind::Access(ref obj, _) => {
                         let this = self.compile(obj)?;
-                        (self.compile(func)?,this)
+                        (self.compile(func)?, this)
                     }
                     _ => {
-
                         let this = self.builder.vreg();
-                        self.builder.emit(Ins::LoadThis {dst: this});
-                        (self.compile(func)?,this)
+                        self.builder.emit(Ins::LoadThis { dst: this });
+                        (self.compile(func)?, this)
                     }
                 };
 
@@ -628,7 +678,54 @@ impl<'a> Context<'a> {
                 for x in parameters.iter() {
                     arguments.push(self.compile(x)?);
                 }
-                Ok(self.builder.do_call(func,this,&arguments))
+                Ok(self.builder.do_call(func, this, &arguments))
+            }
+            ExprKind::While(cond, body) => {
+                self.builder.fallthrough();
+                let c = self.compile(cond)?;
+                let (mut w, mut b) = self.builder.cjmp(c);
+                let pos = self.builder.current;
+                //let mut j = self.builder.jmp();
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                w();
+                let res = self.compile(body)?;
+                self.builder.emit(Ins::Jump { dst: pos });
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                b();
+                return Ok(res);
+            }
+            ExprKind::New(x) => {
+                if let ExprKind::Call(x, args) = &x.expr {
+                    let mut arguments = vec![];
+                    for x in args.iter() {
+                        arguments.push(self.compile(x)?);
+                    }
+                    let x = self.compile(x)?;
+                    return Ok(self.builder.do_construct(x, &arguments));
+                } else {
+                    return Err(MsgWithPos::new(x.pos, Msg::FctCallExpected));
+                }
+            }
+            ExprKind::NewObject(fields) => {
+                let obj = self.builder.vreg();
+                self.builder.emit(Ins::NewObject { dst: obj });
+
+                for (name, expr) in fields.iter() {
+                    let value = if let Some(value) = expr {
+                        self.compile(value)?
+                    } else {
+                        self.ident(name)
+                    };
+                    let id = self.builder.new_string(self.rt, name);
+                    self.builder.emit(Ins::PutById {
+                        val: value,
+                        base: obj,
+                        id,
+                    });
+                }
+                Ok(obj)
             }
             _ => unimplemented!(),
         }
@@ -682,6 +779,26 @@ impl<'a> Context<'a> {
                     fdbk: 0,
                 }
             }
+            "<" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Less {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
+            ">" => {
+                let a = self.compile(lhs)?;
+                let b = self.compile(rhs)?;
+                Ins::Greater {
+                    dst,
+                    lhs: a,
+                    src: b,
+                    fdbk: 0,
+                }
+            }
             _ => unimplemented!(),
         };
         self.builder.emit(ins);
@@ -697,7 +814,9 @@ impl<'a> Context<'a> {
     ) -> Result<(), MsgWithPos> {
         match &pat.decl {
             PatternDecl::Ident(x) => {
-                self.builder.def_var(x.to_owned(), r);
+                let v = self.builder.vreg();
+                self.builder.mov(v, r);
+                self.builder.def_var(x.to_owned(), v);
                 return Ok(());
             }
             _ => unimplemented!("Other var patterns not yet implemented"),
@@ -754,6 +873,7 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>,
         None,
     );
     let r = ctx.compile(&ast)?;
+    ctx.builder.emit(Ins::Safepoint);
     let r = if r.is_local() && r.to_local() == 0 {
         let dst = ctx.builder.vreg();
         let c = ctx.builder.new_constant(Value::undefined());

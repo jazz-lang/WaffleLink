@@ -616,6 +616,7 @@ impl Value {
                         }
                     }
                 }
+                unimplemented!()
             }
             unsafe {
                 println!("0{:x}", self.u.as_int64);

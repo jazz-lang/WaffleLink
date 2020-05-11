@@ -21,12 +21,12 @@ chrono = "*"
 bv = "0.11"
 lazy_static = "1.4"
 simple_logger = "1.6"
-#raw-cpuid = "8"
+
 [features]
 value64 = []
 value32-64 = []
-default = ["value64"]
-
+default = ["value64","perf"]
+perf = []
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "*", features = ["memoryapi"] }
