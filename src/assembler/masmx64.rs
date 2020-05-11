@@ -85,9 +85,35 @@ impl MacroAssembler {
         self.asm.cmpq_ri(src.into(), Immediate(0x2));
         self.set(dst, CondCode::Equal);
     }
+    pub fn jmp_is_int32(&mut self,lbl: Label, src: Reg) {
+        let r = self.get_scratch().reg();
+        self.load_int_const(MachineMode::Int64,r.into(),crate::runtime::value::Value::NUMBER_TAG as _);
+        self.int_and(MachineMode::Int64,RAX.into(),src.into(),r.into());
+        self.cmp_reg(MachineMode::Int64,RAX.into(),r.into());
+        self.jump_if(CondCode::Equal,lbl);
+        //self.set(dst.into(),CondCode::Equal);
+    }
 
+    pub fn jmp_is_number(&mut self, lbl: Label,src: Reg) {
+        self.asm.shrq_ri(src.into(), Immediate(0x49));
+        self.jump_if( CondCode::NotEqual,lbl);
+    }
+
+    pub fn jmp_overflow(&mut self,lbl: Label) {
+
+    }
+
+    pub fn jmp_is_undefined(&mut self, lbl: Label,src: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x10));
+        self.jump_if( CondCode::Equal,lbl);
+    }
+
+    pub fn jmp_is_null(&mut self, lbl: Label,src: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x2));
+        self.jump_if( CondCode::Equal,lbl,);
+    }
     pub fn as_int32(&mut self, src: Reg, dst: Reg) {
-        self.mov_rr(true, dst.into(), src.into());
+        self.mov_rr(false, dst.into(), src.into());
     }
 
     pub fn as_number(&mut self, src: Reg, dst: FReg) {

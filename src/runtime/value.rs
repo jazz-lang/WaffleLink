@@ -8,12 +8,12 @@ compile_error!("Cannot use value32-64 feature on 64 target");
 
 #[derive(Copy, Clone)]
 #[repr(C, align(8))]
-union EncodedValueDescriptor {
-    as_int64: i64,
+pub union EncodedValueDescriptor {
+    pub as_int64: i64,
     #[cfg(feature = "value32-64")]
-    as_double: f64,
-    cell: Handle<Cell>,
-    as_bits: AsBits,
+    pub as_double: f64,
+    pub cell: Handle<Cell>,
+    pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(C)]
@@ -82,7 +82,7 @@ pub enum JSTag {
 
 #[derive(Copy, Clone)]
 pub struct Value {
-    u: EncodedValueDescriptor,
+    pub(crate) u: EncodedValueDescriptor,
 }
 
 #[cfg(feature = "value32-64")]
