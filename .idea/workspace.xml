@@ -1,15 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="REMOTE_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="GROUP_NODE:origin" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select />
+  </component>
   <component name="CargoProjects">
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
     <list default="true" id="715bd4a6-ee19-4e98-9bcc-1efbdf5a70df" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/cgc/src/api.rs" beforeDir="false" afterPath="$PROJECT_DIR$/cgc/src/api.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cgc/src/heap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/cgc/src/heap.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/masmx64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/masmx64.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/discord.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/assembler/cpu/x64/reg.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/cpu/x64/reg.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/fullcodegen/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/value.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/value.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -29,11 +46,13 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
-    <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
+    <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors" />
   </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
@@ -52,10 +71,22 @@
     </task>
     <servers />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="WindowStateProjectService">
-    <state x="0" y="0" width="1920" height="1032" key="SettingsEditor" timestamp="1589215537035">
-      <screen x="0" y="0" width="1920" height="1032" />
+    <state x="369" y="234" width="1280" height="729" key="SettingsEditor" timestamp="1589256392854">
+      <screen x="0" y="0" width="1920" height="1044" />
     </state>
     <state x="0" y="0" width="1920" height="1032" key="SettingsEditor/0.0.1920.1032@0.0.1920.1032" timestamp="1589215537035" />
+    <state x="369" y="234" width="1280" height="729" key="SettingsEditor/0.0.1920.1044@0.0.1920.1044" timestamp="1589256392854" />
   </component>
 </project>

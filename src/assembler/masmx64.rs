@@ -65,10 +65,14 @@ pub struct ForwardJump {
 impl MacroAssembler {
     pub fn is_int32(&mut self, src: Reg, dst: Reg) {
         let r = self.get_scratch().reg();
-        self.load_int_const(MachineMode::Int64,r.into(),crate::runtime::value::Value::NUMBER_TAG as _);
-        self.int_and(MachineMode::Int64,dst.into(),src.into(),r.into());
-        self.cmp_reg(MachineMode::Int64,dst.into(),r.into());
-        self.set(dst.into(),CondCode::Equal);
+        self.load_int_const(
+            MachineMode::Int64,
+            r.into(),
+            crate::runtime::value::Value::NUMBER_TAG as _,
+        );
+        self.int_and(MachineMode::Int64, dst.into(), src.into(), r.into());
+        self.cmp_reg(MachineMode::Int64, dst.into(), r.into());
+        self.set(dst.into(), CondCode::Equal);
     }
 
     pub fn is_number(&mut self, src: Reg, dst: Reg) {
@@ -85,32 +89,34 @@ impl MacroAssembler {
         self.asm.cmpq_ri(src.into(), Immediate(0x2));
         self.set(dst, CondCode::Equal);
     }
-    pub fn jmp_is_int32(&mut self,lbl: Label, src: Reg) {
-        let r = self.get_scratch().reg();
-        self.load_int_const(MachineMode::Int64,r.into(),crate::runtime::value::Value::NUMBER_TAG as _);
-        self.int_and(MachineMode::Int64,RAX.into(),src.into(),r.into());
-        self.cmp_reg(MachineMode::Int64,RAX.into(),r.into());
-        self.jump_if(CondCode::Equal,lbl);
+    pub fn jmp_nis_int32(&mut self, lbl: Label, src: Reg) {
+        let r = REG_TMP2;
+        self.load_int_const(
+            MachineMode::Int64,
+            r.into(),
+            crate::runtime::value::Value::NUMBER_TAG as _,
+        );
+        self.int_and(MachineMode::Int64, RAX.into(), src.into(), r.into());
+        self.cmp_reg(MachineMode::Int64, RAX.into(), r.into());
+        self.jump_if(CondCode::NotEqual, lbl);
         //self.set(dst.into(),CondCode::Equal);
     }
 
-    pub fn jmp_is_number(&mut self, lbl: Label,src: Reg) {
+    pub fn jmp_nis_number(&mut self, lbl: Label, src: Reg) {
         self.asm.shrq_ri(src.into(), Immediate(0x49));
-        self.jump_if( CondCode::NotEqual,lbl);
+        self.jump_if(CondCode::Equal, lbl);
     }
 
-    pub fn jmp_overflow(&mut self,lbl: Label) {
+    pub fn jmp_overflow(&mut self, lbl: Label) {}
 
-    }
-
-    pub fn jmp_is_undefined(&mut self, lbl: Label,src: Reg) {
+    pub fn jmp_nis_undefined(&mut self, lbl: Label, src: Reg) {
         self.asm.cmpq_ri(src.into(), Immediate(0x10));
-        self.jump_if( CondCode::Equal,lbl);
+        self.jump_if(CondCode::NotEqual, lbl);
     }
 
-    pub fn jmp_is_null(&mut self, lbl: Label,src: Reg) {
+    pub fn jmp_nis_null(&mut self, lbl: Label, src: Reg) {
         self.asm.cmpq_ri(src.into(), Immediate(0x2));
-        self.jump_if( CondCode::Equal,lbl,);
+        self.jump_if(CondCode::NotEqual, lbl);
     }
     pub fn as_int32(&mut self, src: Reg, dst: Reg) {
         self.mov_rr(false, dst.into(), src.into());
@@ -127,13 +133,17 @@ impl MacroAssembler {
     }
 
     pub fn new_int(&mut self, src: Reg, dst: Reg) {
-        self.load_int_const(
+        /*self.load_int_const(
             MachineMode::Int64,
             RAX.into(),
             runtime::value::Value::NUMBER_TAG,
-        );
-        self.asm.orq_rr(src.into(), RAX.into());
-        self.mov_rr(true, dst.into(), src.into());
+        );*/
+        if src != RCX.into() {
+            self.copy_reg(MachineMode::Int64, RCX.into(), src);
+        }
+        self.load_int_const(MachineMode::Int64, RAX.into(), -562949953421312);
+        self.asm.orq_rr(RCX.into(), RAX.into());
+        self.mov_rr(true, dst.into(), RCX.into());
     }
 
     pub fn new_double(&mut self, src: FReg, dst: Reg) {

@@ -1,8 +1,8 @@
 use crate::bytecode::*;
+use crate::jit::func::Handler;
 use crate::runtime;
 use cgc::api::*;
 use runtime::value::*;
-use crate::jit::func::Handler;
 use virtual_reg::*;
 
 pub struct CallFrame {
@@ -57,6 +57,12 @@ impl CallFrame {
             unreachable!()
         }
     }
+    #[no_mangle]
+    pub extern "C" fn just_shit(mut this: Handle<Self>, v: Value) {
+        unsafe {
+            *this.registers.get_unchecked_mut(0) = v;
+        }
+    }
 }
 
 impl Traceable for CallFrame {
@@ -66,7 +72,6 @@ impl Traceable for CallFrame {
         self.entries.trace_with(tracer);
         self.func.trace_with(tracer);
         self.this.trace_with(tracer);
-
     }
 }
 
@@ -116,11 +121,11 @@ impl CallStack {
         self.stack.pop()
     }
 
-    pub fn unwind(&self) -> Option<(Handler,Handle<CallFrame>)> {
+    pub fn unwind(&self) -> Option<(Handler, Handle<CallFrame>)> {
         for frame in self.stack.iter() {
             if let StackEntry::Frame(frame) = frame {
                 if let Some(hndlr) = frame.to_heap().handlers.pop() {
-                    return Some((hndlr,frame.to_heap()));
+                    return Some((hndlr, frame.to_heap()));
                 }
             }
         }

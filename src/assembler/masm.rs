@@ -150,9 +150,9 @@ impl MacroAssembler {
         Label(idx)
     }
 
-    pub fn emit_comment(&mut self, comment: String) {
+    pub fn emit_comment(&mut self, comment: impl AsRef<str>) {
         let offset = self.pos() as u32;
-        self.comments.insert(offset, comment);
+        self.comments.insert(offset, comment.as_ref().to_string());
     }
 
     pub fn bind_label(&mut self, lbl: Label) {
@@ -226,7 +226,7 @@ impl MacroAssembler {
             try_end: span.1,
             catch,
             offset,
-            native: true
+            native: true,
         });
     }
 }

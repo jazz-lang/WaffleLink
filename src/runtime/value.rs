@@ -741,3 +741,12 @@ impl Hash for Value {
         }
     }
 }
+#[no_mangle]
+pub extern "C" fn add_val(x: Value, y: Value) -> Value {
+    if x.is_int32() && y.is_int32() {
+        if let (val, false) = x.as_int32().overflowing_add(y.as_int32()) {
+            return Value::new_int(val);
+        }
+    }
+    Value::number(x.to_number() + y.to_number())
+}

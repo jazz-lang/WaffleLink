@@ -21,11 +21,13 @@ pub static CCALL_FREG_PARAMS: [FReg; 8] = [XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, X
 pub static CCALL_FREG_PARAMS: [FReg; 4] = [XMM0, XMM1, XMM2, XMM3];
 
 pub const REG_RESULT: Reg = RAX;
+pub const REG_RESULT2: Reg = RDX;
 pub const REG_TMP1: Reg = R10;
 pub const REG_TMP2: Reg = R11;
 pub const REG_SP: Reg = RSP;
 pub const REG_FP: Reg = RBP;
 pub const REG_THREAD: Reg = R15;
+pub const REG_CALLFRAME: Reg = R14;
 
 #[cfg(target_family = "unix")]
 pub static SCRATCH: [Reg; 4] = [RDI, RSI, RDX, RCX];
