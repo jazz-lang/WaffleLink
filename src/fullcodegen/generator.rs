@@ -1,3 +1,4 @@
+use super::*;
 use crate::bytecode::*;
 use crate::*;
 use assembler::*;
@@ -7,5 +8,6 @@ use masm::*;
 use runtime::*;
 use types::*;
 pub trait FullGenerator {
-    fn generate(&self, _masm: &mut MacroAssembler, _code: Handle<CodeBlock>);
+    fn fast_path(&mut self, gen: &mut FullCodegen) -> bool;
+    fn slow_path(&mut self, gen: &mut FullCodegen);
 }

@@ -4,7 +4,9 @@
 //! FullCodegen is baseline JIT compiler that emits unoptimized code.
 pub mod generator;
 pub mod jitadd_generator;
-
+pub mod jitless_generator;
+pub mod jitsub_generator;
+pub mod to_boolean_generator;
 use crate::assembler;
 use crate::bytecode;
 use crate::interpreter::callstack::*;
@@ -15,15 +17,16 @@ use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
 use cgc::api::*;
 use func::*;
+pub(super) use generator::*;
 use runtime::cell::*;
 use runtime::value::*;
 use runtime::*;
 use std::collections::HashMap;
 use types::*;
-
 pub struct FullCodegen {
     code: Handle<CodeBlock>,
     masm: MacroAssembler,
+    slow_paths: Vec<Box<dyn generator::FullGenerator>>,
 }
 
 impl FullCodegen {
@@ -31,6 +34,7 @@ impl FullCodegen {
         Self {
             code,
             masm: MacroAssembler::new(),
+            slow_paths: vec![],
         }
     }
     pub fn load_registers(&mut self, to: Reg) {
@@ -81,10 +85,6 @@ impl FullCodegen {
                 Mem::Base(REG_RESULT.into(), vreg.to_local() * 8),
             );
         } else if vreg.is_constant() {
-            assert!(
-                self.code.constants_[vreg.to_constant() as usize].as_int32() == 4
-                    || self.code.constants_[vreg.to_constant() as usize].as_int32() == 3
-            );
             self.masm
                 .load_int_const(MachineMode::Int64, REG_RESULT, unsafe {
                     self.code.constants_[vreg.to_constant() as usize].u.as_int64
@@ -165,14 +165,13 @@ impl FullCodegen {
             );
         }
     }
+
     pub fn compile(&mut self) {
         let mut labels = HashMap::new();
         for bb in self.code.code.iter() {
             labels.insert(bb.id, self.masm.create_label());
         }
-        fn enter() {
-            println!("we're in jit!");
-        }
+        let mut slow_paths: Vec<Box<dyn FullGenerator>> = Vec::new();
         let ret_lbl = self.masm.create_label();
         self.masm.prolog();
         self.masm
@@ -187,61 +186,45 @@ impl FullCodegen {
                 match *ins {
                     Ins::Mov { dst, src } => {
                         self.mov(dst, src);
-                        //self.load_register(src);
-                        //self.masm.raw_call(enter as *const _);
-                        //self.store_register(dst);
                     }
                     Ins::Add { dst, lhs, src, .. } => {
-                        let lhs = lhs;
-                        let rhs = src;
-
-                        let slow_path = self.masm.create_label();
-                        let end = self.masm.create_label();
-                        // load registers and move them to argument regs to call slow path when needed.
-                        /* self.load_register(lhs);
-                        self.masm
-                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_RESULT);
-                        self.load_register(src);
-                        self.masm
-                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[1], REG_RESULT);*/
-                        self.load_registers2(lhs, rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-                        self.masm
-                            .emit_comment("if (!is_int32(lhs) || !is_int32(rhs) goto slow_path;");
-                        self.masm
-                            .load_int_const(MachineMode::Int64, REG_RESULT, -562949953421312);
-                        self.masm
-                            .asm
-                            .lea(RAX.into(), assembler::Address::offset(R8.into(), -1));
-                        self.masm
-                            .cmp_reg(MachineMode::Int64, REG_RESULT, CCALL_REG_PARAMS[0]);
-                        self.masm.jump_if(CondCode::UnsignedGreater, slow_path);
-                        self.masm
-                            .cmp_reg(MachineMode::Int64, REG_RESULT, CCALL_REG_PARAMS[1]);
-                        self.masm.jump_if(CondCode::UnsignedGreater, slow_path);
-                        self.masm.int_add(
-                            MachineMode::Int32,
-                            REG_RESULT,
-                            CCALL_REG_PARAMS[0],
-                            CCALL_REG_PARAMS[1],
-                        );
-                        self.masm.emit_comment("if (overflow) goto slow_path");
-                        // TODO: We do not have overflow condition in MASM, add it later.
-                        self.masm
-                            .asm
-                            .setcc_r(assembler::Condition::Overflow, REG_TMP1.into());
-                        self.masm.cmp_zero(MachineMode::Int8, REG_TMP1);
-                        let ovf = self.masm.create_label();
-                        self.masm.jump_if(CondCode::Zero, ovf);
-                        self.masm.new_int(REG_RESULT, REG_RESULT);
-                        self.store_register(dst);
-                        self.masm.jump(end);
-                        self.masm.emit_comment("slow_path:");
-                        self.masm.bind_label(ovf);
-                        self.masm.bind_label(slow_path);
-                        self.load_registers2(lhs, rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-                        self.masm.raw_call(__add_slow_path as *const u8);
-                        self.store_register(dst);
-                        self.masm.bind_label(end);
+                        let mut x = jitadd_generator::AddGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Sub { dst, lhs, src, .. } => {
+                        let mut x = jitsub_generator::SubGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Less { dst, lhs, src, .. } => {
+                        let mut x = jitless_generator::LessGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
                     }
                     Ins::Return { val } => {
                         self.load_register(val);
@@ -252,9 +235,24 @@ impl FullCodegen {
                     }
                     Ins::Safepoint => {
                         self.masm.nop();
-                        /*self.masm
-                            .copy_reg(MachineMode::Int64, REG_RESULT, REG_THREAD);
-                        self.masm.raw_call(__safepoint as *const u8);*/
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_THREAD);
+                        self.masm.raw_call(__safepoint as *const u8);
+                    }
+                    Ins::JumpConditional {
+                        cond,
+                        if_true,
+                        if_false,
+                    } => {
+                        let mut tbool = to_boolean_generator::ToBooleanGenerator::new(cond, *ins);
+                        if tbool.fast_path(self) {
+                            slow_paths.push(Box::new(tbool));
+                        }
+                        let if_false = labels.get(&if_false).copied().unwrap();
+                        let if_true = labels.get(&if_true).copied().unwrap();
+                        self.masm.cmp_zero(MachineMode::Int8, REG_RESULT);
+                        self.masm.jump_if(CondCode::Equal, if_false);
+                        self.masm.jump(if_true);
                     }
                     Ins::Jump { dst } => {
                         let lbl = labels.get(&dst).copied().unwrap();
@@ -267,12 +265,16 @@ impl FullCodegen {
 
         self.masm.bind_label(ret_lbl);
         self.masm.epilog();
+
+        for gen in slow_paths.iter_mut() {
+            gen.slow_path(self);
+        }
     }
 
     pub fn finish(self, rt: &mut Runtime, disasm: bool) -> Code {
         let code = self.masm.jit(rt, 0, JitDescriptor::Fct(0));
         if disasm {
-            use std::io::{self, Write};
+            use std::io::Write;
             let instruction_length = code.instruction_end().offset_from(code.instruction_start());
             let buf: &[u8] = unsafe {
                 std::slice::from_raw_parts(code.instruction_start().to_ptr(), instruction_length)
@@ -329,9 +331,11 @@ impl FullCodegen {
 }
 
 pub extern "C" fn __add_slow_path(x: Value, y: Value) -> Value {
-    assert!(x.is_int32() && y.is_int32());
-    println!("{} {}", x.as_int32(), y.as_int32());
     Value::number(x.to_number() + y.to_number())
+}
+
+pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
+    Value::number(x.to_number() - y.to_number())
 }
 
 pub unsafe extern "C" fn __safepoint(rt: *mut Runtime) {

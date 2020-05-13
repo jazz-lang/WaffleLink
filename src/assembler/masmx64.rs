@@ -63,6 +63,18 @@ pub struct ForwardJump {
 }
 
 impl MacroAssembler {
+    pub fn new_boolean(&mut self, src: Reg, dst: Reg) {
+        if dst != src {
+            self.copy_reg(MachineMode::Int32, dst, src);
+        }
+        self.load_int_const(MachineMode::Int8, REG_TMP1, 7);
+        self.asm.xorq_rr(dst.into(), REG_TMP1.into());
+    }
+    pub fn as_double(&mut self, src: Reg, dest: FReg) {
+        self.load_int_const(MachineMode::Int64, REG_TMP1, -562949953421312);
+        self.int_add(MachineMode::Int64, src, src, REG_TMP1);
+        self.int_as_float(MachineMode::Float64, dest, MachineMode::Int64, src);
+    }
     pub fn is_int32(&mut self, src: Reg, dst: Reg) {
         let r = self.get_scratch().reg();
         self.load_int_const(
@@ -88,6 +100,77 @@ impl MacroAssembler {
     pub fn is_null(&mut self, src: Reg, dst: Reg) {
         self.asm.cmpq_ri(src.into(), Immediate(0x2));
         self.set(dst, CondCode::Equal);
+    }
+
+    pub fn is_true(&mut self, src: Reg, dst: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(6));
+        self.set(dst, CondCode::Equal);
+    }
+    pub fn is_false(&mut self, src: Reg, dst: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(7));
+        self.set(dst, CondCode::Equal);
+    }
+
+    pub fn jmp_is_undefined_or_null(&mut self, lbl: Label, mut src: Reg) {
+        /*
+        movq	%src,%rax
+
+        andq	$-9, %rax
+        cmpq	$2, %rax
+        je	lbl
+        */
+        if src != REG_RESULT {
+            self.copy_reg(MachineMode::Int64, REG_RESULT, src);
+            src = REG_RESULT;
+        }
+        self.asm.andq_ri(src.into(), Immediate(-9));
+        self.asm.cmpq_ri(src.into(), Immediate(2));
+        self.jump_if(CondCode::Equal, lbl);
+    }
+    pub fn jmp_nis_undefined_or_null(&mut self, lbl: Label, mut src: Reg) {
+        /*
+        movq	%src,%rax
+
+        andq	$-9, %rax
+        cmpq	$2, %rax
+        je	lbl
+        */
+        if src != REG_RESULT {
+            self.copy_reg(MachineMode::Int64, REG_RESULT, src);
+            src = REG_RESULT;
+        }
+        self.asm.andq_ri(src.into(), Immediate(-9));
+        self.asm.cmpq_ri(src.into(), Immediate(2));
+        self.jump_if(CondCode::NotEqual, lbl);
+    }
+
+    pub fn jmp_is_boolean(&mut self, lbl: Label, mut src: Reg) {
+        /*
+
+            movq	src,%rax
+            andq	$-9, %rax
+            cmpq	$6, %rax
+            je lbl
+        */
+        if src != REG_RESULT {
+            self.copy_reg(MachineMode::Int64, REG_RESULT, src);
+            src = REG_RESULT;
+        }
+        self.asm.andq_ri(src.into(), Immediate(-9));
+        self.asm.cmpq_ri(src.into(), Immediate(6));
+        self.jump_if(CondCode::Equal, lbl);
+    }
+    pub fn jmp_nis_boolean(&mut self, lbl: Label, src: Reg) {
+        /*
+
+            movq	%rax,src
+            andq	$-9, %rax
+            cmpq	$6, %rax
+            jne lbl
+        */
+        self.asm.andq_ri(src.into(), Immediate(-9));
+        self.asm.cmpq_ri(src.into(), Immediate(6));
+        self.jump_if(CondCode::NotEqual, lbl);
     }
     pub fn jmp_nis_int32(&mut self, lbl: Label, src: Reg) {
         let r = REG_TMP2;
@@ -117,6 +200,33 @@ impl MacroAssembler {
     pub fn jmp_nis_null(&mut self, lbl: Label, src: Reg) {
         self.asm.cmpq_ri(src.into(), Immediate(0x2));
         self.jump_if(CondCode::NotEqual, lbl);
+    }
+    pub fn jmp_is_int32(&mut self, lbl: Label, src: Reg) {
+        let r = REG_TMP2;
+        self.load_int_const(
+            MachineMode::Int64,
+            r.into(),
+            crate::runtime::value::Value::NUMBER_TAG as _,
+        );
+        self.int_and(MachineMode::Int64, RAX.into(), src.into(), r.into());
+        self.cmp_reg(MachineMode::Int64, RAX.into(), r.into());
+        self.jump_if(CondCode::Equal, lbl);
+        //self.set(dst.into(),CondCode::Equal);
+    }
+
+    pub fn jmp_is_number(&mut self, lbl: Label, src: Reg) {
+        self.asm.shrq_ri(src.into(), Immediate(49));
+        self.jump_if(CondCode::NotEqual, lbl);
+    }
+
+    pub fn jmp_is_undefined(&mut self, lbl: Label, src: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x10));
+        self.jump_if(CondCode::Equal, lbl);
+    }
+
+    pub fn jmp_is_null(&mut self, lbl: Label, src: Reg) {
+        self.asm.cmpq_ri(src.into(), Immediate(0x2));
+        self.jump_if(CondCode::Equal, lbl);
     }
     pub fn as_int32(&mut self, src: Reg, dst: Reg) {
         self.mov_rr(false, dst.into(), src.into());

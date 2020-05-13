@@ -890,9 +890,9 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>,
 use frontend::token::*;
 
 pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: &str) -> Value {
-    let mut b = String::new();
-    code.dump(&mut b, rt).unwrap();
-    println!("\nfunction {}(...): \n{}", name, b);
+    //let mut b = String::new();
+    //code.dump(&mut b, rt).unwrap();
+    //println!("\nfunction {}(...): \n{}", name, b);
     use crate::runtime::cell::*;
     let name = Value::from(rt.allocate_string(name));
     let func = RegularFunction {

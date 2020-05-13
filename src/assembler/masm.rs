@@ -232,7 +232,7 @@ impl MacroAssembler {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Label(pub(super) usize);
+pub struct Label(pub(crate) usize);
 
 impl Label {
     pub fn index(&self) -> usize {

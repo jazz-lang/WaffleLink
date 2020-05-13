@@ -16,9 +16,12 @@ fn main() {
         let mut rt = Runtime::new();
         let reader = Reader::from_string(
             "
-var a = 3
-var b = 4
-return a + b
+var i = 0
+while i < 10000000 {
+    i = i + 1
+}
+
+return i
 ",
         );
         let mut ast = vec![];
@@ -44,21 +47,35 @@ return a + b
             .stack
             .push(x, Value::undefined(), code.to_heap(), Value::undefined());
         let current = rt.stack.current_frame();
-        match func(&mut rt, current) {
+        let s = std::time::Instant::now();
+        let res = func(&mut rt, current);
+        let e = s.elapsed();
+        let ms = e.as_millis();
+        let ns = e.as_nanos();
+        println!("JIT code executed in: {}ms or {}ns", ms, ns);
+        match res {
             JITResult::Ok(val) => {
                 println!("{}", waffle2::unwrap!(val.to_string(&mut rt)));
             }
             _ => unreachable!(),
         }
-        /*let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
-        match rt.call(f, Value::undefined(), &[]) {
+
+        let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
+        let s = std::time::Instant::now();
+        let res = rt.call(f, Value::undefined(), &[]);
+        let e = s.elapsed();
+        let ms = e.as_millis();
+        let ns = e.as_nanos();
+
+        println!("Interpreter code executed in: {}ms or {}ns", ms, ns);
+        match res {
             Ok(x) => match x.to_string(&mut rt) {
                 Ok(x) => println!("Result: {}", x),
                 _ => unreachable!(),
             },
             Err(e) => println!("Err {}", waffle2::unwrap!(e.to_string(&mut rt))),
         }
-        rt.perf.print_perf();*/
+        rt.perf.print_perf();
         rt.heap
     };
 

@@ -750,3 +750,11 @@ pub extern "C" fn add_val(x: Value, y: Value) -> Value {
     }
     Value::number(x.to_number() + y.to_number())
 }
+#[no_mangle]
+pub extern "C" fn new_boolean(x: bool) -> Value {
+    if x {
+        Value::true_()
+    } else {
+        Value::false_()
+    }
+}

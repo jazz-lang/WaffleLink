@@ -9,7 +9,7 @@ use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
 use cgc::api::*;
 use func::*;
-pub struct AddGenerator {
+pub struct SubGenerator {
     pub ins: Ins,
     pub slow_path: Label,
     pub lhs: VirtualRegister,
@@ -18,7 +18,7 @@ pub struct AddGenerator {
     pub end: Label,
 }
 
-impl FullGenerator for AddGenerator {
+impl FullGenerator for SubGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
         let lhs = self.lhs;
         let rhs = self.rhs;
@@ -42,7 +42,7 @@ impl FullGenerator for AddGenerator {
         gen.masm
             .cmp_reg(MachineMode::Int64, REG_RESULT, CCALL_REG_PARAMS[1]);
         gen.masm.jump_if(CondCode::UnsignedGreater, slow_path);
-        gen.masm.int_add(
+        gen.masm.int_sub(
             MachineMode::Int32,
             REG_RESULT,
             CCALL_REG_PARAMS[0],
@@ -70,7 +70,7 @@ impl FullGenerator for AddGenerator {
         gen.masm.emit_comment(format!("({}) slow_path:", self.ins));
         gen.masm.bind_label(self.slow_path);
         gen.load_registers2(self.lhs, self.rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.raw_call(__add_slow_path as *const u8);
+        gen.masm.raw_call(__sub_slow_path as *const u8);
         gen.store_register(self.dst);
         gen.masm.jump(self.end);
     }
