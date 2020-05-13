@@ -2,7 +2,7 @@
 use super::cell::*;
 use super::pure_nan::*;
 use super::*;
-use cgc::api::Handle;
+use crate::heap::api::Handle;
 #[cfg(all(target_pointer_width = "64", feature = "value32-64"))]
 compile_error!("Cannot use value32-64 feature on 64 target");
 
@@ -697,7 +697,7 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
     as_int64
 }
 
-use cgc::api::{Finalizer, Traceable, Tracer};
+use crate::heap::api::{Finalizer, Traceable, Tracer};
 
 impl Traceable for Value {
     fn trace_with(&self, tracer: &mut Tracer) {
@@ -717,7 +717,7 @@ impl From<Handle<Cell>> for Value {
     }
 }
 
-use cgc::api::*;
+use crate::heap::api::*;
 
 impl From<Rooted<Cell>> for Value {
     fn from(x: Rooted<Cell>) -> Self {

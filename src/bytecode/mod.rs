@@ -95,7 +95,7 @@ impl BasicBlock {
     }
 }
 
-use cgc::api::{Finalizer, Traceable, Tracer};
+use crate::heap::api::{Finalizer, Traceable, Tracer};
 
 impl Finalizer for BasicBlock {
     fn finalize(&mut self) {}

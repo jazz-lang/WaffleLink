@@ -5,7 +5,7 @@ pub mod loopanalysis;
 pub mod strength_reduction;
 use crate::bytecode::*;
 use crate::runtime::*;
-use cgc::api::*;
+use crate::heap::api::*;
 use def::*;
 use std::collections::HashMap;
 use value::*;

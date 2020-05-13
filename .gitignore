@@ -4,3 +4,5 @@ Cargo.lock
 flamegraph.svg
 perf.data
 perf.data.old
+mimalloc-sys/target
+mimalloc-sys/Cargo.lock

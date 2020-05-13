@@ -3,7 +3,7 @@ use crate::bytecode::*;
 use crate::jit::func::Handler;
 use crate::runtime;
 use cell::*;
-use cgc::api::*;
+use crate::heap::api::*;
 use def::*;
 use runtime::value::*;
 use runtime::*;

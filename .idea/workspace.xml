@@ -23,30 +23,42 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="715bd4a6-ee19-4e98-9bcc-1efbdf5a70df" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitdiv_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitequal_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitgreater_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitgreatereq_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitlesseq_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitmod_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitmul_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitnequal_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitshl_generator.rs" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/fullcodegen/jitshr_generator.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/heap/api.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/heap/heap.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/heap/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cgc/src/heap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/cgc/src/heap.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/masm.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/masm.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/masmx64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/masmx64.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cgc" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/bytecode/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecode/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bytecompiler/graph_coloring.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecompiler/graph_coloring.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bytecompiler/loopanalysis.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecompiler/loopanalysis.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/bytecompiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecompiler/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/bytecompiler/strength_reduction.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecompiler/strength_reduction.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitadd_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitadd_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitdiv_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitdiv_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitequal_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitequal_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitgreater_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitgreater_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitgreatereq_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitgreatereq_generator.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitless_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitless_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitlesseq_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitlesseq_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitmod_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitmod_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitmul_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitmul_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitnequal_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitnequal_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitshl_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitshl_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitshr_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitshr_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitsub_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitsub_generator.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/fullcodegen/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/fullcodegen/to_boolean_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/to_boolean_generator.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/interpreter/callstack.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/interpreter/callstack.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/interpreter/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/interpreter/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/jit/func.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/jit/func.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/jit/osr.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/jit/osr.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/runtime/cell.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/cell.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/runtime/value.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/value.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -81,8 +93,12 @@
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/mimalloc-sys/build.rs" value="true" />
     <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/fullcodegen/jitgreatereq_generator.rs" value="true" />
     <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/fullcodegen/jitmod_generator.rs" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/api.rs" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/heap.rs" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/mod.rs" value="true" />
     <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors" />
   </component>
   <component name="RustProjectSettings">
@@ -115,14 +131,18 @@
     <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="WindowStateProjectService">
+    <state x="632" y="203" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog" timestamp="1589391132686">
+      <screen x="0" y="0" width="1920" height="1032" />
+    </state>
+    <state x="632" y="203" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog/0.0.1920.1032@0.0.1920.1032" timestamp="1589391132686" />
     <state x="369" y="234" width="1280" height="729" key="SettingsEditor" timestamp="1589256392854">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
     <state x="0" y="0" width="1920" height="1032" key="SettingsEditor/0.0.1920.1032@0.0.1920.1032" timestamp="1589215537035" />
     <state x="369" y="234" width="1280" height="729" key="SettingsEditor/0.0.1920.1044@0.0.1920.1044" timestamp="1589256392854" />
-    <state x="558" y="40" width="804" height="951" key="find.popup" timestamp="1589374130145">
+    <state x="558" y="40" width="836" height="951" key="find.popup" timestamp="1589387936684">
       <screen x="0" y="0" width="1920" height="1032" />
     </state>
-    <state x="558" y="40" width="804" height="951" key="find.popup/0.0.1920.1032@0.0.1920.1032" timestamp="1589374130145" />
+    <state x="558" y="40" width="836" height="951" key="find.popup/0.0.1920.1032@0.0.1920.1032" timestamp="1589387936684" />
   </component>
 </project>

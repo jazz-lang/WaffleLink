@@ -1,5 +1,5 @@
 use super::*;
-use cgc::api::*;
+use crate::heap::api::*;
 use fancy_regex::Regex;
 use hashlink::*;
 use value::*;

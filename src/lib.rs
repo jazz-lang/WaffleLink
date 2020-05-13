@@ -1,5 +1,4 @@
 #![allow(unused)]
-extern crate cgc_single_threaded as cgc;
 
 #[macro_export]
 macro_rules! offset_of {
@@ -36,3 +35,7 @@ pub mod fullcodegen;
 pub mod interpreter;
 pub mod jit;
 pub mod runtime;
+pub mod heap;
+
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

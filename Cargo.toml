@@ -8,14 +8,15 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1.3"
-cgc-single-threaded = {path = "cgc",features = ["trace-gc"]}
 hashlink = "0.5"
 fancy-regex = "0.3"
 indexmap = "1.3"
 derive_more = "0.99"
+smallvec = "*"
 futures = "0.3"
 log = "0.4"
 libc = "0.2"
+mimalloc = "*"
 hmap = "0.1"
 chrono = "*"
 bv = "0.11"

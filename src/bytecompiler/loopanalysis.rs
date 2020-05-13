@@ -1,7 +1,7 @@
 use crate::bytecode;
 use crate::common;
 use bytecode::*;
-use cgc::api::Handle;
+use crate::heap::api::Handle;
 use common::multi_map::*;
 use common::tree::*;
 use hashlink::*;

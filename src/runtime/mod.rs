@@ -8,8 +8,8 @@ pub mod value;
 use crate::common::*;
 use crate::jit::*;
 use cell::*;
-use cgc::api::*;
-use cgc::heap::Heap;
+use crate::heap::api::*;
+use crate::heap::heap::Heap;
 use osr::*;
 use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
@@ -79,7 +79,7 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
-        let mut heap = Heap::new(32 * 1024, 64 * 1024, true);
+        let mut heap = Heap::new();
         let object = heap.allocate(Cell::new(CellValue::None, None));
         let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
 

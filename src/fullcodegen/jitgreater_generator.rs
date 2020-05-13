@@ -7,7 +7,7 @@ use crate::runtime;
 use assembler::cpu::*;
 use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
-use cgc::api::*;
+use crate::heap::api::*;
 use func::*;
 pub struct GreaterGenerator {
     pub ins: Ins,

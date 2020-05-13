@@ -1,7 +1,7 @@
 use crate::bytecode::*;
 use crate::jit::func::Handler;
 use crate::runtime;
-use cgc::api::*;
+use crate::heap::api::*;
 use runtime::value::*;
 use virtual_reg::*;
 

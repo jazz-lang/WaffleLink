@@ -18,7 +18,7 @@
 
 use crate::bytecode::*;
 use crate::runtime::value::Value;
-use cgc::api::Handle;
+use crate::heap::api::Handle;
 use def::*;
 use std::collections::HashMap;
 use virtual_reg::*;

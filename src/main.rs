@@ -1,6 +1,6 @@
-extern crate cgc_single_threaded as cgc;
+
 extern crate waffle2;
-use cgc::api::*;
+use waffle2::heap::api::*;
 use parser::*;
 use reader::*;
 use value::*;

@@ -11,7 +11,7 @@ const CHECK_INVARIANTS: bool = false;
 use super::interference_graph::*;
 use super::loopanalysis::*;
 use crate::bytecode::*;
-use cgc::api::*;
+use crate::heap::api::*;
 
 use hashlink::{linked_hash_map::LinkedHashMap, LinkedHashSet};
 use log::error;

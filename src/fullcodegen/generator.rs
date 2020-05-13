@@ -2,7 +2,7 @@ use super::*;
 use crate::bytecode::*;
 use crate::*;
 use assembler::*;
-use cgc::api::Handle;
+use crate::heap::api::Handle;
 use jit::*;
 use masm::*;
 use runtime::*;
