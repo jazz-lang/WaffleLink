@@ -44,7 +44,7 @@ impl ByteCompiler {
             code: Vec::new(),
             cfg: None,
             loopanalysis: None,
-            jit_stub: None,
+            jit_code: None,
             feedback: vec![],
         });
         Self {
@@ -619,6 +619,7 @@ impl<'a> Context<'a> {
                 self.builder.emit(Ins::Return { val });
                 return Ok(val);
             }
+
             ExprKind::Return(None) => unimplemented!(),
             ExprKind::Let(_, pat, expr) => {
                 let val = self.compile(expr)?;

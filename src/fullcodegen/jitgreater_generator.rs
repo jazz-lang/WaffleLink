@@ -9,7 +9,7 @@ use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
 use cgc::api::*;
 use func::*;
-pub struct LessGenerator {
+pub struct GreaterGenerator {
     pub ins: Ins,
     pub slow_path: Label,
     pub lhs: VirtualRegister,
@@ -18,7 +18,7 @@ pub struct LessGenerator {
     pub end: Label,
 }
 
-impl FullGenerator for LessGenerator {
+impl FullGenerator for GreaterGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
         let lhs = self.lhs;
         let rhs = self.rhs;
@@ -50,7 +50,7 @@ impl FullGenerator for LessGenerator {
         );*/
         gen.masm
             .cmp_reg(MachineMode::Int32, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.set(REG_RESULT, CondCode::Less);
+        gen.masm.set(REG_RESULT, CondCode::Greater);
         gen.masm.new_boolean(REG_RESULT, REG_RESULT);
         gen.store_register(dst);
         self.slow_path = slow_path;
@@ -65,7 +65,7 @@ impl FullGenerator for LessGenerator {
         gen.masm.emit_comment(format!("({}) slow_path:", self.ins));
         gen.masm.bind_label(self.slow_path);
         gen.load_registers2(self.lhs, self.rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.raw_call(Runtime::compare_less as *const u8);
+        gen.masm.raw_call(Runtime::compare_greater as *const u8);
         gen.masm.new_boolean(REG_RESULT,REG_RESULT);
         gen.store_register(self.dst);
         gen.masm.jump(self.end);

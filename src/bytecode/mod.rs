@@ -107,6 +107,8 @@ impl Traceable for BasicBlock {
 use crate::jit::*;
 use crate::runtime::value::*;
 use crate::runtime::*;
+use crate::jit::func::Code;
+
 pub struct CodeBlock {
     pub constants_: Vec<Value>,
     pub constants: IndexMap<Value, usize>,
@@ -116,8 +118,7 @@ pub struct CodeBlock {
     pub hotness: usize,
     pub cfg: Option<Box<CodeCFG>>,
     pub loopanalysis: Option<crate::bytecompiler::loopanalysis::BCLoopAnalysisResult>,
-    pub jit_stub:
-        Option<extern "C" fn(&mut osr::OSREntry, &mut Runtime, Value, &[Value]) -> JITResult>,
+    pub jit_code: Option<Code>,
     pub feedback: Vec<FeedBack>,
 }
 

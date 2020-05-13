@@ -11,16 +11,22 @@ use waffle2::interpreter::callstack::CallFrame;
 use waffle2::jit::JITResult;
 use waffle2::runtime::*;
 fn main() {
-    //simple_logger::init().unwrap();
+    simple_logger::init().unwrap();
     let mut heap = {
         let mut rt = Runtime::new();
         let reader = Reader::from_string(
             "
 function foo() {
-    return 2 + 3
+    return 1
 }
 
-foo()
+var i = 0
+while i < 100000 {
+    foo()
+    i = i + 1
+}
+
+return i
 ",
         );
         let mut ast = vec![];
@@ -36,10 +42,10 @@ foo()
                 return;
             }
         };
-        let mut gen = FullCodegen::new(code.to_heap());
-        gen.compile();
+        /*let mut gen = FullCodegen::new(code.to_heap());
+        gen.compile(false);
         let ncode = gen.finish(&mut rt, true);
-        let func: extern "C" fn(&mut Runtime, Handle<CallFrame>) -> JITResult =
+        let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
             unsafe { std::mem::transmute(ncode.instruction_start()) };
         let x = unsafe { &mut *(&mut rt as *mut Runtime) };
         let _ = rt
@@ -60,14 +66,8 @@ foo()
             _ => unreachable!(),
         }
 
-        /*let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
-        let s = std::time::Instant::now();
+        */let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
         let res = rt.call(f, Value::undefined(), &[]);
-        let e = s.elapsed();
-        let ms = e.as_millis();
-        let ns = e.as_nanos();
-
-        println!("Interpreter code executed in: {}ms or {}ns", ms, ns);
         match res {
             Ok(x) => match x.to_string(&mut rt) {
                 Ok(x) => println!("Result: {}", x),
@@ -75,7 +75,7 @@ foo()
             },
             Err(e) => println!("Err {}", waffle2::unwrap!(e.to_string(&mut rt))),
         }
-        rt.perf.print_perf();*/
+        rt.perf.print_perf();
         rt.heap
     };
 

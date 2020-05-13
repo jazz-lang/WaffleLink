@@ -4,8 +4,17 @@
 //! FullCodegen is baseline JIT compiler that emits unoptimized code.
 pub mod generator;
 pub mod jitadd_generator;
+pub mod jitgreater_generator;
 pub mod jitless_generator;
 pub mod jitsub_generator;
+pub mod jitmul_generator;
+pub mod jitdiv_generator;
+pub mod jitshl_generator;
+pub mod jitlesseq_generator;
+pub mod jitshr_generator;
+pub mod jitgreatereq_generator;
+pub mod jitequal_generator;
+pub mod jitnequal_generator;
 pub mod to_boolean_generator;
 use crate::assembler;
 use crate::bytecode;
@@ -236,7 +245,7 @@ impl FullCodegen {
         );
         self.masm.call_reg(REG_TMP1);
     }
-    pub fn compile(&mut self) {
+    pub fn compile(&mut self,has_table: bool) {
         let mut labels = HashMap::new();
         for bb in self.code.code.iter() {
             labels.insert(bb.id, self.masm.create_label());
@@ -249,6 +258,10 @@ impl FullCodegen {
             .copy_reg(MachineMode::Int64, REG_THREAD, CCALL_REG_PARAMS[0]);
         self.masm
             .copy_reg(MachineMode::Int64, REG_CALLFRAME, CCALL_REG_PARAMS[1]);
+        if has_table {
+            self.masm.copy_pc(REG_RESULT);
+            self.masm.load_mem(MachineMode::Int64, AnyReg::Reg(REG_RESULT), Mem::Index(REG_RESULT, CCALL_REG_PARAMS[2], 8, 0));
+        }
         for bb in self.code.clone().code.iter() {
             let lbl = labels.get(&bb.id).copied().unwrap();
             self.masm.bind_label(lbl);
@@ -286,6 +299,123 @@ impl FullCodegen {
                     }
                     Ins::Less { dst, lhs, src, .. } => {
                         let mut x = jitless_generator::LessGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::LessEq { dst, lhs, src, .. } => {
+                        let mut x = jitlesseq_generator::LessEqGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Greater { dst, lhs, src, .. } => {
+                        let mut x = jitgreater_generator::GreaterGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::GreaterEq{ dst, lhs, src, .. } => {
+                        let mut x = jitgreatereq_generator::GreaterEqGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Div { dst, lhs, src, .. } => {
+                        let mut x = jitdiv_generator::DivGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Mul { dst, lhs, src, .. } => {
+                        let mut x = jitmul_generator::MulGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Eq{ dst, lhs, src, .. } => {
+                        let mut x = jitequal_generator::EqualGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::NEq { dst, lhs, src, .. } => {
+                        let mut x = jitnequal_generator::NEqualGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Shr { dst, lhs, src, .. } => {
+                        let mut x = jitshr_generator::ShrGenerator {
+                            ins: *ins,
+                            lhs,
+                            rhs: src,
+                            dst,
+                            slow_path: Label(0),
+                            end: Label(0),
+                        };
+                        if x.fast_path(self) {
+                            slow_paths.push(Box::new(x));
+                        }
+                    }
+                    Ins::Shl { dst, lhs, src, .. } => {
+                        let mut x = jitshl_generator::ShlGenerator {
                             ins: *ins,
                             lhs,
                             rhs: src,
@@ -393,6 +523,51 @@ impl FullCodegen {
                         );
                         self.store_register(dst);
                     }
+                    Ins::TryCatch {
+                        try_,
+                        catch,
+                        ..
+                    } => {
+                        let lbl = labels.get(&catch).copied().unwrap();
+                        self.masm.load_label(CCALL_REG_PARAMS[1],lbl);
+                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
+                        self.masm.raw_call(CallFrame::push_handler as *const u8);
+                        self.masm.jump(labels.get(&try_).copied().unwrap());
+                    }
+
+                    Ins::PopCatch => {
+                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
+                        self.masm.raw_call(CallFrame::pop_handler_or_zero as *const u8);
+                    }
+                    Ins::CloseEnv {
+                        dst,
+                        function,
+                        begin,
+                        end
+                    } => {
+                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
+                        self.load_register_to(function,CCALL_REG_PARAMS[1],None);
+                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[2],begin.0 as _);
+                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[3],end.0 as _);
+                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[4],REG_THREAD);
+                        self.masm.raw_call(__jit_close_env as *const u8);
+                        self.store_register(dst);
+                    }
+                    Ins::LoopHint {..} => {
+                        self.masm.new_osr_entry();
+                        // Do nothing now
+                        // In future we should try to upgrade JIT tier to optimizing one.
+                    }
+                    Ins::LoadUp {
+                        dst,
+                        up
+                    } => {
+                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
+                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[1],up as _);
+                        self.masm.raw_call(__jit_load_up as *const u8);
+                        self.store_register(dst);
+                    }
+
                     _ => unimplemented!("{}", ins),
                 }
             }
@@ -400,7 +575,9 @@ impl FullCodegen {
 
         self.masm.bind_label(self.ret);
         self.masm.epilog();
-
+        if !slow_paths.is_empty() {
+            self.masm.emit_comment("Slow paths begin: ");
+        }
         for gen in slow_paths.iter_mut() {
             gen.slow_path(self);
         }
@@ -409,57 +586,59 @@ impl FullCodegen {
     pub fn finish(self, rt: &mut Runtime, disasm: bool) -> Code {
         let code = self.masm.jit(rt, 0, JitDescriptor::Fct(0));
         if disasm {
-            use std::io::Write;
-            let instruction_length = code.instruction_end().offset_from(code.instruction_start());
-            let buf: &[u8] = unsafe {
-                std::slice::from_raw_parts(code.instruction_start().to_ptr(), instruction_length)
-            };
-            let engine = get_engine().expect("cannot create capstone engine");
-            let mut w: Box<dyn Write> = Box::new(std::io::stdout());
-            let start_addr = code.instruction_start().to_usize() as u64;
-            let end_addr = code.instruction_end().to_usize() as u64;
+            if log::log_enabled!(log::Level::Trace) {
+                use std::io::Write;
+                let instruction_length = code.instruction_end().offset_from(code.instruction_start());
+                let buf: &[u8] = unsafe {
+                    std::slice::from_raw_parts(code.instruction_start().to_ptr(), instruction_length)
+                };
+                let engine = get_engine().expect("cannot create capstone engine");
+                let mut w: Box<dyn Write> = Box::new(std::io::stdout());
+                let start_addr = code.instruction_start().to_usize() as u64;
+                let end_addr = code.instruction_end().to_usize() as u64;
 
-            let instrs = engine
-                .disasm_all(buf, start_addr)
-                .expect("could not disassemble code");
-            for instr in instrs.iter() {
-                let addr = (instr.address() - start_addr) as u32;
+                let instrs = engine
+                    .disasm_all(buf, start_addr)
+                    .expect("could not disassemble code");
+                for instr in instrs.iter() {
+                    let addr = (instr.address() - start_addr) as u32;
 
-                if let Some(gc_point) = code.gcpoint_for_offset(addr) {
-                    write!(&mut w, "\t\t  ; gc point = (").unwrap();
-                    let mut first = true;
+                    if let Some(gc_point) = code.gcpoint_for_offset(addr) {
+                        write!(&mut w, "\t\t  ; gc point = (").unwrap();
+                        let mut first = true;
 
-                    for &offset in &gc_point.offsets {
-                        if !first {
-                            write!(&mut w, ", ").unwrap();
+                        for &offset in &gc_point.offsets {
+                            if !first {
+                                write!(&mut w, ", ").unwrap();
+                            }
+
+                            if offset < 0 {
+                                write!(&mut w, "-").unwrap();
+                            }
+
+                            write!(&mut w, "0x{:x}", offset.abs()).unwrap();
+                            first = false;
                         }
 
-                        if offset < 0 {
-                            write!(&mut w, "-").unwrap();
-                        }
-
-                        write!(&mut w, "0x{:x}", offset.abs()).unwrap();
-                        first = false;
+                        writeln!(&mut w, ")").unwrap();
                     }
 
-                    writeln!(&mut w, ")").unwrap();
+                    if let Some(comment) = code.comment_for_offset(addr as u32) {
+                        writeln!(&mut w, "\t\t  // {}", comment).unwrap();
+                    }
+
+                    writeln!(
+                        &mut w,
+                        "  {:#06x}: {}\t\t{}",
+                        instr.address(),
+                        instr.mnemonic().expect("no mnmemonic found"),
+                        instr.op_str().expect("no op_str found"),
+                    )
+                        .unwrap();
                 }
 
-                if let Some(comment) = code.comment_for_offset(addr as u32) {
-                    writeln!(&mut w, "\t\t  // {}", comment).unwrap();
-                }
-
-                writeln!(
-                    &mut w,
-                    "  {:#06x}: {}\t\t{}",
-                    instr.address(),
-                    instr.mnemonic().expect("no mnmemonic found"),
-                    instr.op_str().expect("no op_str found"),
-                )
-                .unwrap();
+                writeln!(&mut w).unwrap();
             }
-
-            writeln!(&mut w).unwrap();
         }
         code
     }
@@ -531,6 +710,39 @@ pub unsafe extern "C" fn __jit_load_global(rt: &mut Runtime, n: Value) -> JITRes
             rt.allocate_string(format!("Global '{}' not found", s)),
         )),
     }
+}
+
+pub extern "C" fn __jit_close_env(current: Handle<CallFrame>, func: Value,begin: VirtualRegister,end: VirtualRegister,rt: &mut Runtime) -> Value {
+    let arguments = {
+        let mut v = vec![];
+        for x in begin.to_argument()..=end.to_argument() {
+            v.push(current.r(VirtualRegister::argument(x)));
+        }
+        v
+    };
+
+    let func = func;
+    match func.as_cell().value {
+        CellValue::Function(Function::Regular(ref mut r)) => {
+            let arr =
+                rt.allocate_cell(Cell::new(CellValue::Array(arguments), None));
+            r.env = Value::from(arr);
+            return func;
+        }
+        _ => unreachable!(),
+    }
+}
+
+
+pub extern "C" fn __jit_load_up(current: Handle<CallFrame>,x: u32) -> Value {
+    let func = current.func;
+
+    if let CellValue::Function(Function::Regular(ref r)) = func.as_cell().value {
+        if let CellValue::Array(ref arr) = r.env.as_cell().value {
+           return arr[x as usize];
+        }
+    }
+    unreachable!();
 }
 
 pub struct Empty;

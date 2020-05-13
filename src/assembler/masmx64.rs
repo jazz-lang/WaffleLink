@@ -872,6 +872,13 @@ impl MacroAssembler {
         }
     }
 
+    pub fn new_osr_entry(&mut self) -> usize {
+        let id = self.osr_table.labels.len();
+        self.osr_table.labels.push(0);
+        self.to_finish_osr.push((self.pos(),id));
+        id
+    }
+
     pub fn count_bits_trailing(
         &mut self,
         mode: MachineMode,
@@ -1299,6 +1306,7 @@ impl MacroAssembler {
             let mut slice = &mut self.asm.code_mut()[jmp.at..];
             slice.write_u32::<LittleEndian>(diff as u32).unwrap();
         }
+
     }
 
     pub fn load_label(&mut self, dst: Reg, lbl: Label) {

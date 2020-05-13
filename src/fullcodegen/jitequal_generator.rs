@@ -9,7 +9,7 @@ use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
 use cgc::api::*;
 use func::*;
-pub struct LessGenerator {
+pub struct EqualGenerator {
     pub ins: Ins,
     pub slow_path: Label,
     pub lhs: VirtualRegister,
@@ -18,7 +18,7 @@ pub struct LessGenerator {
     pub end: Label,
 }
 
-impl FullGenerator for LessGenerator {
+impl FullGenerator for EqualGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
         let lhs = self.lhs;
         let rhs = self.rhs;
@@ -33,7 +33,7 @@ impl FullGenerator for LessGenerator {
         gen.masm
             .load_int_const(MachineMode::Int64, REG_RESULT, -562949953421312);
         gen.masm.asm.lea(
-            REG_RESULT.into(),
+            RAX.into(),
             assembler::Address::offset(REG_RESULT.into(), -1),
         );
         gen.masm
@@ -42,22 +42,13 @@ impl FullGenerator for LessGenerator {
         gen.masm
             .cmp_reg(MachineMode::Int64, REG_RESULT, CCALL_REG_PARAMS[1]);
         gen.masm.jump_if(CondCode::UnsignedGreater, slow_path);
-        /*gen.masm.int_sub(
-            MachineMode::Int32,
-            REG_RESULT,
-            CCALL_REG_PARAMS[0],
-            CCALL_REG_PARAMS[1],
-        );*/
         gen.masm
             .cmp_reg(MachineMode::Int32, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.set(REG_RESULT, CondCode::Less);
+        gen.masm.set(REG_RESULT, CondCode::Equal);
         gen.masm.new_boolean(REG_RESULT, REG_RESULT);
         gen.store_register(dst);
         self.slow_path = slow_path;
-        /*gen.masm.bind_label(slow_path);
-        self.load_registers2(lhs, rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.raw_call(__add_slow_path as *const u8);
-        self.store_register(dst);*/
+
         gen.masm.bind_label(self.end);
         true
     }
@@ -65,7 +56,7 @@ impl FullGenerator for LessGenerator {
         gen.masm.emit_comment(format!("({}) slow_path:", self.ins));
         gen.masm.bind_label(self.slow_path);
         gen.load_registers2(self.lhs, self.rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
-        gen.masm.raw_call(Runtime::compare_less as *const u8);
+        gen.masm.raw_call(Runtime::compare_equal as *const u8);
         gen.masm.new_boolean(REG_RESULT,REG_RESULT);
         gen.store_register(self.dst);
         gen.masm.jump(self.end);

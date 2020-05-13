@@ -4,6 +4,7 @@ use super::*;
 use crate::common;
 use crate::frontend::token::Position;
 use crate::jit::{func::*, types::*, *};
+use osr::*;
 use crate::runtime::*;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use common::{mem::*, os::*, *};
@@ -11,8 +12,13 @@ use data_segment::*;
 use std::cell::Cell;
 use std::ops::Deref;
 use std::rc::Rc;
+
+
+
 pub struct MacroAssembler {
     pub asm: Assembler,
+    pub osr_table: OSRTable,
+    pub to_finish_osr: Vec<(usize,usize)>,
     pub(crate) labels: Vec<Option<usize>>,
     pub(crate) jumps: Vec<ForwardJump>,
     pub(crate) bailouts: Vec<(Label, Trap, Position)>,
@@ -31,11 +37,15 @@ impl MacroAssembler {
             asm: Assembler::new(),
             labels: Vec::new(),
             jumps: Vec::new(),
+            to_finish_osr: Vec::new(),
             bailouts: Vec::new(),
             lazy_compilation: LazyCompilationData::new(),
             dseg: DataSegment::new(),
             gcpoints: GcPoints::new(),
             comments: Comments::new(),
+            osr_table: OSRTable {
+                labels: vec![]
+            },
             positions: PositionTable::new(),
             scratch_registers: ScratchRegisters::new(),
             handlers: vec![],
@@ -51,7 +61,7 @@ impl MacroAssembler {
 
         Code::from_buffer(
             vm,
-            &self.dseg,
+            &mut self.dseg,
             self.asm.code_mut(),
             self.lazy_compilation,
             self.gcpoints,
@@ -59,6 +69,10 @@ impl MacroAssembler {
             self.comments,
             self.positions,
             desc,
+
+
+            self.to_finish_osr.clone(),
+            self.osr_table.clone(),
             self.handlers,
         )
     }

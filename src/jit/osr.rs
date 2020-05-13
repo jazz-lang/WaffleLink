@@ -9,22 +9,29 @@ pub struct OSR {
 /// OSR might be used to enter some specific bytecode impl in interpreter
 /// or some specific code in assembly.
 ///
+#[repr(C)]
 pub struct OSREntry {
-    pub throw: bool,
-    pub to_bp: usize,
-    pub to_ip: usize,
+    pub to_ip: u32,
+    pub to_bp: u32,
+
 }
 
 impl OSREntry {
-    pub fn jit_jmp_addr(&self) -> usize {
+    pub fn jit_jmp_addr(&self) -> u32 {
         self.to_ip
     }
 
-    pub fn ip(&self) -> usize {
+    pub fn ip(&self) -> u32 {
         self.to_ip
     }
 
-    pub fn bp(&self) -> usize {
+    pub fn bp(&self) -> u32 {
         self.to_bp
     }
+}
+
+
+#[derive(Clone)]
+pub struct OSRTable {
+    pub labels: Vec<usize>,
 }

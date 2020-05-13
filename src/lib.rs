@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate cgc_single_threaded as cgc;
 
 #[macro_export]

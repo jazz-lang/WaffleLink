@@ -8,6 +8,8 @@ use def::*;
 use runtime::value::*;
 use runtime::*;
 use virtual_reg::*;
+use crate::interpreter::callstack::CallFrame;
+use crate::fullcodegen::FullCodegen;
 
 #[derive(Copy, Clone)]
 pub enum Return {
@@ -23,7 +25,7 @@ enum C {
 }
 
 impl Runtime {
-    pub extern "C" fn compare_greater(&mut self, lhs: Value, rhs: Value) -> bool {
+    pub extern "C" fn compare_greater(lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
             return false;
         }
@@ -44,7 +46,7 @@ impl Runtime {
             false
         }
     }
-    pub extern "C" fn compare_less(&mut self, lhs: Value, rhs: Value) -> bool {
+    pub extern "C" fn compare_less(lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
             return false;
         }
@@ -65,7 +67,7 @@ impl Runtime {
             false
         }
     }
-    pub extern "C" fn compare_equal(&mut self, lhs: Value, rhs: Value) -> bool {
+    pub extern "C" fn compare_equal(lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
             return false;
         }
@@ -82,7 +84,7 @@ impl Runtime {
                     }
                     x.iter()
                         .zip(y.iter())
-                        .all(|(x, y)| self.compare_equal(*x, *y))
+                        .all(|(x, y)| Self::compare_equal(*x, *y))
                 }
                 (CellValue::ByteArray(x), CellValue::ByteArray(y)) => {
                     return x == y;
@@ -93,7 +95,7 @@ impl Runtime {
             lhs == rhs
         }
     }
-    pub extern "C" fn compare_greater_equal(&mut self, lhs: Value, rhs: Value) -> bool {
+    pub extern "C" fn compare_greater_equal(lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
             return false;
         }
@@ -113,7 +115,7 @@ impl Runtime {
                     }
                     x.iter()
                         .zip(y.iter())
-                        .all(|(x, y)| self.compare_equal(*x, *y))
+                        .all(|(x, y)| Self::compare_equal(*x, *y))
                 }
                 (CellValue::ByteArray(x), CellValue::ByteArray(y)) => {
                     return x >= y;
@@ -124,7 +126,7 @@ impl Runtime {
             false
         }
     }
-    pub extern "C" fn compare_less_equal(&mut self, lhs: Value, rhs: Value) -> bool {
+    pub extern "C" fn compare_less_equal(lhs: Value, rhs: Value) -> bool {
         if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
             return false;
         }
@@ -144,7 +146,7 @@ impl Runtime {
                     }
                     x.iter()
                         .zip(y.iter())
-                        .all(|(x, y)| self.compare_equal(*x, *y))
+                        .all(|(x, y)| Self::compare_equal(*x, *y))
                 }
                 (CellValue::ByteArray(x), CellValue::ByteArray(y)) => {
                     return x <= y;
@@ -177,38 +179,62 @@ impl Runtime {
                             unimplemented!("TODO: Instantiat generator");
                         }
                         _ => {
-                            if let Some(jit) = regular.code.jit_stub {
-                                let _ =
-                                    self.stack
-                                        .push(unsafe { &mut *ptr }, val, regular.code, this);
+                            if let Some(ref jit) = regular.code.jit_code {
+                                let _ = self.stack
+                                    .push(unsafe { &mut *ptr }, val, regular.code, this);
                                 // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
                                 // that will start interpreting.
-                                let mut entry = OSREntry {
-                                    throw: false,
-                                    to_bp: 0,
-                                    to_ip: jit as usize, // if `to_ip` points to current func then skip all jump tables and start execution.
-                                };
-                                match jit(&mut entry, self, this, args) {
+                                let cur = self.stack.current_frame();
+                                let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
+                                    unsafe { std::mem::transmute(jit.instruction_start()) };
+                                match func(self,cur,0) {
                                     JITResult::Err(e) => return C::Err(e),
                                     JITResult::Ok(x) => return C::Ok(x),
                                     JITResult::OSRExit => {
-                                        self.stack.current_frame().ip = entry.to_ip;
+                                        /*self.stack.current_frame().ip = entry.to_ip;
                                         self.stack.current_frame().bp = entry.to_bp;
-                                        /*match self.interpret() {
+                                        match self.interpret() {
                                             Return::Return(val) => return Ok(val),
                                             Return::Error(e) => return Err(e),
                                             Return::Yield { .. } => {
                                                 unimplemented!("TODO: Generators")
                                             }
                                         }*/
-                                        return C::Continue;
+                                        unimplemented!();
                                     }
                                 }
                             } else {
-                                regular.code.get_mut().hotness =
-                                    regular.code.hotness.wrapping_add(1);
-                                if regular.code.hotness >= 10000 {
-                                    // TODO: FullCodegen
+                                if regular.code.hotness >= 1000 {
+                                    if let RegularFunctionKind::Ordinal = regular.kind {
+                                        let mut gen = FullCodegen::new(regular.code);
+                                        gen.compile(false);
+                                        //log::trace!("Disassembly for '{}'",unwrap!(regular.name.to_string(self)));
+                                        let code = gen.finish(self,true);
+                                        let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
+                                            unsafe { std::mem::transmute(code.instruction_start()) };
+                                        let x = unsafe { &mut *ptr };
+                                        let _ = self
+                                            .stack
+                                            .push(x, val, regular.code, this);
+                                        let cur = self.stack.current_frame();
+                                        match func(self,cur,0) {
+                                            JITResult::Ok(val) => {
+                                                self.stack.pop();
+                                                regular.code.jit_code = Some(code);
+                                                return C::Ok(val);
+                                            }
+                                            JITResult::Err(e) => {
+                                                self.stack.pop();
+                                                regular.code.jit_code = Some(code);
+                                                return C::Err(e);
+                                            }
+                                            _ => unimplemented!()
+                                        }
+
+                                    }
+                                } else {
+                                    regular.code.get_mut().hotness =
+                                        regular.code.hotness.wrapping_add(50);
                                 }
                                 // unsafe code block is actually safe,we just access heap.
                                 match self
@@ -394,7 +420,7 @@ impl Runtime {
                 Ins::Eq { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = self.compare_equal(lhs, rhs);
+                    let result = Self::compare_equal(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {
@@ -404,7 +430,7 @@ impl Runtime {
                 Ins::NEq { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = !self.compare_equal(lhs, rhs);
+                    let result = !Self::compare_equal(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {
@@ -414,7 +440,7 @@ impl Runtime {
                 Ins::Greater { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = self.compare_greater(lhs, rhs);
+                    let result = Self::compare_greater(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {
@@ -424,7 +450,7 @@ impl Runtime {
                 Ins::Less { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = self.compare_less(lhs, rhs);
+                    let result = Self::compare_less(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {
@@ -434,7 +460,7 @@ impl Runtime {
                 Ins::LessEq { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = self.compare_less_equal(lhs, rhs);
+                    let result = Self::compare_less_equal(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {
@@ -444,7 +470,7 @@ impl Runtime {
                 Ins::GreaterEq { dst, lhs, src, .. } => {
                     let lhs = current.r(lhs);
                     let rhs = current.r(src);
-                    let result = self.compare_greater_equal(lhs, rhs);
+                    let result = Self::compare_greater_equal(lhs, rhs);
                     *current.r_mut(dst) = if result {
                         Value::true_()
                     } else {

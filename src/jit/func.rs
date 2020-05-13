@@ -6,6 +6,8 @@ use data_segment::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::ptr;
+use crate::jit::osr::OSRTable;
+
 pub enum JitFct {
     Compiled(Code),
     Uncompiled,
@@ -118,7 +120,7 @@ pub struct Code {
     // pointer to beginning of function
     instruction_start: Address,
     instruction_end: Address,
-
+    osr_table: OSRTable,
     framesize: i32,
     lazy_compilation: LazyCompilationData,
     gcpoints: GcPoints,
@@ -143,7 +145,7 @@ impl fmt::Debug for Code {
 impl Code {
     pub fn from_buffer(
         rt: &mut Runtime,
-        dseg: &DataSegment,
+        mut dseg: &mut DataSegment,
         buffer: &[u8],
         lazy_compilation: LazyCompilationData,
         gcpoints: GcPoints,
@@ -151,8 +153,15 @@ impl Code {
         comments: Comments,
         positions: PositionTable,
         desc: JitDescriptor,
+        to_finish: Vec<(usize,usize)>,
+        mut table: OSRTable,
         mut handlers: Vec<Handler>,
     ) -> Code {
+        let mut v = vec![];
+        for (x,id) in &to_finish {
+            let addr = dseg.add_addr(std::ptr::null_mut());
+            v.push(addr);
+        }
         let size = dseg.size() as usize + buffer.len();
         let (ptr, code_size) = rt.code_space.alloc(size);
 
@@ -172,13 +181,20 @@ impl Code {
                 buffer.len(),
             );
         }
+        for (i,(x,id)) in to_finish.iter().copied().enumerate() {
+            unsafe {
+                *ptr.offset(v[i] as usize).to_mut_ptr::<usize>() = instruction_start.offset(x).to_usize();
+            }
+        }
         for handler in &mut handlers {
             handler.try_start = instruction_start.offset(handler.try_start).to_usize();
             handler.try_end = instruction_start.offset(handler.try_end).to_usize();
             handler.catch = instruction_start.offset(handler.catch).to_usize();
             handler.native = true;
         }
-
+        /*for (pos,id) in &to_finish {
+            table.labels[*id] = instruction_start.offset(*pos).to_usize();
+        }*/
         //flush_icache(ptr.to_ptr(), size);
 
         Code {
@@ -194,6 +210,7 @@ impl Code {
             desc,
             code_size,
             handlers,
+            osr_table: table
         }
     }
     pub fn position_for_offset(&self, offset: u32) -> Option<Position> {

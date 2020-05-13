@@ -14,6 +14,9 @@ use osr::*;
 use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
 use value::*;
+use crate::fullcodegen::FullCodegen;
+use crate::interpreter::callstack::CallFrame;
+
 pub struct CodeAllocator {
     allocated: HashSet<Address>,
     free: VecDeque<(Address, usize)>,
@@ -160,21 +163,19 @@ impl Runtime {
                             unimplemented!("TODO: Instantiat generator");
                         }
                         _ => {
-                            if let Some(jit) = regular.code.jit_stub {
+                            if let Some(ref jit) = regular.code.jit_code {
                                 self.stack
                                     .push(unsafe { &mut *ptr }, val, regular.code, this)?;
                                 // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
                                 // that will start interpreting.
-                                let mut entry = OSREntry {
-                                    throw: false,
-                                    to_bp: 0,
-                                    to_ip: jit as usize, // if `to_ip` points to current func then skip all jump tables and start execution.
-                                };
-                                match jit(&mut entry, self, this, args) {
+                                let cur = self.stack.current_frame();
+                                let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
+                                    unsafe { std::mem::transmute(jit.instruction_start()) };
+                                match func(self,cur,0) {
                                     JITResult::Err(e) => return Err(e),
                                     JITResult::Ok(x) => return Ok(x),
                                     JITResult::OSRExit => {
-                                        self.stack.current_frame().ip = entry.to_ip;
+                                        /*self.stack.current_frame().ip = entry.to_ip;
                                         self.stack.current_frame().bp = entry.to_bp;
                                         match self.interpret() {
                                             Return::Return(val) => return Ok(val),
@@ -182,14 +183,43 @@ impl Runtime {
                                             Return::Yield { .. } => {
                                                 unimplemented!("TODO: Generators")
                                             }
-                                        }
+                                        }*/
+                                        unimplemented!();
                                     }
                                 }
                             } else {
-                                regular.code.get_mut().hotness =
-                                    regular.code.hotness.wrapping_add(1);
-                                if regular.code.hotness >= 10000 {
-                                    // TODO: FullCodegen
+
+                                if regular.code.hotness >= 1000 {
+                                    if let RegularFunctionKind::Ordinal = regular.kind {
+                                        let mut gen = FullCodegen::new(regular.code);
+                                        gen.compile(false);
+                                        log::trace!("Disassembly for '{}'",unwrap!(regular.name.to_string(self)));
+                                        let code = gen.finish(self,true);
+                                        let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
+                                            unsafe { std::mem::transmute(code.instruction_start()) };
+                                        let x = unsafe { &mut *ptr };
+                                        let _ = self
+                                            .stack
+                                            .push(x, val, regular.code, this);
+                                        let cur = self.stack.current_frame();
+                                        match func(self,cur,0) {
+                                            JITResult::Ok(val) => {
+                                                self.stack.pop();
+                                                regular.code.jit_code = Some(code);
+                                                return Ok(val);
+                                            }
+                                            JITResult::Err(e) => {
+                                                self.stack.pop();
+                                                regular.code.jit_code = Some(code);
+                                                return Err(e);
+                                            }
+                                            _ => unimplemented!()
+                                        }
+
+                                    }
+                                } else {
+                                    regular.code.get_mut().hotness =
+                                        regular.code.hotness.wrapping_add(50);
                                 }
                                 // unsafe code block is actually safe,we just access heap.
                                 self.stack
