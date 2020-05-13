@@ -145,6 +145,7 @@ impl Runtime {
         }
         let val = func;
         use crate::interpreter::Return;
+
         if let CellValue::Function(ref mut func) = func.as_cell().value {
             match func {
                 Function::Native { name: _, native } => match native(self, this, args) {

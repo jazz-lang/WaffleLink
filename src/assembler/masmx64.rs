@@ -1301,6 +1301,15 @@ impl MacroAssembler {
         }
     }
 
+    pub fn load_label(&mut self, dst: Reg, lbl: Label) {
+        self.asm.movl_ri(dst.into(), Immediate(0));
+        self.asm.code_mut().pop();
+        self.asm.code_mut().pop();
+        self.asm.code_mut().pop();
+        self.asm.code_mut().pop();
+        self.emit_label(lbl);
+    }
+
     fn mov_rr(&mut self, x64: bool, lhs: AsmRegister, rhs: AsmRegister) {
         if x64 {
             self.asm.movq_rr(lhs, rhs);

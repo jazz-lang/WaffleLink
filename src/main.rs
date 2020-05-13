@@ -16,12 +16,11 @@ fn main() {
         let mut rt = Runtime::new();
         let reader = Reader::from_string(
             "
-var i = 0
-while i < 10000000 {
-    i = i + 1
+function foo() {
+    return 2 + 3
 }
 
-return i
+foo()
 ",
         );
         let mut ast = vec![];
@@ -46,6 +45,7 @@ return i
         let _ = rt
             .stack
             .push(x, Value::undefined(), code.to_heap(), Value::undefined());
+        rt.stack.current_frame().entries.push(Value::undefined());
         let current = rt.stack.current_frame();
         let s = std::time::Instant::now();
         let res = func(&mut rt, current);
@@ -60,7 +60,7 @@ return i
             _ => unreachable!(),
         }
 
-        let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
+        /*let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
         let s = std::time::Instant::now();
         let res = rt.call(f, Value::undefined(), &[]);
         let e = s.elapsed();
@@ -75,7 +75,7 @@ return i
             },
             Err(e) => println!("Err {}", waffle2::unwrap!(e.to_string(&mut rt))),
         }
-        rt.perf.print_perf();
+        rt.perf.print_perf();*/
         rt.heap
     };
 

@@ -11,7 +11,10 @@ pub enum Ins {
     },
     #[display(fmt = "movi {},{}", dst, imm)]
     // dst = imm
-    LoadI32 { dst: VirtualRegister, imm: i32 },
+    LoadI32 {
+        dst: VirtualRegister,
+        imm: i32,
+    },
     // dst = new Generator(src)
     #[display(fmt = "new_generator_function {},{}", dst, src)]
     NewGeneratorFunction {
@@ -63,7 +66,9 @@ pub enum Ins {
     },
     #[display(fmt = "return {}", val)]
     // return val
-    Return { val: VirtualRegister },
+    Return {
+        val: VirtualRegister,
+    },
     // dst = await on
     #[display(fmt = "await {},{}", dst, on)]
     Await {
@@ -80,7 +85,9 @@ pub enum Ins {
         reg: VirtualRegister,
     },
     #[display(fmt = "throw {}", src)]
-    Throw { src: VirtualRegister },
+    Throw {
+        src: VirtualRegister,
+    },
     #[display(fmt = "add {},{},{}", dst, lhs, src)]
     Add {
         dst: VirtualRegister,
@@ -192,7 +199,9 @@ pub enum Ins {
         name: VirtualRegister,
     },
     #[display(fmt = "jmp [%{}]", dst)]
-    Jump { dst: u32 },
+    Jump {
+        dst: u32,
+    },
     #[display(fmt = "jmp_cond {}, [%{}],[%{}]", cond, if_true, if_false)]
     JumpConditional {
         cond: VirtualRegister,
@@ -214,7 +223,10 @@ pub enum Ins {
         iterator: VirtualRegister,
     },
     #[display(fmt = "load_up {},{}", dst, up)]
-    LoadUp { dst: VirtualRegister, up: u32 },
+    LoadUp {
+        dst: VirtualRegister,
+        up: u32,
+    },
     #[display(fmt = "get_by_id {},{},{}", dst, base, id)]
     GetById {
         dst: VirtualRegister,
@@ -243,11 +255,17 @@ pub enum Ins {
     #[display(fmt = "safepoint")]
     Safepoint,
     #[display(fmt = "loop_hint")]
-    LoopHint { fdbk: u32 },
+    LoopHint {
+        fdbk: u32,
+    },
     #[display(fmt = "load_this {}", dst)]
-    LoadThis { dst: VirtualRegister },
+    LoadThis {
+        dst: VirtualRegister,
+    },
     #[display(fmt = "new_object {}", dst)]
-    NewObject { dst: VirtualRegister },
+    NewObject {
+        dst: VirtualRegister,
+    },
     #[display(fmt = "construct {},{},{}-{}", dst, obj, begin, end)]
     Construct {
         dst: VirtualRegister,
@@ -260,9 +278,10 @@ pub enum Ins {
         dst: VirtualRegister,
         obj: VirtualRegister,
     },
+    PopCatch,
 }
 #[rustfmt::skip]
-pub static INS_NAME: [&'static str; 44] = [
+pub static INS_NAME: [&'static str; 45] = [
     "mov", 
     "load_i32", 
     "new_generator_func", 
@@ -306,7 +325,8 @@ pub static INS_NAME: [&'static str; 44] = [
     "load_this",
     "new_object",
     "construct",
-    "construct_no_args"
+    "construct_no_args",
+    "pop_catch",
 ];
 
 #[derive(Hash, PartialEq, Eq)]

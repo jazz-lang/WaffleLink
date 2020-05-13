@@ -1,5 +1,6 @@
 pub mod callstack;
 use crate::bytecode::*;
+use crate::jit::func::Handler;
 use crate::runtime;
 use cell::*;
 use cgc::api::*;
@@ -7,7 +8,6 @@ use def::*;
 use runtime::value::*;
 use runtime::*;
 use virtual_reg::*;
-use crate::jit::func::Handler;
 
 #[derive(Copy, Clone)]
 pub enum Return {
@@ -323,18 +323,28 @@ impl Runtime {
                 }
                 Ins::Throw { src } => {
                     let value = current.r(src);
+                    if let Some(x) = current.handlers.pop() {
+                        current.bp = x as _;
+                        current.ip = 0;
+                        *current.r_mut(VirtualRegister::argument(0)) = value;
+                        continue;
+                    }
                     return Return::Error(value);
                 }
                 Ins::TryCatch { try_, catch, reg } => {
                     current.bp = try_ as _;
                     current.ip = 0;
-                    current.handlers.push(Handler {
+                    /*current.handlers.push(Handler {
                         try_start: try_ as usize,
                         catch: catch as usize,
                         offset: None,
                         try_end: 0,
-                        native: false
-                    });
+                        native: false,
+                    });*/
+                    current.handlers.push(catch as _);
+                }
+                Ins::PopCatch => {
+                    current.handlers.pop().unwrap();
                 }
                 Ins::Add { dst, lhs, src, .. } => {
                     let y = current.r(src);

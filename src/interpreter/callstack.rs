@@ -5,16 +5,17 @@ use cgc::api::*;
 use runtime::value::*;
 use virtual_reg::*;
 
+#[repr(C)]
 pub struct CallFrame {
+    pub this: Value,
     pub func: Value,
     pub registers: Vec<Value>,
     /// a.k.a arguments
     pub entries: Vec<Value>,
-    pub this: Value,
     pub ip: usize,
     pub bp: usize,
     pub code: Handle<CodeBlock>,
-    pub handlers: Vec<Handler>,
+    pub handlers: Vec<usize>,
     pub exit_on_return: bool,
     pub rreg: VirtualRegister,
 }
@@ -57,11 +58,17 @@ impl CallFrame {
             unreachable!()
         }
     }
+
+    pub extern "C" fn push_handler(mut this: Handle<Self>, lbl: usize) {
+        this.handlers.push(lbl);
+    }
+
+    pub extern "C" fn pop_handler_or_zero(mut this: Handle<Self>) -> usize {
+        this.handlers.pop().unwrap_or(0)
+    }
     #[no_mangle]
-    pub extern "C" fn just_shit(mut this: Handle<Self>, v: Value) {
-        unsafe {
-            *this.registers.get_unchecked_mut(0) = v;
-        }
+    pub fn test_local(mut this: Handle<Self>, x: i32) -> Value {
+        unsafe { this.this }
     }
 }
 
@@ -119,17 +126,6 @@ impl CallStack {
 
     pub fn pop(&mut self) -> Option<StackEntry> {
         self.stack.pop()
-    }
-
-    pub fn unwind(&self) -> Option<(Handler, Handle<CallFrame>)> {
-        for frame in self.stack.iter() {
-            if let StackEntry::Frame(frame) = frame {
-                if let Some(hndlr) = frame.to_heap().handlers.pop() {
-                    return Some((hndlr, frame.to_heap()));
-                }
-            }
-        }
-        None
     }
 
     pub fn current_frame(&mut self) -> Handle<CallFrame> {
