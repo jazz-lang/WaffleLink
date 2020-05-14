@@ -200,6 +200,7 @@ pub(super) struct RootedInner<T: Trace + ?Sized> {
     pub(super) inner: *mut super::heap::HeapInner<T>,
 }
 impl<T: Trace + ?Sized> Drop for Rooted<T> {
+    #[inline(never)]
     fn drop(&mut self) {
         unsafe {
             assert!(!self.inner.is_null());
@@ -210,13 +211,12 @@ impl<T: Trace + ?Sized> Drop for Rooted<T> {
 }
 
 impl<T: Trace + ?Sized> Clone for Rooted<T> {
+    #[inline(never)]
     fn clone(&self) -> Self {
         unsafe {
             let inner = &mut *self.inner;
             inner.counter = inner.counter + 1;
-            Rooted {
-                inner: inner as *mut _,
-            }
+            Rooted { inner: self.inner }
         }
     }
 }
@@ -271,7 +271,7 @@ unsafe impl<T: Trace + Sized + 'static> HeapTrait for RootedInner<T> {
 
 impl<T: Trace + Sized + 'static> RootedTrait for RootedInner<T> {
     fn is_rooted(&self) -> bool {
-        self.counter >= 1
+        !(self.counter == 0)
     }
     fn references(&self) -> SmallVec<[*const dyn HeapTrait; 64]> {
         unsafe { (&*self.inner).value.references() }

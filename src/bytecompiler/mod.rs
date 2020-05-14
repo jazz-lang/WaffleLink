@@ -741,7 +741,12 @@ impl<'a> Context<'a> {
                 }
                 Ok(obj)
             }
-            _ => unimplemented!(),
+            ExprKind::Access { .. } => {
+                let access = self.compile_access(&e.expr);
+                self.access_get(access)
+            }
+            ExprKind::Lambda(args, body) => self.compile_function(args, body, None),
+            _ => unimplemented!("{:?}", e),
         }
     }
 

@@ -50,17 +50,20 @@ impl Heap {
         }
     }
     fn sweep(&mut self) {
+        let mut n = self.allocated;
         self.heap.retain(|&item| unsafe {
             let i = &mut *item;
             if i.state {
                 i.state = true;
                 return true;
             } else {
+                n -= std::mem::size_of_val(i);
                 i.value.finalize();
                 let _ = Box::from_raw(item);
                 return false;
             }
         });
+        self.allocated = n;
     }
     fn mark(&mut self) {
         let mut stack = VecDeque::new();

@@ -162,6 +162,9 @@ impl Runtime {
         args: &[Value],
     ) -> Result<Value, Value> {
         let ptr = self as *mut Self;
+        if func.is_empty() {
+            panic!();
+        }
         if func.is_cell() == false {
             return Err(Value::from(self.allocate_string("not a function")));
         }
@@ -190,8 +193,7 @@ impl Runtime {
                                         regular.code,
                                         this,
                                     )?;
-                                    // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
-                                    // that will start interpreting.
+
                                     let mut cur = self.stack.current_frame();
                                     let func: extern "C" fn(
                                         &mut Runtime,
@@ -200,6 +202,14 @@ impl Runtime {
                                     )
                                         -> JITResult =
                                         unsafe { std::mem::transmute(jit.instruction_start()) };
+                                    for (i, arg) in args.iter().enumerate() {
+                                        if i >= self.stack.current_frame().entries.len() {
+                                            break;
+                                        }
+                                        self.stack.current_frame().entries[i] = *arg;
+                                    }
+                                    assert!(regular.code.jit_enter == 0);
+                                    let _r = self.stack.clone();
                                     let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
                                     self.stack.pop();
                                     match res {
@@ -238,13 +248,26 @@ impl Runtime {
                                             };
                                             let x = unsafe { &mut *ptr };
                                             let _ = self.stack.push(x, val, regular.code, this);
+                                            for (i, arg) in args.iter().enumerate() {
+                                                if i >= self.stack.current_frame().entries.len() {
+                                                    break;
+                                                }
+                                                self.stack.current_frame().entries[i] = *arg;
+                                            }
+                                            let _r = self.stack.clone();
                                             let mut cur = self.stack.current_frame();
+                                            drop(_r);
                                             match func(
                                                 self,
                                                 cur.get_mut(),
                                                 code.osr_table.labels[0],
                                             ) {
                                                 JITResult::Ok(val) => {
+                                                    assert!(
+                                                        self.stack.get() as *const _ as *const u8
+                                                            as usize
+                                                            != 0x19
+                                                    );
                                                     self.stack.pop();
                                                     regular.code.jit_code = Some(code);
                                                     return Ok(val);

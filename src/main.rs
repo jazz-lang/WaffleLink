@@ -15,12 +15,14 @@ fn main() {
         let mut rt = Runtime::new(Configs::default());
         let reader = Reader::from_string(
             "
-var i = 0
-while i < 100000000 { 
-    i = i + 1
-}
+200.times(|x| {
+    log(x)
+    10.times(|y| {
+        log(\"I\",x + y)
+    })
+})
 
-return i
+return 0
 ",
         );
         let mut ast = vec![];

@@ -31,10 +31,11 @@ macro_rules! native_fn {
     }};
 }
 
+pub mod number;
 pub mod object;
-
 pub fn initialize(rt: &mut Runtime) {
     let func = native_fn!(rt, "log", log);
     rt.globals.insert("log".to_owned(), func);
     object::initialize(rt);
+    number::initialize(rt);
 }

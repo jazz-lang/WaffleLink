@@ -129,6 +129,7 @@ impl CallStack {
     }
 
     pub fn pop(&mut self) -> Option<StackEntry> {
+        assert!(self as *const Self as *const u8 as usize >= 1000);
         self.stack.pop()
     }
 
@@ -143,11 +144,14 @@ impl CallStack {
 
 impl Traceable for CallStack {
     fn trace_with(&self, tracer: &mut Tracer) {
-        log::warn!("AAAAA");
         for frame in self.stack.iter() {
             match frame {
                 StackEntry::Frame(f) => {
-                    f.trace_with(tracer);
+                    f.func.trace_with(tracer);
+                    f.this.trace_with(tracer);
+                    f.registers.trace_with(tracer);
+                    f.entries.trace_with(tracer);
+                    f.code.trace_with(tracer);
                 }
                 _ => (),
             }
