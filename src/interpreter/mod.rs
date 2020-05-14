@@ -379,6 +379,7 @@ impl Runtime {
                                         let code = gen.finish(self, true);
                                         let osr = &code.osr_table;
                                         let osr_enter = osr_enter.unwrap();
+                                        let mut bytecode = current.code;
                                         log::trace!(
                                             "Continue at 0x{:x}",
                                             code.osr_table.labels[osr_enter]
@@ -393,18 +394,18 @@ impl Runtime {
                                         };
                                         match func(self, current.get_mut(), osr.labels[osr_enter]) {
                                             JITResult::Err(e) => {
-                                                if current.code.jit_code.is_some() {
+                                                /*if current.code.jit_code.is_some() {
                                                     std::mem::forget(current.code.jit_code.take())
-                                                }
-                                                current.code.jit_code = Some(code);
+                                                }*/
+                                                bytecode.jit_code = Some(code);
                                                 self.stack.pop();
                                                 return Return::Error(e);
                                             }
                                             JITResult::Ok(x) => {
-                                                if current.code.jit_code.is_some() {
+                                                /*if current.code.jit_code.is_some() {
                                                     std::mem::forget(current.code.jit_code.take())
-                                                }
-                                                current.code.jit_code = Some(code);
+                                                }*/
+                                                bytecode.jit_code = Some(code);
                                                 self.stack.pop();
                                                 return Return::Return(x);
                                             }
