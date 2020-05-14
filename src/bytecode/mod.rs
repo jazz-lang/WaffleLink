@@ -104,10 +104,10 @@ impl Finalizer for BasicBlock {
 impl Traceable for BasicBlock {
     fn trace_with(&self, _tracer: &mut Tracer) {}
 }
+use crate::jit::func::Code;
 use crate::jit::*;
 use crate::runtime::value::*;
 use crate::runtime::*;
-use crate::jit::func::Code;
 
 pub struct CodeBlock {
     pub constants_: Vec<Value>,
@@ -119,6 +119,7 @@ pub struct CodeBlock {
     pub cfg: Option<Box<CodeCFG>>,
     pub loopanalysis: Option<crate::bytecompiler::loopanalysis::BCLoopAnalysisResult>,
     pub jit_code: Option<Code>,
+    pub jit_enter: usize,
     pub feedback: Vec<FeedBack>,
 }
 
@@ -194,9 +195,12 @@ impl CodeBlock {
 
 impl Traceable for CodeBlock {
     fn trace_with(&self, tracer: &mut Tracer) {
-        self.constants
+        /*self.constants
+        .iter()
+        .for_each(|(_, val)| val.trace_with(tracer));*/
+        self.constants_
             .iter()
-            .for_each(|(_, val)| val.trace_with(tracer));
+            .for_each(|item| item.trace_with(tracer));
     }
 }
 

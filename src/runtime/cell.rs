@@ -206,11 +206,31 @@ impl Traceable for Cell {
         self.prototype.trace_with(tracer);
         match &self.value {
             CellValue::Array(arr) => arr.trace_with(tracer),
+            CellValue::Function(f) => match f {
+                Function::Native { name, .. } => {
+                    name.trace_with(tracer);
+                }
+                Function::Regular(r) => {
+                    r.name.trace_with(tracer);
+                    r.code.trace_with(tracer);
+                    r.env.trace_with(tracer);
+                }
+                _ => unimplemented!(),
+            },
             _ => (),
         }
     }
 }
-impl Finalizer for Cell {}
+impl Finalizer for Cell {
+    fn finalize(&mut self) {
+        log::warn!("Finalize cell");
+        match &self.value {
+            CellValue::String(x) => log::warn!("val {}", x),
+            CellValue::Function(Function::Regular(_)) => log::warn!("Regular function"),
+            _ => (),
+        }
+    }
+}
 // A simple helper for getting the address of a value
 pub fn address_of<T>(t: &T) -> usize {
     let my_ptr: *const T = t;

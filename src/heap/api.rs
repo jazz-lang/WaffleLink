@@ -24,8 +24,8 @@ impl Tracer {
 }
 
 pub trait Traceable
-    where
-        Self: Finalizer,
+where
+    Self: Finalizer,
 {
     fn trace_with(&self, _: &mut Tracer) {}
 }
@@ -70,7 +70,11 @@ macro_rules! simple {
     ($($t: ty)*) => {
         $(
             impl Traceable for $t {}
-            impl Finalizer for $t {}
+            impl Finalizer for $t {
+                fn finalize(&mut self) {
+                    log::warn!("Finalize {}",stringify!($t));
+                }
+            }
         )*
     };
 }
@@ -163,8 +167,8 @@ impl<T: Finalizer> Finalizer for Vec<T> {
 }
 
 pub trait RootedTrait
-    where
-        Self: HeapTrait,
+where
+    Self: HeapTrait,
 {
     fn is_rooted(&self) -> bool;
     fn references(&self) -> SmallVec<[*const dyn HeapTrait; 64]>;
@@ -198,7 +202,7 @@ pub(super) struct RootedInner<T: Trace + ?Sized> {
 impl<T: Trace + ?Sized> Drop for Rooted<T> {
     fn drop(&mut self) {
         unsafe {
-            ////debug_assert!(!self.inner.is_null());
+            assert!(!self.inner.is_null());
             let inner = &mut *self.inner;
             inner.counter = inner.counter.wrapping_sub(1);
         }
@@ -220,7 +224,7 @@ impl<T: Trace + ?Sized> Clone for Rooted<T> {
 unsafe impl<T: Trace + Sized + 'static> HeapTrait for RootedInner<T> {
     fn mark(&self) {
         unsafe {
-            (&mut *self.inner).mark(true);
+            (&mut *self.inner).state = true;
         }
     }
 

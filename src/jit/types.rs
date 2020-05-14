@@ -76,7 +76,7 @@ impl From<usize> for TypeListId {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum TypeList {
     Empty,
-    List(Arc<Vec<Type>>),
+    List(Vec<Type>),
 }
 
 impl TypeList {
@@ -85,14 +85,14 @@ impl TypeList {
     }
 
     pub fn single(ty: Type) -> TypeList {
-        TypeList::List(Arc::new(vec![ty]))
+        TypeList::List(vec![ty])
     }
 
     pub fn with(type_params: Vec<Type>) -> TypeList {
         if type_params.len() == 0 {
             TypeList::Empty
         } else {
-            TypeList::List(Arc::new(type_params))
+            TypeList::List(type_params)
         }
     }
 
@@ -185,4 +185,9 @@ impl TypeLists {
 
 pub enum FeedBack {
     TypeList(TypeList),
+    Loop {
+        osr_enter: Option<usize>,
+        hotness: usize,
+    },
+    None,
 }

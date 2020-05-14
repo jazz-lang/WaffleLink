@@ -758,3 +758,7 @@ pub extern "C" fn new_boolean(x: bool) -> Value {
         Value::false_()
     }
 }
+
+pub extern "C" fn mul_val(x: Value, y: Value) -> Value {
+    Value::new_int(x.as_int32() * y.as_int32())
+}

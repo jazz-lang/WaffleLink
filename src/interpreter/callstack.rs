@@ -1,17 +1,18 @@
 use crate::bytecode::*;
+use crate::heap::api::*;
 use crate::jit::func::Handler;
 use crate::runtime;
-use crate::heap::api::*;
+use crate::runtime::deref_ptr::DerefPointer;
 use runtime::value::*;
 use virtual_reg::*;
 
 #[repr(C)]
 pub struct CallFrame {
-    pub this: Value,
-    pub func: Value,
     pub registers: Vec<Value>,
     /// a.k.a arguments
     pub entries: Vec<Value>,
+    pub this: Value,
+    pub func: Value,
     pub ip: usize,
     pub bp: usize,
     pub code: Handle<CodeBlock>,
@@ -74,6 +75,7 @@ impl CallFrame {
 
 impl Traceable for CallFrame {
     fn trace_with(&self, tracer: &mut Tracer) {
+        log::warn!("Trace callframe");
         self.code.trace_with(tracer);
         self.registers.trace_with(tracer);
         self.entries.trace_with(tracer);
@@ -83,7 +85,9 @@ impl Traceable for CallFrame {
 }
 
 impl Finalizer for CallFrame {
-    fn finalize(&mut self) {}
+    fn finalize(&mut self) {
+        log::warn!("Fin callframe");
+    }
 }
 
 pub struct CallStack {
@@ -92,7 +96,7 @@ pub struct CallStack {
 }
 
 pub enum StackEntry {
-    Frame(Rooted<CallFrame>),
+    Frame(CallFrame),
     Native { func: Value },
 }
 
@@ -119,7 +123,7 @@ impl CallStack {
                 rt.allocate_string("Maximum call stack size exceeded"),
             ));
         }
-        let entry = rt.allocate(CallFrame::new(func, code, this));
+        let entry = CallFrame::new(func, code, this);
         self.stack.push(StackEntry::Frame(entry));
         Ok(())
     }
@@ -128,11 +132,29 @@ impl CallStack {
         self.stack.pop()
     }
 
-    pub fn current_frame(&mut self) -> Handle<CallFrame> {
+    pub fn current_frame(&mut self) -> DerefPointer<CallFrame> {
         match self.stack.last() {
-            Some(StackEntry::Frame(frame)) => frame.to_heap(),
+            Some(StackEntry::Frame(frame)) => DerefPointer::new(frame),
             None => unreachable!("wtf"),
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }
+}
+
+impl Traceable for CallStack {
+    fn trace_with(&self, tracer: &mut Tracer) {
+        log::warn!("AAAAA");
+        for frame in self.stack.iter() {
+            match frame {
+                StackEntry::Frame(f) => {
+                    f.trace_with(tracer);
+                }
+                _ => (),
+            }
+        }
+    }
+}
+
+impl Finalizer for CallStack {
+    fn finalize(&mut self) {}
 }

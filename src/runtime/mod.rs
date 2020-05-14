@@ -6,16 +6,16 @@ pub mod pure_nan;
 pub mod tld;
 pub mod value;
 use crate::common::*;
-use crate::jit::*;
-use cell::*;
+use crate::fullcodegen::FullCodegen;
 use crate::heap::api::*;
 use crate::heap::heap::Heap;
+use crate::interpreter::callstack::CallFrame;
+use crate::jit::*;
+use cell::*;
 use osr::*;
 use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
 use value::*;
-use crate::fullcodegen::FullCodegen;
-use crate::interpreter::callstack::CallFrame;
 
 pub struct CodeAllocator {
     allocated: HashSet<Address>,
@@ -56,7 +56,14 @@ impl CodeAllocator {
     }
 }
 
+use crate::jit::osr::*;
+use std::cell::RefCell;
+thread_local! {
+    static OSR_STUB: RefCell<OSRStub> = RefCell::new(OSRStub::new());
+}
+
 pub struct Runtime {
+    pub configs: Configs,
     #[cfg(feature = "perf")]
     pub perf: perf::Perf,
     pub heap: Heap,
@@ -72,18 +79,30 @@ pub struct Runtime {
     pub boolean_prototype: Rooted<Cell>,
     pub byte_array_prototype: Rooted<Cell>,
     pub globals: Rooted<HashMap<String, Value>>,
-    pub stack: crate::interpreter::callstack::CallStack,
+    pub stack: Rooted<crate::interpreter::callstack::CallStack>,
     pub code_space: CodeAllocator,
     pub strings: Rooted<HashMap<String, Value>>,
 }
 
 impl Runtime {
-    pub fn new() -> Self {
+    pub fn get_osr(
+        &mut self,
+    ) -> extern "C" fn(&mut Runtime, &mut CallFrame, usize) -> super::jit::JITResult {
+        OSR_STUB.with(|x| {
+            if x.borrow().code.is_some() {
+                return x.borrow().get();
+            }
+            x.borrow_mut().generate(self);
+            x.borrow().get()
+        })
+    }
+    pub fn new(c: Configs) -> Self {
         let mut heap = Heap::new();
         let object = heap.allocate(Cell::new(CellValue::None, None));
         let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
 
         let mut this = Self {
+            configs: c,
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
             boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
@@ -92,7 +111,7 @@ impl Runtime {
             array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             globals: heap.allocate(HashMap::new()),
-            stack: crate::interpreter::callstack::CallStack::new(999 * 2),
+            stack: heap.allocate(crate::interpreter::callstack::CallStack::new(999 * 2)),
             module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
             string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
@@ -163,79 +182,101 @@ impl Runtime {
                             unimplemented!("TODO: Instantiat generator");
                         }
                         _ => {
-                            if let Some(ref jit) = regular.code.jit_code {
-                                self.stack
-                                    .push(unsafe { &mut *ptr }, val, regular.code, this)?;
-                                // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
-                                // that will start interpreting.
-                                let cur = self.stack.current_frame();
-                                let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
-                                    unsafe { std::mem::transmute(jit.instruction_start()) };
-                                match func(self,cur,0) {
-                                    JITResult::Err(e) => return Err(e),
-                                    JITResult::Ok(x) => return Ok(x),
-                                    JITResult::OSRExit => {
-                                        /*self.stack.current_frame().ip = entry.to_ip;
-                                        self.stack.current_frame().bp = entry.to_bp;
-                                        match self.interpret() {
-                                            Return::Return(val) => return Ok(val),
-                                            Return::Error(e) => return Err(e),
-                                            Return::Yield { .. } => {
-                                                unimplemented!("TODO: Generators")
-                                            }
-                                        }*/
-                                        unimplemented!();
-                                    }
-                                }
-                            } else {
-
-                                if regular.code.hotness >= 1000 {
-                                    if let RegularFunctionKind::Ordinal = regular.kind {
-                                        let mut gen = FullCodegen::new(regular.code);
-                                        gen.compile(false);
-                                        log::trace!("Disassembly for '{}'",unwrap!(regular.name.to_string(self)));
-                                        let code = gen.finish(self,true);
-                                        let func: extern "C" fn(&mut Runtime, Handle<CallFrame>,u32) -> JITResult =
-                                            unsafe { std::mem::transmute(code.instruction_start()) };
-                                        let x = unsafe { &mut *ptr };
-                                        let _ = self
-                                            .stack
-                                            .push(x, val, regular.code, this);
-                                        let cur = self.stack.current_frame();
-                                        match func(self,cur,0) {
-                                            JITResult::Ok(val) => {
-                                                self.stack.pop();
-                                                regular.code.jit_code = Some(code);
-                                                return Ok(val);
-                                            }
-                                            JITResult::Err(e) => {
-                                                self.stack.pop();
-                                                regular.code.jit_code = Some(code);
-                                                return Err(e);
-                                            }
-                                            _ => unimplemented!()
+                            if self.configs.enable_jit {
+                                if let Some(ref jit) = regular.code.jit_code {
+                                    self.stack.push(
+                                        unsafe { &mut *ptr },
+                                        val,
+                                        regular.code,
+                                        this,
+                                    )?;
+                                    // This variable is mutable because JIT might exit to interpreter and set bp/ip of instruction
+                                    // that will start interpreting.
+                                    let mut cur = self.stack.current_frame();
+                                    let func: extern "C" fn(
+                                        &mut Runtime,
+                                        &mut CallFrame,
+                                        usize,
+                                    )
+                                        -> JITResult =
+                                        unsafe { std::mem::transmute(jit.instruction_start()) };
+                                    let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
+                                    self.stack.pop();
+                                    match res {
+                                        JITResult::Err(e) => return Err(e),
+                                        JITResult::Ok(x) => return Ok(x),
+                                        JITResult::OSRExit => {
+                                            /*self.stack.current_frame().ip = entry.to_ip;
+                                            self.stack.current_frame().bp = entry.to_bp;
+                                            match self.interpret() {
+                                                Return::Return(val) => return Ok(val),
+                                                Return::Error(e) => return Err(e),
+                                                Return::Yield { .. } => {
+                                                    unimplemented!("TODO: Generators")
+                                                }
+                                            }*/
+                                            unimplemented!();
                                         }
-
                                     }
                                 } else {
-                                    regular.code.get_mut().hotness =
-                                        regular.code.hotness.wrapping_add(50);
-                                }
-                                // unsafe code block is actually safe,we just access heap.
-                                self.stack
-                                    .push(unsafe { &mut *ptr }, val, regular.code, this)?;
-                                for (i, arg) in args.iter().enumerate() {
-                                    if i >= self.stack.current_frame().entries.len() {
-                                        break;
+                                    if regular.code.hotness >= 1000 {
+                                        if let RegularFunctionKind::Ordinal = regular.kind {
+                                            let mut gen = FullCodegen::new(regular.code);
+                                            gen.compile(false);
+                                            log::trace!(
+                                                "Disassembly for '{}'",
+                                                unwrap!(regular.name.to_string(self))
+                                            );
+                                            let code = gen.finish(self, true);
+                                            let func: extern "C" fn(
+                                                &mut Runtime,
+                                                &mut CallFrame,
+                                                usize,
+                                            )
+                                                -> JITResult = unsafe {
+                                                std::mem::transmute(code.instruction_start())
+                                            };
+                                            let x = unsafe { &mut *ptr };
+                                            let _ = self.stack.push(x, val, regular.code, this);
+                                            let mut cur = self.stack.current_frame();
+                                            match func(
+                                                self,
+                                                cur.get_mut(),
+                                                code.osr_table.labels[0],
+                                            ) {
+                                                JITResult::Ok(val) => {
+                                                    self.stack.pop();
+                                                    regular.code.jit_code = Some(code);
+                                                    return Ok(val);
+                                                }
+                                                JITResult::Err(e) => {
+                                                    self.stack.pop();
+                                                    regular.code.jit_code = Some(code);
+                                                    return Err(e);
+                                                }
+                                                _ => unimplemented!(),
+                                            }
+                                        }
+                                    } else {
+                                        regular.code.get_mut().hotness =
+                                            regular.code.hotness.wrapping_add(50);
                                     }
-                                    self.stack.current_frame().entries[i] = *arg;
                                 }
-                                self.stack.current_frame().exit_on_return = true;
-                                match self.interpret() {
-                                    Return::Return(val) => return Ok(val),
-                                    Return::Error(e) => return Err(e),
-                                    Return::Yield { .. } => unimplemented!("TODO: Generators"),
+                            }
+                            // unsafe code block is actually safe,we just access heap.
+                            self.stack
+                                .push(unsafe { &mut *ptr }, val, regular.code, this)?;
+                            for (i, arg) in args.iter().enumerate() {
+                                if i >= self.stack.current_frame().entries.len() {
+                                    break;
                                 }
+                                self.stack.current_frame().entries[i] = *arg;
+                            }
+                            self.stack.current_frame().exit_on_return = true;
+                            match self.interpret() {
+                                Return::Return(val) => return Ok(val),
+                                Return::Error(e) => return Err(e),
+                                Return::Yield { .. } => unimplemented!("TODO: Generators"),
                             }
                         }
                     }
@@ -285,6 +326,28 @@ impl Trap {
             6 => Some(Trap::OOM),
             7 => Some(Trap::STACK_OVERFLOW),
             _ => None,
+        }
+    }
+}
+
+pub struct Configs {
+    pub enable_osr: bool,
+    pub enable_jit: bool,
+}
+
+impl Configs {
+    pub fn no_jit(mut self) -> Self {
+        self.enable_osr = false;
+        self.enable_jit = false;
+        self
+    }
+}
+
+impl Default for Configs {
+    fn default() -> Self {
+        Self {
+            enable_jit: true,
+            enable_osr: true,
         }
     }
 }

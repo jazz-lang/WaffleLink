@@ -4,8 +4,8 @@ pub mod loopanalysis;
 
 pub mod strength_reduction;
 use crate::bytecode::*;
-use crate::runtime::*;
 use crate::heap::api::*;
+use crate::runtime::*;
 use def::*;
 use std::collections::HashMap;
 use value::*;
@@ -34,6 +34,16 @@ impl ByteCompiler {
         self.strs.insert(s.as_ref().to_string(), x);
         x
     }
+
+    pub fn loop_hint(&mut self) -> u32 {
+        let id = self.code.feedback.len();
+        self.code.feedback.push(crate::jit::types::FeedBack::Loop {
+            osr_enter: None,
+            hotness: 0,
+        });
+        self.emit(Ins::LoopHint { fdbk: id as _ });
+        id as _
+    }
     pub fn new(rt: &mut Runtime) -> Self {
         let block = rt.allocate(CodeBlock {
             constants: Default::default(),
@@ -46,6 +56,7 @@ impl ByteCompiler {
             loopanalysis: None,
             jit_code: None,
             feedback: vec![],
+            jit_enter: 0,
         });
         Self {
             code: block,
@@ -683,6 +694,7 @@ impl<'a> Context<'a> {
             }
             ExprKind::While(cond, body) => {
                 self.builder.fallthrough();
+                self.builder.loop_hint();
                 let c = self.compile(cond)?;
                 let (mut w, mut b) = self.builder.cjmp(c);
                 let pos = self.builder.current;
@@ -691,6 +703,7 @@ impl<'a> Context<'a> {
                 self.builder.switch_to_block(bb);
                 w();
                 let res = self.compile(body)?;
+                self.builder.emit(Ins::Safepoint);
                 self.builder.emit(Ins::Jump { dst: pos });
                 let bb = self.builder.create_new_block();
                 self.builder.switch_to_block(bb);

@@ -19,7 +19,12 @@ impl<T> DerefPointer<T> {
     pub fn from_pointer(value: *mut T) -> Self {
         DerefPointer { pointer: value }
     }
-
+    pub fn get_mut(&self) -> &mut T {
+        unsafe { &mut *self.pointer }
+    }
+    pub fn get(&self) -> &T {
+        unsafe { &mut *self.pointer }
+    }
     pub fn null() -> Self {
         DerefPointer {
             pointer: ptr::null_mut(),

@@ -4,27 +4,27 @@
 //! FullCodegen is baseline JIT compiler that emits unoptimized code.
 pub mod generator;
 pub mod jitadd_generator;
-pub mod jitgreater_generator;
-pub mod jitless_generator;
-pub mod jitsub_generator;
-pub mod jitmul_generator;
 pub mod jitdiv_generator;
-pub mod jitshl_generator;
-pub mod jitlesseq_generator;
-pub mod jitshr_generator;
-pub mod jitgreatereq_generator;
 pub mod jitequal_generator;
+pub mod jitgreater_generator;
+pub mod jitgreatereq_generator;
+pub mod jitless_generator;
+pub mod jitlesseq_generator;
+pub mod jitmul_generator;
 pub mod jitnequal_generator;
+pub mod jitshl_generator;
+pub mod jitshr_generator;
+pub mod jitsub_generator;
 pub mod to_boolean_generator;
 use crate::assembler;
 use crate::bytecode;
+use crate::heap::api::*;
 use crate::interpreter::callstack::*;
 use crate::jit::*;
 use crate::runtime;
 use assembler::cpu::*;
 use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
-use crate::heap::api::*;
 use func::*;
 pub(super) use generator::*;
 use runtime::cell::*;
@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use types::*;
 macro_rules! call_frame_offset_of {
     ($field: ident) => {
-        offset_of!(Handle<CallFrame>, $field)
+        offset_of!(&mut CallFrame, $field)
     };
 }
 
@@ -42,7 +42,6 @@ pub struct FullCodegen {
     code: Handle<CodeBlock>,
     masm: MacroAssembler,
     ret: Label,
-    slow_paths: Vec<Box<dyn generator::FullGenerator>>,
 }
 
 impl FullCodegen {
@@ -51,7 +50,6 @@ impl FullCodegen {
             code,
             ret: Label(0),
             masm: MacroAssembler::new(),
-            slow_paths: vec![],
         }
     }
     pub fn load_registers(&mut self, to: Reg) {
@@ -60,7 +58,7 @@ impl FullCodegen {
             AnyReg::Reg(to),
             Mem::Base(
                 Reg::from(REG_CALLFRAME),
-                32 as _, //offset_of!(Handle<CallFrame>, registers) as _,
+                offset_of!(CallFrame, registers) as _,
             ),
         )
         /*
@@ -87,10 +85,7 @@ impl FullCodegen {
             self.masm.load_mem(
                 MachineMode::Int64,
                 AnyReg::Reg(REG_RESULT),
-                Mem::Base(
-                    REG_CALLFRAME.into(),
-                    56, //call_frame_offset_of!(entries) as _, //offset_of!(Handle<CallFrame>, entries) as _,
-                ),
+                Mem::Base(REG_CALLFRAME.into(), offset_of!(CallFrame, entries) as _),
             );
             self.load_register_to(x, dst_1, Some(REG_RESULT));
             self.load_register_to(y, dst_2, Some(REG_RESULT));
@@ -118,7 +113,7 @@ impl FullCodegen {
             self.masm.load_mem(
                 MachineMode::Int64,
                 AnyReg::Reg(REG_RESULT.into()),
-                Mem::Base(REG_CALLFRAME.into(), 56), //call_frame_offset_of!(entries) as _),
+                Mem::Base(REG_CALLFRAME.into(), offset_of!(CallFrame, entries) as _), //call_frame_offset_of!(entries) as _),
             );
             self.masm.load_mem(
                 MachineMode::Int64,
@@ -147,7 +142,7 @@ impl FullCodegen {
                 self.masm.load_mem(
                     MachineMode::Int64,
                     AnyReg::Reg(REG_RESULT),
-                    Mem::Base(REG_CALLFRAME.into(), 56), //call_frame_offset_of!(entries) as _),
+                    Mem::Base(REG_CALLFRAME.into(), offset_of!(CallFrame, entries) as _), //call_frame_offset_of!(entries) as _),
                 );
                 regs = Some(REG_RESULT);
             }
@@ -174,7 +169,7 @@ impl FullCodegen {
             self.masm.load_mem(
                 MachineMode::Int64,
                 AnyReg::Reg(REG_TMP1.into()),
-                Mem::Base(REG_CALLFRAME.into(), 56), //call_frame_offset_of!(entries) as _),
+                Mem::Base(REG_CALLFRAME.into(), offset_of!(CallFrame, entries) as _), //call_frame_offset_of!(entries) as _),
             );
             self.masm.store_mem(
                 MachineMode::Int64,
@@ -245,7 +240,7 @@ impl FullCodegen {
         );
         self.masm.call_reg(REG_TMP1);
     }
-    pub fn compile(&mut self,has_table: bool) {
+    pub fn compile(&mut self, has_table: bool) {
         let mut labels = HashMap::new();
         for bb in self.code.code.iter() {
             labels.insert(bb.id, self.masm.create_label());
@@ -253,15 +248,14 @@ impl FullCodegen {
         let mut slow_paths: Vec<Box<dyn FullGenerator>> = Vec::new();
         let lbl = self.masm.create_label();
         self.ret = lbl;
+        let id = self.masm.new_osr_entry();
+        self.code.jit_enter = id;
         self.masm.prolog();
         self.masm
             .copy_reg(MachineMode::Int64, REG_THREAD, CCALL_REG_PARAMS[0]);
         self.masm
             .copy_reg(MachineMode::Int64, REG_CALLFRAME, CCALL_REG_PARAMS[1]);
-        if has_table {
-            self.masm.copy_pc(REG_RESULT);
-            self.masm.load_mem(MachineMode::Int64, AnyReg::Reg(REG_RESULT), Mem::Index(REG_RESULT, CCALL_REG_PARAMS[2], 8, 0));
-        }
+        self.masm.jump_reg(CCALL_REG_PARAMS[2]);
         for bb in self.code.clone().code.iter() {
             let lbl = labels.get(&bb.id).copied().unwrap();
             self.masm.bind_label(lbl);
@@ -336,7 +330,7 @@ impl FullCodegen {
                             slow_paths.push(Box::new(x));
                         }
                     }
-                    Ins::GreaterEq{ dst, lhs, src, .. } => {
+                    Ins::GreaterEq { dst, lhs, src, .. } => {
                         let mut x = jitgreatereq_generator::GreaterEqGenerator {
                             ins: *ins,
                             lhs,
@@ -375,7 +369,7 @@ impl FullCodegen {
                             slow_paths.push(Box::new(x));
                         }
                     }
-                    Ins::Eq{ dst, lhs, src, .. } => {
+                    Ins::Eq { dst, lhs, src, .. } => {
                         let mut x = jitequal_generator::EqualGenerator {
                             ins: *ins,
                             lhs,
@@ -435,7 +429,6 @@ impl FullCodegen {
                         self.masm.jump(self.ret);
                     }
                     Ins::Safepoint => {
-                        self.masm.nop();
                         self.masm
                             .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_THREAD);
                         self.masm.raw_call(__safepoint as *const u8);
@@ -523,47 +516,61 @@ impl FullCodegen {
                         );
                         self.store_register(dst);
                     }
-                    Ins::TryCatch {
-                        try_,
-                        catch,
-                        ..
-                    } => {
+                    Ins::TryCatch { try_, catch, .. } => {
                         let lbl = labels.get(&catch).copied().unwrap();
-                        self.masm.load_label(CCALL_REG_PARAMS[1],lbl);
-                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
+                        self.masm.load_label(CCALL_REG_PARAMS[1], lbl);
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
                         self.masm.raw_call(CallFrame::push_handler as *const u8);
                         self.masm.jump(labels.get(&try_).copied().unwrap());
                     }
 
                     Ins::PopCatch => {
-                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
-                        self.masm.raw_call(CallFrame::pop_handler_or_zero as *const u8);
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
+                        self.masm
+                            .raw_call(CallFrame::pop_handler_or_zero as *const u8);
                     }
                     Ins::CloseEnv {
                         dst,
                         function,
                         begin,
-                        end
+                        end,
                     } => {
-                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
-                        self.load_register_to(function,CCALL_REG_PARAMS[1],None);
-                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[2],begin.0 as _);
-                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[3],end.0 as _);
-                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[4],REG_THREAD);
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
+                        self.load_register_to(function, CCALL_REG_PARAMS[1], None);
+                        self.masm.load_int_const(
+                            MachineMode::Int32,
+                            CCALL_REG_PARAMS[2],
+                            begin.0 as _,
+                        );
+                        self.masm.load_int_const(
+                            MachineMode::Int32,
+                            CCALL_REG_PARAMS[3],
+                            end.0 as _,
+                        );
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[4], REG_THREAD);
                         self.masm.raw_call(__jit_close_env as *const u8);
                         self.store_register(dst);
                     }
-                    Ins::LoopHint {..} => {
-                        self.masm.new_osr_entry();
+                    Ins::LoopHint { fdbk } => {
+                        let id = self.masm.new_osr_entry();
+                        match &mut self.code.feedback[fdbk as usize] {
+                            FeedBack::Loop { osr_enter, .. } => {
+                                *osr_enter = Some(id);
+                            }
+                            _ => unreachable!(),
+                        }
                         // Do nothing now
                         // In future we should try to upgrade JIT tier to optimizing one.
                     }
-                    Ins::LoadUp {
-                        dst,
-                        up
-                    } => {
-                        self.masm.copy_reg(MachineMode::Int64,CCALL_REG_PARAMS[0],REG_CALLFRAME);
-                        self.masm.load_int_const(MachineMode::Int32,CCALL_REG_PARAMS[1],up as _);
+                    Ins::LoadUp { dst, up } => {
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
+                        self.masm
+                            .load_int_const(MachineMode::Int32, CCALL_REG_PARAMS[1], up as _);
                         self.masm.raw_call(__jit_load_up as *const u8);
                         self.store_register(dst);
                     }
@@ -588,9 +595,13 @@ impl FullCodegen {
         if disasm {
             if log::log_enabled!(log::Level::Trace) {
                 use std::io::Write;
-                let instruction_length = code.instruction_end().offset_from(code.instruction_start());
+                let instruction_length =
+                    code.instruction_end().offset_from(code.instruction_start());
                 let buf: &[u8] = unsafe {
-                    std::slice::from_raw_parts(code.instruction_start().to_ptr(), instruction_length)
+                    std::slice::from_raw_parts(
+                        code.instruction_start().to_ptr(),
+                        instruction_length,
+                    )
                 };
                 let engine = get_engine().expect("cannot create capstone engine");
                 let mut w: Box<dyn Write> = Box::new(std::io::stdout());
@@ -634,7 +645,7 @@ impl FullCodegen {
                         instr.mnemonic().expect("no mnmemonic found"),
                         instr.op_str().expect("no op_str found"),
                     )
-                        .unwrap();
+                    .unwrap();
                 }
 
                 writeln!(&mut w).unwrap();
@@ -652,7 +663,7 @@ pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
     Value::number(x.to_number() - y.to_number())
 }
 
-pub unsafe extern "C" fn __safepoint(rt: *mut Runtime) {
+pub unsafe extern "C" fn __safepoint(rt: &mut Runtime) {
     (&mut *rt).heap.safepoint();
 }
 use capstone::prelude::*;
@@ -677,14 +688,14 @@ pub extern "C" fn __jit_call(
     func: Value,
     this: Value,
     rt: &mut Runtime,
-    callframe: Handle<CallFrame>,
+    callframe: &mut CallFrame,
     begin: VirtualRegister,
     end: VirtualRegister,
 ) -> JITResult {
     let mut arguments = vec![];
     for x in begin.to_argument()..=end.to_argument() {
         let x = callframe.r(VirtualRegister::argument(x));
-        assert!(x.is_int32());
+        //assert!(x.is_int32());
         arguments.push(x);
     }
     match rt.call(func, this, &arguments) {
@@ -701,7 +712,6 @@ pub extern "C" fn __jit_call_no_args(func: Value, this: Value, rt: &mut Runtime)
 }
 
 pub unsafe extern "C" fn __jit_load_global(rt: &mut Runtime, n: Value) -> JITResult {
-    println!("{:x}", n.u.as_int64);
     let s = unwrap!(n.to_string(rt));
     let global = rt.globals.get().get(&s).copied();
     match global {
@@ -712,7 +722,13 @@ pub unsafe extern "C" fn __jit_load_global(rt: &mut Runtime, n: Value) -> JITRes
     }
 }
 
-pub extern "C" fn __jit_close_env(current: Handle<CallFrame>, func: Value,begin: VirtualRegister,end: VirtualRegister,rt: &mut Runtime) -> Value {
+pub extern "C" fn __jit_close_env(
+    current: &mut CallFrame,
+    func: Value,
+    begin: VirtualRegister,
+    end: VirtualRegister,
+    rt: &mut Runtime,
+) -> Value {
     let arguments = {
         let mut v = vec![];
         for x in begin.to_argument()..=end.to_argument() {
@@ -724,8 +740,7 @@ pub extern "C" fn __jit_close_env(current: Handle<CallFrame>, func: Value,begin:
     let func = func;
     match func.as_cell().value {
         CellValue::Function(Function::Regular(ref mut r)) => {
-            let arr =
-                rt.allocate_cell(Cell::new(CellValue::Array(arguments), None));
+            let arr = rt.allocate_cell(Cell::new(CellValue::Array(arguments), None));
             r.env = Value::from(arr);
             return func;
         }
@@ -733,13 +748,12 @@ pub extern "C" fn __jit_close_env(current: Handle<CallFrame>, func: Value,begin:
     }
 }
 
-
-pub extern "C" fn __jit_load_up(current: Handle<CallFrame>,x: u32) -> Value {
+pub extern "C" fn __jit_load_up(current: &mut CallFrame, x: u32) -> Value {
     let func = current.func;
 
     if let CellValue::Function(Function::Regular(ref r)) = func.as_cell().value {
         if let CellValue::Array(ref arr) = r.env.as_cell().value {
-           return arr[x as usize];
+            return arr[x as usize];
         }
     }
     unreachable!();

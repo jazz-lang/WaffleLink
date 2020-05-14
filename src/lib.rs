@@ -32,10 +32,10 @@ pub mod bytecompiler;
 pub mod common;
 pub mod frontend;
 pub mod fullcodegen;
+pub mod heap;
 pub mod interpreter;
 pub mod jit;
 pub mod runtime;
-pub mod heap;
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+/*#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;*/

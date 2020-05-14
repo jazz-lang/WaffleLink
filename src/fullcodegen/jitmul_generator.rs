@@ -1,13 +1,13 @@
 use super::*;
 use crate::assembler;
 use crate::bytecode;
+use crate::heap::api::*;
 use crate::interpreter::callstack::*;
 use crate::jit::*;
 use crate::runtime;
 use assembler::cpu::*;
 use assembler::masm::*;
 use bytecode::{def::*, virtual_reg::*, *};
-use crate::heap::api::*;
 use func::*;
 pub struct MulGenerator {
     pub ins: Ins,
@@ -20,7 +20,7 @@ pub struct MulGenerator {
 
 impl FullGenerator for MulGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
-        let lhs = self.lhs;
+        /*let lhs = self.lhs;
         let rhs = self.rhs;
         let dst = self.dst;
         let slow_path = gen.masm.create_label();
@@ -63,10 +63,14 @@ impl FullGenerator for MulGenerator {
         self.load_registers2(lhs, rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
         gen.masm.raw_call(__add_slow_path as *const u8);
         self.store_register(dst);*/
-        gen.masm.bind_label(self.end);
-        true
+        gen.masm.bind_label(self.end);*/
+        gen.load_registers2(self.lhs, self.rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
+        gen.masm.raw_call(__mul as *mut _);
+        gen.store_register(self.dst);
+        false
     }
     fn slow_path(&mut self, gen: &mut FullCodegen) {
+        gen.masm.nop();
         gen.masm.emit_comment(format!("({}) slow_path:", self.ins));
         gen.masm.bind_label(self.slow_path);
         gen.load_registers2(self.lhs, self.rhs, CCALL_REG_PARAMS[0], CCALL_REG_PARAMS[1]);
@@ -76,6 +80,16 @@ impl FullGenerator for MulGenerator {
     }
 }
 
-pub extern "C" fn __mul_slow_path(x: Value,y: Value) -> Value {
+pub extern "C" fn __mul_slow_path(x: Value, y: Value) -> Value {
+    println!("Slowpath {} * {}", x.to_number(), y.to_number());
+    Value::number(x.to_number() * y.to_number())
+}
+
+pub extern "C" fn __mul(x: Value, y: Value) -> Value {
+    if x.is_int32() && y.is_int32() {
+        if let (x, false) = x.as_int32().overflowing_mul(y.as_int32()) {
+            return Value::new_int(x);
+        }
+    }
     Value::number(x.to_number() * y.to_number())
 }
