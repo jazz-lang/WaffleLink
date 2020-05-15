@@ -10,19 +10,17 @@ use waffle2::interpreter::callstack::CallFrame;
 use waffle2::jit::JITResult;
 use waffle2::runtime::*;
 fn main() {
-    simple_logger::init().unwrap();
+    //simple_logger::init().unwrap();
     let mut heap = {
-        let mut rt = Runtime::new(Configs::default().no_jit());
+        let mut rt = Runtime::new(Configs::default());
         let reader = Reader::from_string(
             "
-200.times(|x| {
-    log(x)
-    10.times(|y| {
-        log(\"I\",x + y)
-    })
-})
+var i = 0
+while i < 10000000 {
+    i = i + 1
+}
 
-return 0
+return i
 ",
         );
         let mut ast = vec![];
