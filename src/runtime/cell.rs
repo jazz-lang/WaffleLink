@@ -46,6 +46,7 @@ pub enum CellValue {
 }
 use indexmap::IndexMap;
 pub struct Cell {
+    pub marked: bool,
     pub value: CellValue,
     pub prototype: Option<CellPointer>,
     pub properties: Box<IndexMap<String, Value>>,
@@ -57,6 +58,7 @@ impl Cell {
     }
     pub fn new(val: CellValue, proto: Option<CellPointer>) -> Self {
         Self {
+            marked: false,
             value: val,
             prototype: proto,
             properties: Box::new(IndexMap::new()),
@@ -207,6 +209,38 @@ pub struct CellPointer {
 }
 
 impl CellPointer {
+
+    pub fn each_pointer(&self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+        match self.prototype {
+            Some(ref proto) => {
+                stack.push_back(proto);
+            }
+            _ => ()
+        }
+
+        for (_,property) in self.properties.iter() {
+            property.each_pointer(stack);
+        }
+        match self.value {
+            CellValue::Array(ref array) => {
+                array.iter().for_each(|item| item.each_pointer(stack))
+            }
+            CellValue::Function(ref f) => {
+                match f {
+                    Function::Native { name,..} => name.each_pointer(stack),
+                    Function::AsyncNative { name,..} => name.each_pointer(stack),
+                    Function::Regular(regular) => {
+                        regular.env.each_pointer(stack);
+                        regular.code.constants_.iter().for_each(|item| item.each_pointer(stack));
+                        regular.name.each_pointer(stack);
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
     pub fn get(&self) -> &Cell {
         unsafe { &mut *self.raw }
     }
@@ -216,6 +250,7 @@ impl CellPointer {
 }
 
 use std::ops::{Deref, DerefMut};
+use smallvec::SmallVec;
 
 impl Deref for CellPointer {
     type Target = Cell;

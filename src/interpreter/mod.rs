@@ -343,7 +343,7 @@ impl Runtime {
                     *current.r_mut(dst) = Value::new_int(imm);
                 }
                 Ins::Safepoint => {
-                    self.heap.safepoint();
+                    self.safepoint();
                 }
                 Ins::LoopHint { fdbk } => {
                     use crate::jit::types::*;

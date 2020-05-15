@@ -12,7 +12,7 @@ use waffle2::runtime::*;
 fn main() {
     //simple_logger::init().unwrap();
     let mut heap = {
-        let mut rt = Runtime::new(Configs::default());
+        let mut rt = Runtime::new(Configs::default().no_jit());
         let reader = Reader::from_string(
             "
 var i = 0

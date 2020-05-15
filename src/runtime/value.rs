@@ -654,6 +654,12 @@ impl Value {
             Self::new_double(x)
         }
     }
+
+    pub fn each_pointer(&self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+        if self.is_cell() {
+            stack.push_back(self.as_cell_ref());
+        }
+    }
 }
 
 macro_rules! signbit {
@@ -705,6 +711,8 @@ impl From<CellPointer> for Value {
     }
 }
 use std::hash::{Hash, Hasher};
+use smallvec::SmallVec;
+
 impl Hash for Value {
     fn hash<H: Hasher>(&self, s: &mut H) {
         unsafe {

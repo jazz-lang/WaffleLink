@@ -25,6 +25,12 @@ pub struct Heap {
     threshold: usize,
     allocated: usize,
 }
+
+pub struct HeapCell {
+    pub marked: bool,
+    pub cell: CellPointer
+}
+
 use std::collections::VecDeque;
 impl Heap {
     pub fn new() -> Self {
@@ -102,29 +108,82 @@ impl Heap {
         let ptr = Box::into_raw(Box::new(cell));
 
         unsafe {
+
             self.allocated += std::mem::size_of::<Cell>();
             self.heap.push(CellPointer { raw: ptr });
             return CellPointer { raw: ptr };
         }
         unimplemented!()
     }
-    pub fn safepoint(&mut self) {
-        /*if self.threshold <= self.allocated {
-            log::trace!(
-                "Collecting, threshold is {} bytes and {} bytes allocated",
-                self.threshold,
-                self.allocated
-            );
-            self.collect();
-            if self.allocated >= self.threshold {
-                self.threshold = (self.allocated as f64 / 0.7) as usize;
-            }
-        }*/
+
+    pub fn safepoint(&mut self) -> bool {
+        self.threshold <= self.allocated
     }
 }
 
 pub struct Collection<'a> {
     rt: &'a mut Runtime,
+    stack: VecDeque<*const CellPointer>,
 }
 
-impl<'a> Collection<'a> {}
+impl<'a> Collection<'a> {
+    fn mark_obj(&mut self,obj: *const CellPointer) {
+        unsafe {
+            if obj.is_null() {
+                return;
+            }
+            let obj = obj as *mut CellPointer;
+            let obj_ref = &mut *obj;
+            if obj_ref.marked {
+                return;
+            }
+            obj_ref.marked = true;
+            self.stack.push_back(obj);
+        }
+    }
+
+    fn mark(&mut self) {
+        while let Some(object) = self.stack.pop_front() {
+            unsafe {
+                let object_ref = &mut *(object as *mut CellPointer);
+                if object_ref.marked {
+                    continue;
+                }
+                object_ref.marked = true;
+                object_ref.each_pointer(&mut self.stack);
+            }
+        }
+    }
+
+    fn sweep(&mut self) {
+        self.rt.heap.heap.retain(|item| {
+            if !item.marked {
+                unsafe {
+                    let _ = Box::from_raw(item.raw);
+                }
+                return false;
+            } else {
+                item.get_mut().marked = false;
+                true
+            }
+        })
+    }
+    pub fn run(rt: &'a mut Runtime) {
+        let mut rootset = Default::default();
+        rt.each_pointer(&mut rootset);
+        let mut this = Self {
+            rt,
+            stack: rootset
+        };
+
+        this.mark();
+        this.sweep();
+        if this.rt.heap.allocated >= this.rt.heap.threshold {
+            this.rt.heap.threshold = (this.rt.heap.allocated as f64 / 0.7) as usize;
+        }
+
+
+    }
+
+
+}

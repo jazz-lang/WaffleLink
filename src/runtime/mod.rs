@@ -8,8 +8,8 @@ pub mod value;
 use crate::common::*;
 use crate::fullcodegen::FullCodegen;
 use crate::heap::api::*;
-use crate::heap::heap::Heap;
-use crate::interpreter::callstack::CallFrame;
+use crate::heap::heap::{Heap, Collection};
+use crate::interpreter::callstack::{CallFrame, StackEntry};
 use crate::jit::*;
 use cell::*;
 use osr::*;
@@ -58,6 +58,7 @@ impl CodeAllocator {
 
 use crate::jit::osr::*;
 use std::cell::RefCell;
+use smallvec::SmallVec;
 thread_local! {
     static OSR_STUB: RefCell<OSRStub> = RefCell::new(OSRStub::new());
 }
@@ -126,6 +127,46 @@ impl Runtime {
         builtins::initialize(&mut this);
         this
     }
+    pub fn safepoint(&mut self) {
+        if self.heap.safepoint() {
+            Collection::run(self);
+
+        }
+    }
+
+    pub fn each_pointer(&mut self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+        stack.push_back(&self.array_prototype);
+        stack.push_back(&self.object_prototype);
+        stack.push_back(&self.number_prototype);
+        stack.push_back(&self.boolean_prototype);
+        stack.push_back(&self.generator_prototype);
+        stack.push_back(&self.boolean_prototype);
+        stack.push_back(&self.byte_array_prototype);
+        stack.push_back(&self.function_prototype);
+        stack.push_back(&self.file_prototype);
+        stack.push_back(&self.string_prototype);
+        stack.push_back(&self.module_prototype);
+        for (_,val) in self.globals.iter() {
+            val.each_pointer(stack);
+        }
+        for (_,val) in self.strings.iter() {
+            val.each_pointer(stack);
+        }
+
+        for frame in self.stack.stack.iter() {
+            match frame {
+                StackEntry::Frame(ref f) => {
+                    f.registers.iter().for_each(|item| item.each_pointer(stack));
+                    f.entries.iter().for_each(|item| item.each_pointer(stack));
+                    f.func.each_pointer(stack);
+                    f.code.constants_.iter().for_each(|item| item.each_pointer(stack));
+                    f.this.each_pointer(stack);
+                }
+                _ => ()
+            }
+        }
+    }
+
     #[inline]
     pub fn allocate_cell(&mut self, cell: Cell) -> CellPointer {
         self.heap.allocate(cell)

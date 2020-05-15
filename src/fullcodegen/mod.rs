@@ -708,7 +708,7 @@ pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
 }
 
 pub unsafe extern "C" fn __safepoint(rt: &mut Runtime) {
-    // (&mut *rt).heap.safepoint();
+    (&mut *rt).heap.safepoint();
 }
 use capstone::prelude::*;
 #[cfg(target_arch = "x86_64")]
