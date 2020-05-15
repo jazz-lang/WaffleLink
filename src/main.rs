@@ -12,7 +12,7 @@ use waffle2::runtime::*;
 fn main() {
     simple_logger::init().unwrap();
     let mut heap = {
-        let mut rt = Runtime::new(Configs::default());
+        let mut rt = Runtime::new(Configs::default().no_jit());
         let reader = Reader::from_string(
             "
 200.times(|x| {
@@ -38,8 +38,7 @@ return 0
                 return;
             }
         };
-        let f = function_from_codeblock(&mut rt, code.to_heap(), "<main>");
-        let main_r = rt.make_rooted(f.as_cell());
+        let f = function_from_codeblock(&mut rt, code.clone(), "<main>");
         let x = std::time::Instant::now();
         let res = rt.call(f, Value::undefined(), &[]);
         let e = x.elapsed();
@@ -57,7 +56,6 @@ return 0
         {
             rt.perf.print_perf();
         }
-        drop(main_r);
         rt.heap
     };
 

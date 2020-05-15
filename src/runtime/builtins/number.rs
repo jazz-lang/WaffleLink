@@ -24,8 +24,6 @@ pub fn times(rt: &mut Runtime, this: Value, args: &[Value]) -> Return {
 pub fn initialize(rt: &mut Runtime) {
     let f = native_fn!(rt, "times", times);
     rt.number_prototype.put_named(f, "times");
-    rt.globals.insert(
-        "Number".to_owned(),
-        Value::from(rt.number_prototype.to_heap()),
-    );
+    rt.globals
+        .insert("Number".to_owned(), Value::from(rt.number_prototype));
 }

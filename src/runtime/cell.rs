@@ -24,7 +24,7 @@ pub struct RegularFunction {
     pub source: String,
     pub arguments: Vec<String>,
     pub env: Value,
-    pub code: Handle<crate::bytecode::CodeBlock>,
+    pub code: crate::Rc<crate::bytecode::CodeBlock>,
     /// Generator functions compiled to simple state machine
     pub kind: RegularFunctionKind,
 }
@@ -47,7 +47,7 @@ pub enum CellValue {
 use indexmap::IndexMap;
 pub struct Cell {
     pub value: CellValue,
-    pub prototype: Option<Handle<Cell>>,
+    pub prototype: Option<CellPointer>,
     pub properties: Box<IndexMap<String, Value>>,
 }
 
@@ -55,7 +55,7 @@ impl Cell {
     pub fn take_value(&mut self) -> CellValue {
         std::mem::replace(&mut self.value, CellValue::None)
     }
-    pub fn new(val: CellValue, proto: Option<Handle<Cell>>) -> Self {
+    pub fn new(val: CellValue, proto: Option<CellPointer>) -> Self {
         Self {
             value: val,
             prototype: proto,
@@ -167,9 +167,7 @@ impl Cell {
             CellValue::String(ref s) => {
                 let character = s.chars().nth(x as usize);
                 if let Some(character) = character {
-                    return Some(Value::from(
-                        rt.allocate_string(character.to_string()).to_heap(),
-                    ));
+                    return Some(Value::from(rt.allocate_string(character.to_string())));
                 } else {
                     return None;
                 }
@@ -198,41 +196,43 @@ impl Cell {
     }
 }
 
-impl Traceable for Cell {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        for (_, prop) in self.properties.iter() {
-            prop.trace_with(tracer);
-        }
-        self.prototype.trace_with(tracer);
-        match &self.value {
-            CellValue::Array(arr) => arr.trace_with(tracer),
-            CellValue::Function(f) => match f {
-                Function::Native { name, .. } => {
-                    name.trace_with(tracer);
-                }
-                Function::Regular(r) => {
-                    r.name.trace_with(tracer);
-                    r.code.trace_with(tracer);
-                    r.env.trace_with(tracer);
-                }
-                _ => unimplemented!(),
-            },
-            _ => (),
-        }
-    }
-}
-impl Finalizer for Cell {
-    fn finalize(&mut self) {
-        log::warn!("Finalize cell");
-        match &self.value {
-            CellValue::String(x) => log::warn!("val {}", x),
-            CellValue::Function(Function::Regular(_)) => log::warn!("Regular function"),
-            _ => (),
-        }
-    }
-}
 // A simple helper for getting the address of a value
 pub fn address_of<T>(t: &T) -> usize {
     let my_ptr: *const T = t;
     my_ptr as usize
+}
+
+pub struct CellPointer {
+    pub(crate) raw: *mut Cell,
+}
+
+impl CellPointer {
+    pub fn get(&self) -> &Cell {
+        unsafe { &mut *self.raw }
+    }
+    pub fn get_mut(&self) -> &mut Cell {
+        unsafe { &mut *self.raw }
+    }
+}
+
+use std::ops::{Deref, DerefMut};
+
+impl Deref for CellPointer {
+    type Target = Cell;
+    fn deref(&self) -> &Cell {
+        unsafe { &mut *self.raw }
+    }
+}
+
+impl DerefMut for CellPointer {
+    fn deref_mut(&mut self) -> &mut Cell {
+        unsafe { &mut *self.raw }
+    }
+}
+
+impl Copy for CellPointer {}
+impl Clone for CellPointer {
+    fn clone(&self) -> Self {
+        *self
+    }
 }

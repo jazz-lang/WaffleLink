@@ -2,7 +2,7 @@
 use super::cell::*;
 use super::pure_nan::*;
 use super::*;
-use crate::heap::api::Handle;
+
 #[cfg(all(target_pointer_width = "64", feature = "value32-64"))]
 compile_error!("Cannot use value32-64 feature on 64 target");
 
@@ -12,7 +12,7 @@ pub union EncodedValueDescriptor {
     pub as_int64: i64,
     #[cfg(feature = "value32-64")]
     pub as_double: f64,
-    pub cell: Handle<Cell>,
+    pub cell: CellPointer,
     pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -187,11 +187,11 @@ impl Value {
         unsafe { self.u.as_double }
     }
 
-    pub fn as_cell(&self) -> Handle<Cell> {
+    pub fn as_cell(&self) -> CellPointer {
         //assert!(self.is_cell(), "Value payload is not a cell!");
         unsafe { std::mem::transmute(self.payload()) }
     }
-    pub fn as_cell_ref(&self) -> &Handle<Cell> {
+    pub fn as_cell_ref(&self) -> &CellPointer {
         assert!(self.is_cell(), "Value payload is not a cell!");
         unsafe { std::mem::transmute(&self.payload()) }
     }
@@ -327,7 +327,7 @@ impl Value {
         }
     }
 
-    pub fn cell(x: Handle<Cell>) -> Self {
+    pub fn cell(x: CellPointer) -> Self {
         Self {
             u: EncodedValueDescriptor { cell: x },
         }
@@ -425,11 +425,11 @@ impl Value {
         unsafe { f64::from_bits((self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET) as u64) }
     }
 
-    pub fn as_cell(&self) -> Handle<Cell> {
+    pub fn as_cell(&self) -> CellPointer {
         //assert!(self.is_cell());
         unsafe { self.u.cell }
     }
-    pub fn as_cell_ref(&self) -> &Handle<Cell> {
+    pub fn as_cell_ref(&self) -> &CellPointer {
         assert!(self.is_cell());
         unsafe { &self.u.cell }
     }
@@ -508,8 +508,6 @@ impl Value {
         d as i32
     }
     pub fn to_uint32(&self) -> u32 {
-        // The only difference between to_int32 and to_uint32 is that to_uint32 reinterprets resulted i32 value as u32.
-        // https://tc39.es/ecma262/#sec-touint32
         self.to_int32() as u32
     }
     #[inline(always)]
@@ -601,7 +599,7 @@ impl Value {
                     }
                 }
                 let key = rt.allocate_string("toString");
-                let x = self.lookup(rt, Value::from(key.to_heap()))?;
+                let x = self.lookup(rt, Value::from(key))?;
                 if let Some(to_string) = x {
                     if to_string.is_cell() {
                         if let CellValue::Function(_) = to_string.as_cell().value {
@@ -628,11 +626,11 @@ impl Value {
     pub fn lookup(&self, rt: &mut Runtime, key: Value) -> Result<Option<Value>, Value> {
         let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
         if self.is_cell() {
-            self.as_cell().lookup(r, key)
+            self.as_cell().get_mut().lookup(r, key)
         } else if self.is_number() {
-            rt.number_prototype.lookup(r, key)
+            rt.number_prototype.get_mut().lookup(r, key)
         } else if self.is_boolean() {
-            rt.boolean_prototype.lookup(r, key)
+            rt.boolean_prototype.get_mut().lookup(r, key)
         } else {
             Ok(None)
         }
@@ -640,11 +638,11 @@ impl Value {
     pub fn put(&self, rt: &mut Runtime, key: Value, val: Value) -> Result<(), Value> {
         let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
         if self.is_cell() {
-            self.as_cell().put(rt, key, val)
+            self.as_cell().get_mut().put(rt, key, val)
         } else if self.is_number() {
-            rt.number_prototype.put(r, key, val)
+            rt.number_prototype.get_mut().put(r, key, val)
         } else if self.is_boolean() {
-            rt.boolean_prototype.put(r, key, val)
+            rt.boolean_prototype.get_mut().put(r, key, val)
         } else {
             Ok(())
         }
@@ -697,39 +695,12 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
     as_int64
 }
 
-use crate::heap::api::{Finalizer, Traceable, Tracer};
-
-impl Traceable for Value {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        if self.is_cell() {
-            tracer.trace(self.as_cell_ref());
-        }
-    }
-}
-
-impl Finalizer for Value {}
-
-impl From<Handle<Cell>> for Value {
-    fn from(x: Handle<Cell>) -> Self {
-        Self {
-            u: EncodedValueDescriptor { cell: x },
-        }
-    }
-}
-
 use crate::heap::api::*;
 
-impl From<Rooted<Cell>> for Value {
-    fn from(x: Rooted<Cell>) -> Self {
+impl From<CellPointer> for Value {
+    fn from(x: CellPointer) -> Self {
         Self {
-            u: EncodedValueDescriptor { cell: x.to_heap() },
-        }
-    }
-}
-impl From<&Rooted<Cell>> for Value {
-    fn from(x: &Rooted<Cell>) -> Self {
-        Self {
-            u: EncodedValueDescriptor { cell: x.to_heap() },
+            u: EncodedValueDescriptor { cell: x },
         }
     }
 }

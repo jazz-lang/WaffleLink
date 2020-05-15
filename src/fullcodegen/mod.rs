@@ -39,13 +39,13 @@ macro_rules! call_frame_offset_of {
 }
 
 pub struct FullCodegen {
-    code: Handle<CodeBlock>,
+    code: crate::Rc<CodeBlock>,
     masm: MacroAssembler,
     ret: Label,
 }
 
 impl FullCodegen {
-    pub fn new(code: Handle<CodeBlock>) -> Self {
+    pub fn new(code: crate::Rc<CodeBlock>) -> Self {
         Self {
             code,
             ret: Label(0),
@@ -53,14 +53,18 @@ impl FullCodegen {
         }
     }
     pub fn load_registers(&mut self, to: Reg) {
-        self.masm.load_mem(
+        /*self.masm.load_mem(
             MachineMode::Int64,
             AnyReg::Reg(to),
             Mem::Base(
                 Reg::from(REG_CALLFRAME),
                 offset_of!(CallFrame, registers) as _,
             ),
-        )
+        )*/
+        self.masm.lea(
+            to,
+            Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, registers) as _),
+        );
         /*
         self.masm.lea(
             to,
@@ -704,7 +708,7 @@ pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
 }
 
 pub unsafe extern "C" fn __safepoint(rt: &mut Runtime) {
-    (&mut *rt).heap.safepoint();
+    // (&mut *rt).heap.safepoint();
 }
 use capstone::prelude::*;
 #[cfg(target_arch = "x86_64")]
@@ -753,7 +757,7 @@ pub extern "C" fn __jit_call_no_args(func: Value, this: Value, rt: &mut Runtime)
 
 pub unsafe extern "C" fn __jit_load_global(rt: &mut Runtime, n: Value) -> JITResult {
     let s = unwrap!(n.to_string(rt));
-    let global = rt.globals.get().get(&s).copied();
+    let global = rt.globals.get(&s).copied();
     match global {
         Some(val) => JITResult::Ok(val),
         None => JITResult::Err(Value::from(
@@ -812,8 +816,3 @@ pub extern "C" fn __put(rt: &mut Runtime, mut base: Value, id: Value, val: Value
         _ => JITResult::Ok(Value::undefined()),
     }
 }
-
-pub struct Empty;
-
-impl Traceable for Empty {}
-impl Finalizer for Empty {}

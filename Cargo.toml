@@ -16,7 +16,7 @@ smallvec = "*"
 futures = "0.3"
 log = "0.4"
 libc = "0.2"
-mimalloc = "*"
+mimalloc = { version = "*", default-features = false }
 hmap = "0.1"
 chrono = "*"
 bv = "0.11"

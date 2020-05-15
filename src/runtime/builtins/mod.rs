@@ -26,7 +26,7 @@ macro_rules! native_fn {
                 name: Value::from(name),
                 native: $func,
             }),
-            Some($rt.function_prototype.to_heap()),
+            Some($rt.function_prototype),
         )))
     }};
 }

@@ -5,28 +5,27 @@ use crate::runtime;
 use crate::runtime::deref_ptr::DerefPointer;
 use runtime::value::*;
 use virtual_reg::*;
-
 #[repr(C)]
 pub struct CallFrame {
-    pub registers: Vec<Value>,
+    pub registers: [Value; 255],
     /// a.k.a arguments
     pub entries: Vec<Value>,
     pub this: Value,
     pub func: Value,
     pub ip: usize,
     pub bp: usize,
-    pub code: Handle<CodeBlock>,
+    pub code: crate::Rc<CodeBlock>,
     pub handlers: Vec<usize>,
     pub exit_on_return: bool,
     pub rreg: VirtualRegister,
 }
 
 impl CallFrame {
-    pub fn new(func: Value, code: Handle<CodeBlock>, this: Value) -> Self {
+    pub fn new(func: Value, code: crate::Rc<CodeBlock>, this: Value) -> Self {
         Self {
             func,
-            code,
-            registers: vec![Value::undefined(); code.tmp_regs_count as usize],
+            code: code.clone(),
+            registers: { [Value::undefined(); 255] },
             entries: vec![Value::undefined(); code.arg_regs_count as usize],
             this,
             ip: 0,
@@ -60,33 +59,12 @@ impl CallFrame {
         }
     }
 
-    pub extern "C" fn push_handler(mut this: Handle<Self>, lbl: usize) {
+    pub extern "C" fn push_handler(mut this: &mut Self, lbl: usize) {
         this.handlers.push(lbl);
     }
 
-    pub extern "C" fn pop_handler_or_zero(mut this: Handle<Self>) -> usize {
+    pub extern "C" fn pop_handler_or_zero(mut this: &mut Self) -> usize {
         this.handlers.pop().unwrap_or(0)
-    }
-    #[no_mangle]
-    pub fn test_local(mut this: Handle<Self>, x: i32) -> Value {
-        unsafe { this.this }
-    }
-}
-
-impl Traceable for CallFrame {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        log::warn!("Trace callframe");
-        self.code.trace_with(tracer);
-        self.registers.trace_with(tracer);
-        self.entries.trace_with(tracer);
-        self.func.trace_with(tracer);
-        self.this.trace_with(tracer);
-    }
-}
-
-impl Finalizer for CallFrame {
-    fn finalize(&mut self) {
-        log::warn!("Fin callframe");
     }
 }
 
@@ -115,7 +93,7 @@ impl CallStack {
         &mut self,
         rt: &mut runtime::Runtime,
         func: Value,
-        code: Handle<CodeBlock>,
+        code: crate::Rc<CodeBlock>,
         this: Value,
     ) -> Result<(), Value> {
         if self.stack.len() + 1 >= self.limit {
@@ -140,25 +118,4 @@ impl CallStack {
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }
-}
-
-impl Traceable for CallStack {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        for frame in self.stack.iter() {
-            match frame {
-                StackEntry::Frame(f) => {
-                    f.func.trace_with(tracer);
-                    f.this.trace_with(tracer);
-                    f.registers.trace_with(tracer);
-                    f.entries.trace_with(tracer);
-                    f.code.trace_with(tracer);
-                }
-                _ => (),
-            }
-        }
-    }
-}
-
-impl Finalizer for CallStack {
-    fn finalize(&mut self) {}
 }

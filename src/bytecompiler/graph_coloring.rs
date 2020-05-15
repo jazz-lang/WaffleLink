@@ -20,7 +20,7 @@ const VERBOSE: bool = false;
 /// GraphColoring algorithm
 /// based on Appel's book section 11.4
 pub struct GraphColoring {
-    pub cf: Handle<CodeBlock>,
+    pub cf: crate::Rc<CodeBlock>,
     pub ig: InterferenceGraph,
 
     /// how many coloring iteration have we done?
@@ -78,7 +78,7 @@ pub struct GraphColoring {
 
 impl GraphColoring {
     /// starts coloring
-    pub fn start(cf: Handle<CodeBlock>, a: &BCLoopAnalysisResult) -> GraphColoring {
+    pub fn start(cf: crate::Rc<CodeBlock>, a: &BCLoopAnalysisResult) -> GraphColoring {
         GraphColoring::start_with_spill_history(LinkedHashMap::new(), 0, cf, a)
     }
 
@@ -86,7 +86,7 @@ impl GraphColoring {
     fn start_with_spill_history(
         spill_scratch_temps: LinkedHashMap<VirtualRegister, VirtualRegister>,
         iteration_count: usize,
-        mut cf: Handle<CodeBlock>,
+        mut cf: crate::Rc<CodeBlock>,
         analysis: &BCLoopAnalysisResult,
     ) -> GraphColoring {
         assert!(

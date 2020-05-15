@@ -37,5 +37,6 @@ pub mod interpreter;
 pub mod jit;
 pub mod runtime;
 
-/*#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;*/
+#[global_allocator]
+static GLOBAL: std::alloc::System = std::alloc::System;
+pub use common::rc::Rc;

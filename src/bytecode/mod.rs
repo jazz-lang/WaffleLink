@@ -95,15 +95,6 @@ impl BasicBlock {
     }
 }
 
-use crate::heap::api::{Finalizer, Traceable, Tracer};
-
-impl Finalizer for BasicBlock {
-    fn finalize(&mut self) {}
-}
-
-impl Traceable for BasicBlock {
-    fn trace_with(&self, _tracer: &mut Tracer) {}
-}
 use crate::jit::func::Code;
 use crate::jit::*;
 use crate::runtime::value::*;
@@ -190,29 +181,6 @@ impl CodeBlock {
     }
     pub fn predecessors_of(&self, bb: u32) -> &[u32] {
         self.cfg.as_ref().expect("CFG not computed").get_preds(&bb)
-    }
-}
-
-impl Traceable for CodeBlock {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        /*self.constants
-        .iter()
-        .for_each(|(_, val)| val.trace_with(tracer));*/
-        self.constants_
-            .iter()
-            .for_each(|item| item.trace_with(tracer));
-    }
-}
-
-impl Finalizer for CodeBlock {
-    fn finalize(&mut self) {
-        if let Some(mut cfg) = self.cfg.take() {
-            cfg.inner = IndexMap::new();
-        }
-        self.loopanalysis = None;
-        self.code.clear();
-        self.constants_.clear();
-        self.constants.clear();
     }
 }
 

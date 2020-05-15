@@ -67,21 +67,21 @@ pub struct Runtime {
     #[cfg(feature = "perf")]
     pub perf: perf::Perf,
     pub heap: Heap,
-    pub string_prototype: Rooted<Cell>,
-    pub object_prototype: Rooted<Cell>,
-    pub array_prototype: Rooted<Cell>,
-    pub number_prototype: Rooted<Cell>,
-    pub function_prototype: Rooted<Cell>,
-    pub generator_prototype: Rooted<Cell>,
-    pub process_prototype: Rooted<Cell>,
-    pub file_prototype: Rooted<Cell>,
-    pub module_prototype: Rooted<Cell>,
-    pub boolean_prototype: Rooted<Cell>,
-    pub byte_array_prototype: Rooted<Cell>,
-    pub globals: Rooted<HashMap<String, Value>>,
-    pub stack: Rooted<crate::interpreter::callstack::CallStack>,
+    pub string_prototype: CellPointer,
+    pub object_prototype: CellPointer,
+    pub array_prototype: CellPointer,
+    pub number_prototype: CellPointer,
+    pub function_prototype: CellPointer,
+    pub generator_prototype: CellPointer,
+    pub process_prototype: CellPointer,
+    pub file_prototype: CellPointer,
+    pub module_prototype: CellPointer,
+    pub boolean_prototype: CellPointer,
+    pub byte_array_prototype: CellPointer,
+    pub globals: HashMap<String, Value>,
+    pub stack: crate::interpreter::callstack::CallStack,
     pub code_space: CodeAllocator,
-    pub strings: Rooted<HashMap<String, Value>>,
+    pub strings: HashMap<String, Value>,
 }
 
 impl Runtime {
@@ -99,25 +99,25 @@ impl Runtime {
     pub fn new(c: Configs) -> Self {
         let mut heap = Heap::new();
         let object = heap.allocate(Cell::new(CellValue::None, None));
-        let func = heap.allocate(Cell::new(CellValue::None, Some(object.to_heap())));
+        let func = heap.allocate(Cell::new(CellValue::None, Some(object)));
 
         let mut this = Self {
             configs: c,
             #[cfg(feature = "perf")]
             perf: perf::Perf::new(),
-            boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            process_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            generator_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            globals: heap.allocate(HashMap::new()),
-            stack: heap.allocate(crate::interpreter::callstack::CallStack::new(999 * 2)),
-            module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
-            string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object.to_heap()))),
+            boolean_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            process_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            generator_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            globals: (HashMap::new()),
+            stack: (crate::interpreter::callstack::CallStack::new(999 * 2)),
+            module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
+            string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
             object_prototype: object,
             function_prototype: func,
-            strings: heap.allocate(HashMap::new()),
+            strings: HashMap::new(),
             number_prototype: heap.allocate(Cell::new(CellValue::None, None)),
             heap,
             code_space: CodeAllocator::new(),
@@ -127,29 +127,25 @@ impl Runtime {
         this
     }
     #[inline]
-    pub fn allocate_cell(&mut self, cell: Cell) -> Rooted<Cell> {
+    pub fn allocate_cell(&mut self, cell: Cell) -> CellPointer {
         self.heap.allocate(cell)
     }
+
     #[inline]
-    /// Make some value rooted.
-    pub fn make_rooted<T: Traceable + 'static>(&mut self, value: Handle<T>) -> Rooted<T> {
-        self.heap.root(value)
-    }
-    #[inline]
-    pub fn allocate<T: Traceable + 'static>(&mut self, val: T) -> Rooted<T> {
-        self.heap.allocate(val)
+    pub fn allocate(&mut self, cell: Cell) -> CellPointer {
+        self.heap.allocate(cell)
     }
     pub fn intern(&mut self, str: impl AsRef<str>) -> Value {
-        if let Some(x) = self.strings.get().get(str.as_ref()) {
+        if let Some(x) = self.strings.get(str.as_ref()) {
             return *x;
         }
         let val = Value::from(self.allocate_string(str.as_ref()));
         self.strings.insert(str.as_ref().to_string(), val);
         return val;
     }
-    pub fn allocate_string(&mut self, string: impl AsRef<str>) -> Rooted<Cell> {
+    pub fn allocate_string(&mut self, string: impl AsRef<str>) -> CellPointer {
         let s = string.as_ref().to_string();
-        let proto = self.string_prototype.to_heap();
+        let proto = self.string_prototype;
         let cell = Cell::new(CellValue::String(Box::new(s)), Some(proto));
 
         self.allocate_cell(cell)
@@ -190,7 +186,7 @@ impl Runtime {
                                     self.stack.push(
                                         unsafe { &mut *ptr },
                                         val,
-                                        regular.code,
+                                        regular.code.clone(),
                                         this,
                                     )?;
 
@@ -209,7 +205,6 @@ impl Runtime {
                                         self.stack.current_frame().entries[i] = *arg;
                                     }
                                     assert!(regular.code.jit_enter == 0);
-                                    let _r = self.stack.clone();
                                     let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
                                     self.stack.pop();
                                     match res {
@@ -231,7 +226,7 @@ impl Runtime {
                                 } else {
                                     if regular.code.hotness >= 1000 {
                                         if let RegularFunctionKind::Ordinal = regular.kind {
-                                            let mut gen = FullCodegen::new(regular.code);
+                                            let mut gen = FullCodegen::new(regular.code.clone());
                                             gen.compile(false);
                                             log::trace!(
                                                 "Disassembly for '{}'",
@@ -247,27 +242,21 @@ impl Runtime {
                                                 std::mem::transmute(code.instruction_start())
                                             };
                                             let x = unsafe { &mut *ptr };
-                                            let _ = self.stack.push(x, val, regular.code, this);
+                                            let _ =
+                                                self.stack.push(x, val, regular.code.clone(), this);
                                             for (i, arg) in args.iter().enumerate() {
                                                 if i >= self.stack.current_frame().entries.len() {
                                                     break;
                                                 }
                                                 self.stack.current_frame().entries[i] = *arg;
                                             }
-                                            let _r = self.stack.clone();
                                             let mut cur = self.stack.current_frame();
-                                            drop(_r);
                                             match func(
                                                 self,
                                                 cur.get_mut(),
                                                 code.osr_table.labels[0],
                                             ) {
                                                 JITResult::Ok(val) => {
-                                                    assert!(
-                                                        self.stack.get() as *const _ as *const u8
-                                                            as usize
-                                                            != 0x19
-                                                    );
                                                     self.stack.pop();
                                                     regular.code.jit_code = Some(code);
                                                     return Ok(val);
@@ -287,14 +276,19 @@ impl Runtime {
                                 }
                             }
                             // unsafe code block is actually safe,we just access heap.
-                            self.stack
-                                .push(unsafe { &mut *ptr }, val, regular.code, this)?;
+                            self.stack.push(
+                                unsafe { &mut *ptr },
+                                val,
+                                regular.code.clone(),
+                                this,
+                            )?;
                             for (i, arg) in args.iter().enumerate() {
                                 if i >= self.stack.current_frame().entries.len() {
                                     break;
                                 }
                                 self.stack.current_frame().entries[i] = *arg;
                             }
+                            let _c = regular.code.clone();
                             self.stack.current_frame().exit_on_return = true;
                             match self.interpret() {
                                 Return::Return(val) => return Ok(val),
@@ -308,7 +302,7 @@ impl Runtime {
             }
         }
         let key = self.allocate_string("call");
-        if let Some(call) = func.lookup(self, Value::from(key.to_heap()))? {
+        if let Some(call) = func.lookup(self, Value::from(key))? {
             return self.call(call, this, args);
         }
         return Err(Value::from(self.allocate_string("not a function")));

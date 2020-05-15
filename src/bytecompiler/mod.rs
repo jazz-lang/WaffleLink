@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use value::*;
 use virtual_reg::*;
 pub struct ByteCompiler {
-    pub code: Rooted<CodeBlock>,
+    pub code: crate::Rc<CodeBlock>,
     vid: i32,
     args: i32,
     free_args: std::collections::VecDeque<VirtualRegister>,
@@ -45,7 +45,7 @@ impl ByteCompiler {
         id as _
     }
     pub fn new(rt: &mut Runtime) -> Self {
-        let block = rt.allocate(CodeBlock {
+        let block = crate::Rc::new(CodeBlock {
             constants: Default::default(),
             constants_: vec![],
             arg_regs_count: 0,
@@ -287,11 +287,11 @@ impl ByteCompiler {
     pub fn set_var(&mut self, name: String, new: VirtualRegister) {
         self.def_var(name, new);
     }
-    pub fn finish(mut self, rt: &mut Runtime) -> Rooted<CodeBlock> {
+    pub fn finish(mut self, rt: &mut Runtime) -> crate::Rc<CodeBlock> {
         self.code.arg_regs_count = self.args as _;
         self.code.tmp_regs_count = 255;
 
-        strength_reduction::regalloc_and_reduce_strength(self.code.to_heap(), rt);
+        strength_reduction::regalloc_and_reduce_strength(self.code.clone(), rt);
         self.code
     }
 }
@@ -326,7 +326,7 @@ pub struct Context<'a> {
     pub builder: ByteCompiler,
     pub parent: Option<DerefPointer<Self>>,
     pub fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
-    pub functions: Rc<RefCell<Vec<(Rooted<CodeBlock>, VirtualRegister, String)>>>,
+    pub functions: Rc<RefCell<Vec<(crate::Rc<CodeBlock>, VirtualRegister, String)>>>,
     pub used_upvars: indexmap::IndexMap<String, i32>,
 }
 
@@ -514,7 +514,7 @@ impl<'a> Context<'a> {
         let code = ctx.builder.finish(self.rt);
         let f = function_from_codeblock(
             self.rt,
-            code.to_heap(),
+            code.clone(),
             &vname
                 .as_ref()
                 .map(|x| x.to_string())
@@ -864,7 +864,7 @@ impl<'a> Context<'a> {
     pub fn new(
         rt: &'a mut Runtime,
         fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
-        functions: Rc<RefCell<Vec<(Rooted<CodeBlock>, VirtualRegister, String)>>>,
+        functions: Rc<RefCell<Vec<(crate::Rc<CodeBlock>, VirtualRegister, String)>>>,
         parent: Option<DerefPointer<Context<'_>>>,
     ) -> Self {
         let mut builder = ByteCompiler::new(rt);
@@ -880,7 +880,7 @@ impl<'a> Context<'a> {
     }
 }
 
-pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>, MsgWithPos> {
+pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<crate::Rc<CodeBlock>, MsgWithPos> {
     let ast = Box::new(Expr {
         pos: Position::new(0, 0),
         expr: ExprKind::Block(ast.to_vec()),
@@ -908,7 +908,7 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<Rooted<CodeBlock>,
 
 use frontend::token::*;
 
-pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: &str) -> Value {
+pub fn function_from_codeblock(rt: &mut Runtime, code: crate::Rc<CodeBlock>, name: &str) -> Value {
     //let mut b = String::new();
     //code.dump(&mut b, rt).unwrap();
     //println!("\nfunction {}(...): \n{}", name, b);
@@ -922,7 +922,7 @@ pub fn function_from_codeblock(rt: &mut Runtime, code: Handle<CodeBlock>, name: 
         arguments: vec![],
         source: String::new(),
     };
-    let proto = rt.function_prototype.to_heap();
+    let proto = rt.function_prototype;
     let f = rt.allocate_cell(Cell::new(
         CellValue::Function(Function::Regular(func)),
         Some(proto),

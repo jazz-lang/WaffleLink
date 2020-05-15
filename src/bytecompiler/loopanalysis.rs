@@ -1,14 +1,14 @@
 use crate::bytecode;
 use crate::common;
+
 use bytecode::*;
-use crate::heap::api::Handle;
 use common::multi_map::*;
 use common::tree::*;
 use hashlink::*;
 pub const TRACE_LOOPANALYSIS: bool = false;
-pub fn loopanalysis(mut code: Handle<CodeBlock>) {
+pub fn loopanalysis(mut code: crate::Rc<CodeBlock>) {
     let cfg = code.cfg.as_ref().unwrap();
-    let dominators = compute_dominators(code, cfg);
+    let dominators = compute_dominators(code.clone(), cfg);
     let idoms = compute_immediate_dominators(&dominators);
     let domtree = compute_domtree(0, &idoms);
     let loops = compute_loops(&domtree, cfg);
@@ -46,7 +46,7 @@ pub struct BCLoopAnalysisResult {
     pub loop_depth: LinkedHashMap<u32, usize>,
 }
 
-fn compute_dominators(cf: Handle<CodeBlock>, cfg: &CodeCFG) -> LinkedMultiMap<u32, u32> {
+fn compute_dominators(cf: crate::Rc<CodeBlock>, cfg: &CodeCFG) -> LinkedMultiMap<u32, u32> {
     let mut dominators = LinkedMultiMap::new();
     let all_blocks = {
         let mut ret = LinkedHashSet::new();

@@ -92,7 +92,7 @@ impl Runtime {
                 (CellValue::ByteArray(x), CellValue::ByteArray(y)) => {
                     return x == y;
                 }
-                _ => lhs.as_cell().inner() == rhs.as_cell().inner(),
+                _ => lhs.as_cell().raw == rhs.as_cell().raw,
             }
         } else {
             lhs == rhs
@@ -187,7 +187,7 @@ impl Runtime {
                                     let _ = self.stack.push(
                                         unsafe { &mut *ptr },
                                         val,
-                                        regular.code,
+                                        regular.code.clone(),
                                         this,
                                     );
 
@@ -230,7 +230,7 @@ impl Runtime {
                                                 "Compiling function after {} calls",
                                                 regular.code.hotness / 50
                                             );
-                                            let mut gen = FullCodegen::new(regular.code);
+                                            let mut gen = FullCodegen::new(regular.code.clone());
                                             gen.compile(false);
                                             log::trace!(
                                                 "Disassembly for '{}'",
@@ -246,7 +246,8 @@ impl Runtime {
                                                 std::mem::transmute(code.instruction_start())
                                             };
                                             let x = unsafe { &mut *ptr };
-                                            let _ = self.stack.push(x, val, regular.code, this);
+                                            let _ =
+                                                self.stack.push(x, val, regular.code.clone(), this);
                                             let mut cur = self.stack.current_frame();
                                             for (i, arg) in args.iter().enumerate() {
                                                 if i >= self.stack.current_frame().entries.len() {
@@ -278,10 +279,12 @@ impl Runtime {
                                 }
                             }
                             // unsafe code block is actually safe,we just access heap.
-                            match self
-                                .stack
-                                .push(unsafe { &mut *ptr }, val, regular.code, this)
-                            {
+                            match self.stack.push(
+                                unsafe { &mut *ptr },
+                                val,
+                                regular.code.clone(),
+                                this,
+                            ) {
                                 Err(e) => return C::Err(e),
                                 _ => (),
                             }
@@ -305,7 +308,7 @@ impl Runtime {
             }
         }
         let key = self.allocate_string("call");
-        if let Some(call) = match func.lookup(self, Value::from(key.to_heap())) {
+        if let Some(call) = match func.lookup(self, Value::from(key)) {
             Ok(x) => x,
             Err(e) => return C::Err(e),
         } {
@@ -317,8 +320,8 @@ impl Runtime {
         return C::Err(Value::from(self.allocate_string("not a function")));
     }
     pub fn interpret(&mut self) -> Return {
-        let mut current = self.stack.current_frame();
         loop {
+            let mut current = self.stack.current_frame();
             let bp = current.bp;
             let ip = current.ip;
             let ins = current.code.code[bp].code[ip];
@@ -374,12 +377,12 @@ impl Runtime {
                                 } else {
                                     if *hotness >= 1000 {
                                         log::trace!("Loop is hot! Doin OSR");
-                                        let mut gen = FullCodegen::new(current.code);
+                                        let mut gen = FullCodegen::new(current.code.clone());
                                         gen.compile(false);
                                         let code = gen.finish(self, true);
                                         let osr = &code.osr_table;
                                         let osr_enter = osr_enter.unwrap();
-                                        let mut bytecode = current.code;
+                                        let mut bytecode = current.code.clone();
                                         log::trace!(
                                             "Continue at 0x{:x}",
                                             code.osr_table.labels[osr_enter]
@@ -448,7 +451,7 @@ impl Runtime {
                         Ok(x) => x,
                         Err(e) => return Return::Error(e),
                     };
-                    let global = self.globals.get().get(&name).copied();
+                    let global = self.globals.get(&name).copied();
                     if global.is_none() {
                         return Return::Error(Value::from(
                             self.allocate_string(format!("Global '{}' not found", name)),
@@ -763,7 +766,7 @@ impl Runtime {
                     }
                 }
                 Ins::NewObject { dst } => {
-                    let proto = Some(self.object_prototype.to_heap());
+                    let proto = Some(self.object_prototype);
                     let cell = Cell::new(CellValue::None, proto);
                     *current.r_mut(dst) = Value::from(self.allocate_cell(cell));
                 }

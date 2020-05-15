@@ -3,6 +3,7 @@ pub mod data_segment;
 pub mod mem;
 pub mod multi_map;
 pub mod os;
+pub mod rc;
 pub mod tree;
 
 use std::cmp::Ordering;

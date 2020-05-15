@@ -18,7 +18,6 @@
 
 use crate::bytecode::*;
 use crate::runtime::value::Value;
-use crate::heap::api::Handle;
 use def::*;
 use std::collections::HashMap;
 use virtual_reg::*;
@@ -82,7 +81,7 @@ fn possibly_throws(x: &[Ins]) -> bool {
 }
 
 impl ConstantFolding {
-    pub fn run(mut code: Handle<CodeBlock>) {
+    pub fn run(mut code: crate::Rc<CodeBlock>) {
         let mut constants = std::collections::HashMap::new();
         for (i, c) in code.constants.iter().enumerate() {
             if is_constant(*c.0) {
@@ -202,7 +201,7 @@ impl ConstantFolding {
 pub struct LocalCSE;
 
 impl LocalCSE {
-    pub fn run(code: Handle<CodeBlock>) {
+    pub fn run(code: crate::Rc<CodeBlock>) {
         //return;
         for bb in code.clone().code.iter_mut() {
             let mut map = HashMap::new();
@@ -270,7 +269,7 @@ impl CleanPass {
         return empty_blocks;
     }
     /// Remove empty basic blocks from function.
-    fn remove_empty_blocks(code: Handle<CodeBlock>) {
+    fn remove_empty_blocks(code: crate::Rc<CodeBlock>) {
         const VERBOSE: bool = false;
         log::trace!("Code before removing empty blocks:");
         code.trace_code(true);
@@ -299,7 +298,7 @@ impl CleanPass {
         code.trace_code(true);
     }
 
-    pub fn remove_dead_blocks(code: Handle<CodeBlock>) {
+    pub fn remove_dead_blocks(code: crate::Rc<CodeBlock>) {
         use crate::common::bitvec::BitVector;
         let mut seen = BitVector::new(code.code.len());
         seen.insert(0);
@@ -316,7 +315,7 @@ impl CleanPass {
     }
 
     fn retain_basic_blocks(
-        mut code: Handle<CodeBlock>,
+        mut code: crate::Rc<CodeBlock>,
         keep: &crate::common::bitvec::BitVector,
         _x: bool,
     ) {
@@ -341,7 +340,7 @@ impl CleanPass {
             }
         }
     }
-    pub fn run(code: Handle<CodeBlock>) {
+    pub fn run(code: crate::Rc<CodeBlock>) {
         Self::remove_empty_blocks(code);
     }
 }
@@ -355,24 +354,26 @@ use super::interference_graph::InterferenceGraph;
 impl DCE {}
 
 pub fn regalloc_and_reduce_strength(
-    mut code: Handle<CodeBlock>,
+    mut code: crate::Rc<CodeBlock>,
     _rt: &mut crate::runtime::Runtime,
 ) {
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
     // replace jumps
-    CleanPass::remove_empty_blocks(code);
+    CleanPass::remove_empty_blocks(code.clone());
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
     // delete unused blocks
-    CleanPass::remove_dead_blocks(code);
+    CleanPass::remove_dead_blocks(code.clone());
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
 
-    LocalCSE::run(code);
+    LocalCSE::run(code.clone());
     //ConstantFolding::run(code);
 
-    super::loopanalysis::loopanalysis(code);
+    super::loopanalysis::loopanalysis(code.clone());
 
-    let ra =
-        super::graph_coloring::GraphColoring::start(code, &code.loopanalysis.as_ref().unwrap());
+    let ra = super::graph_coloring::GraphColoring::start(
+        code.clone(),
+        &code.loopanalysis.as_ref().unwrap(),
+    );
 
     for (temp, real) in ra.get_assignments() {
         for bb in code.code.iter_mut() {
