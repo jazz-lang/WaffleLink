@@ -69,7 +69,32 @@ impl ByteCompiler {
             strs: Default::default(),
         }
     }
-
+    pub fn try_catch(&mut self) -> (impl FnMut(),impl FnMut()) {
+        let p = self.current;
+        let p2 = self.code.code[p as usize].code.len();
+        self.code.code[p as usize].code.push(Ins::Jump { dst: 0 }); // this is replaced later.
+        let this = unsafe { &mut *(self as *mut Self) };
+        let this2 = unsafe { &mut *(self as *mut Self) };
+        (
+            move || {
+                this.code.code[p as usize].code[p2 as usize] = Ins::TryCatch {
+                    try_: this.current,
+                    reg: VirtualRegister::argument(0),
+                    catch: 0
+                }
+            },
+            move || {
+                match &mut this2.code.code[p as usize].code[p2 as usize] {
+                    Ins::TryCatch {
+                        catch,..
+                    } => {
+                        *catch = this2.current;
+                    }
+                    _ => unreachable!()
+                }
+            }
+        )
+    }
     pub fn cjmp(&mut self, val: VirtualRegister) -> (impl FnMut(), impl FnMut()) {
         let p = self.current;
         let p2 = self.code.code[p as usize].code.len();
@@ -544,6 +569,35 @@ impl<'a> Context<'a> {
             ExprKind::Function(name, params, body) => {
                 self.compile_function(params, body, name.clone())
             }
+            ExprKind::Try(t,name,c) => {
+                let (mut try_,mut catch) = self.builder.try_catch();
+                let dst = self.builder.vreg();
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                try_();
+                let e = self.compile(t)?;
+                self.builder.mov(dst,e);
+                let mut j = self.builder.jmp();
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                catch();
+                let locals = self.builder.vars.clone();
+                let v = self.builder.vreg();
+                self.builder.mov(v,VirtualRegister::argument(0));
+                self.builder.def_var(name.to_owned(),v);
+                let e = self.compile(c)?;
+                self.builder.vars = locals;
+                self.builder.emit(Ins::PopCatch);
+                self.builder.mov(dst,e);
+                let mut j2 = self.builder.jmp();
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
+                j();
+                j2();
+                Ok(dst)
+
+
+            }
             ExprKind::Throw(e) => {
                 let x = self.compile(e)?;
                 self.builder.emit(Ins::Throw { src: x });
@@ -562,7 +616,7 @@ impl<'a> Context<'a> {
                         for x in v.iter() {
                             last = Some(this.compile(x)?);
                         }
-                        let ret = if this.builder.code.code[this.builder.current as usize]
+                        /*let ret = if this.builder.code.code[this.builder.current as usize]
                             .code
                             .last()
                             .expect(&format!("{}", {
@@ -589,8 +643,8 @@ impl<'a> Context<'a> {
                             }
                         } else {
                             false
-                        };
-                        Ok((last.unwrap(), ret))
+                        };*/
+                        Ok((last.unwrap(), false))
                     })?;
                     if last.is_local() && last.to_local() == 0 {
                         let dst = self.builder.vreg();
@@ -598,7 +652,9 @@ impl<'a> Context<'a> {
                         self.builder.emit(Ins::Mov { dst, src: x });
                         return Ok(dst);
                     } else {
-                        return Ok(last);
+                        let r = self.builder.vreg();
+                        self.builder.emit(Ins::Mov {dst: r,src: last});
+                        return Ok(r);
                     }
                 }
             }

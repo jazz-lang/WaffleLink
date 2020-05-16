@@ -20,11 +20,34 @@ pub struct DivGenerator {
 
 impl FullGenerator for DivGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
-        // TODO: Fast path: number + number, slow path: invoke __div_slow_path.
+
+        self.slow_path = gen.masm.create_label();
+        self.end = gen.masm.create_label();
         gen.load_registers2(self.lhs,self.rhs,CCALL_REG_PARAMS[0],CCALL_REG_PARAMS[1]);
-        gen.masm.raw_call(__div_slow_path as *const _);
+        gen.masm.emit_comment("if not_number(lhs) && not_number(rhs) goto slow_path");
+        gen.masm.jmp_is_number(self.slow_path,CCALL_REG_PARAMS[0]);
+        gen.masm.jmp_is_number(self.slow_path,CCALL_REG_PARAMS[1]);
+        let not_int = gen.masm.create_label();
+        let skip = gen.masm.create_label();
+        gen.masm.jmp_nis_int32(not_int,CCALL_REG_PARAMS[0]);
+        gen.masm.cvt_int32_to_double(CCALL_REG_PARAMS[0],XMM0);
+        gen.masm.jump(skip);
+        gen.masm.bind_label(not_int);
+        gen.masm.as_double(CCALL_REG_PARAMS[0],XMM0);
+        gen.masm.bind_label(skip);
+        let not_int = gen.masm.create_label();
+        let skip = gen.masm.create_label();
+        gen.masm.jmp_nis_int32(not_int,CCALL_REG_PARAMS[1]);
+        gen.masm.cvt_int32_to_double(CCALL_REG_PARAMS[1],XMM1);
+        gen.masm.jump(skip);
+        gen.masm.bind_label(not_int);
+        gen.masm.as_double(CCALL_REG_PARAMS[1],XMM1);
+        gen.masm.bind_label(skip);
+        gen.masm.float_div(MachineMode::Float64,XMM0,XMM0,XMM1);
+        gen.masm.new_number(XMM0);
         gen.store_register(self.dst);
-        false
+        gen.masm.bind_label(self.end);
+        true
     }
     fn slow_path(&mut self, gen: &mut FullCodegen) {
         gen.masm.emit_comment(format!("({}) slow_path:", self.ins));

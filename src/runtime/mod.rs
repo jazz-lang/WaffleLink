@@ -129,6 +129,7 @@ impl Runtime {
     }
     pub fn safepoint(&mut self) {
         if self.heap.safepoint() {
+            log::debug!("{} bytes allocated when threshold is {}, running GC cycle.",self.heap.allocated(),self.heap.threshold());
             Collection::run(self);
 
         }

@@ -28,7 +28,7 @@ pub struct MacroAssembler {
     pub(crate) comments: Comments,
     pub(crate) positions: PositionTable,
     pub(crate) scratch_registers: ScratchRegisters,
-    handlers: Vec<Handler>,
+    pub(crate) handlers: Vec<Handler>,
 }
 
 impl MacroAssembler {
@@ -50,6 +50,12 @@ impl MacroAssembler {
             scratch_registers: ScratchRegisters::new(),
             handlers: vec![],
         }
+    }
+
+    pub fn with_buf(buffer: AsmBuffer) -> Self {
+        let mut this = Self::new();
+        this.asm.code = buffer;
+        this
     }
 
     pub fn jit(mut self, vm: &mut Runtime, stacksize: i32, desc: JitDescriptor) -> Code {
@@ -194,7 +200,8 @@ impl MacroAssembler {
     }
 
     pub fn emit_u8(&mut self, value: u8) {
-        self.asm.code_mut().write_u8(value).unwrap();
+        self.asm.emit_u8(value);
+        //self.asm.code_mut().write_u8(value).unwrap();
     }
 
     pub fn emit_u8_at(&mut self, pos: i32, value: u8) {
@@ -202,10 +209,12 @@ impl MacroAssembler {
     }
 
     pub fn emit_u32(&mut self, value: u32) {
-        self.asm
+        /*self.asm
             .code_mut()
             .write_u32::<LittleEndian>(value)
-            .unwrap();
+            .unwrap();*/
+
+        self.asm.emit_u32(value);
     }
 
     pub fn emit_u32_at(&mut self, pos: i32, value: u32) {
@@ -214,11 +223,14 @@ impl MacroAssembler {
     }
 
     pub fn emit_u64(&mut self, value: u64) {
-        self.asm
+        /*self.asm
             .code_mut()
             .write_u64::<LittleEndian>(value)
             .unwrap();
+        */
+        self.asm.emit_u64(value);
     }
+
 
     pub fn copy(&mut self, mode: MachineMode, dest: AnyReg, src: AnyReg) {
         assert!(dest.is_reg() == src.is_reg());
@@ -229,7 +241,7 @@ impl MacroAssembler {
             self.copy_freg(mode, dest.freg(), src.freg());
         }
     }
-    pub fn emit_exception_handler(
+    /*pub fn emit_exception_handler(
         &mut self,
         span: (usize, usize),
         catch: usize,
@@ -242,7 +254,8 @@ impl MacroAssembler {
             offset,
             native: true,
         });
-    }
+    }*/
+
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

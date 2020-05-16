@@ -7,6 +7,7 @@ use data_segment::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::ptr;
+use smallvec::alloc::alloc::handle_alloc_error;
 
 pub enum JitFct {
     Compiled(Code),
@@ -183,10 +184,10 @@ impl Code {
             }
         }*/
         for handler in &mut handlers {
-            handler.try_start = instruction_start.offset(handler.try_start).to_usize();
-            handler.try_end = instruction_start.offset(handler.try_end).to_usize();
-            handler.catch = instruction_start.offset(handler.catch).to_usize();
-            handler.native = true;
+            handler.pointer = instruction_start.offset(handler.load).to_usize();
+            unsafe {
+                *instruction_start.offset(handler.offset).to_mut_ptr::<usize>() = handler.pointer;
+            }
         }
         for (pos, id) in &to_finish {
             table.labels[*id] = instruction_start.offset(*pos).to_usize();
@@ -438,9 +439,7 @@ pub enum LazyCompilationSite {
 
 #[derive(Debug)]
 pub struct Handler {
-    pub try_start: usize,
-    pub try_end: usize,
-    pub catch: usize,
-    pub offset: Option<i32>,
-    pub native: bool,
+    pub offset: usize,
+    pub pointer: usize,
+    pub load: usize,
 }

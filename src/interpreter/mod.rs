@@ -383,10 +383,7 @@ impl Runtime {
                                         let osr = &code.osr_table;
                                         let osr_enter = osr_enter.unwrap();
                                         let mut bytecode = current.code.clone();
-                                        log::trace!(
-                                            "Continue at 0x{:x}",
-                                            code.osr_table.labels[osr_enter]
-                                        );
+
                                         let func: extern "C" fn(
                                             &mut Runtime,
                                             &mut CallFrame,
@@ -397,17 +394,11 @@ impl Runtime {
                                         };
                                         match func(self, current.get_mut(), osr.labels[osr_enter]) {
                                             JITResult::Err(e) => {
-                                                /*if current.code.jit_code.is_some() {
-                                                    std::mem::forget(current.code.jit_code.take())
-                                                }*/
                                                 bytecode.jit_code = Some(code);
                                                 self.stack.pop();
                                                 return Return::Error(e);
                                             }
                                             JITResult::Ok(x) => {
-                                                /*if current.code.jit_code.is_some() {
-                                                    std::mem::forget(current.code.jit_code.take())
-                                                }*/
                                                 bytecode.jit_code = Some(code);
                                                 self.stack.pop();
                                                 return Return::Return(x);
@@ -473,17 +464,11 @@ impl Runtime {
                 Ins::TryCatch { try_, catch, reg } => {
                     current.bp = try_ as _;
                     current.ip = 0;
-                    /*current.handlers.push(Handler {
-                        try_start: try_ as usize,
-                        catch: catch as usize,
-                        offset: None,
-                        try_end: 0,
-                        native: false,
-                    });*/
+
                     current.handlers.push(catch as _);
                 }
                 Ins::PopCatch => {
-                    current.handlers.pop().unwrap();
+                    current.handlers.pop();
                 }
                 Ins::Add { dst, lhs, src, .. } => {
                     let y = current.r(src);

@@ -203,19 +203,20 @@ impl FullCodegen {
             REG_TMP1,
             CallFrame::pop_handler_or_zero as usize as i64,
         );
+        self.masm.call_reg(REG_TMP1);
+        self.masm.copy_reg(MachineMode::Int64,REG_TMP2,REG_RESULT);
         let no_handler = self.masm.create_label();
         self.masm.cmp_reg_imm(MachineMode::Int64, REG_RESULT, 0);
         self.masm.jump_if(CondCode::Equal, no_handler);
         self.masm
             .copy_reg(MachineMode::Int64, REG_RESULT, REG_RESULT2);
         self.store_register(VirtualRegister::argument(0));
+        self.masm.copy_reg(MachineMode::Int64,REG_RESULT,REG_TMP2);
+        self.masm.load_int_const(MachineMode::Int64,REG_TMP2,0);
         // jump to handler in current function.
         self.masm.jump_reg(REG_RESULT);
         self.masm.bind_label(no_handler);
-        fn x() {
-            panic!();
-        }
-        //self.masm.raw_call(x as *const u8);
+
         // restore Err discriminant
         self.masm
             .load_int_const(MachineMode::Int64, REG_RESULT, unsafe {
@@ -225,28 +226,43 @@ impl FullCodegen {
 
         self.masm.bind_label(end);
     }
-    pub fn push_handler(&mut self, lbl: Label) {
-        self.masm
-            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
-        self.masm.load_label(CCALL_REG_PARAMS[1], lbl);
-        self.masm.load_int_const(
-            MachineMode::Int64,
-            REG_TMP1,
-            CallFrame::push_handler as usize as i64,
-        );
-        self.masm.call_reg(REG_TMP1);
-    }
-    pub fn pop_handler(&mut self) {
-        self.masm
-            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
 
+    pub fn throw(&mut self,val: VirtualRegister) {
+
+        let disc = std::mem::discriminant(&JITResult::Err(Value::undefined()));
+
+        self.masm
+            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
         self.masm.load_int_const(
             MachineMode::Int64,
             REG_TMP1,
             CallFrame::pop_handler_or_zero as usize as i64,
         );
         self.masm.call_reg(REG_TMP1);
+        self.masm.copy_reg(MachineMode::Int64,REG_TMP2,REG_RESULT);
+        let no_handler = self.masm.create_label();
+        self.masm.cmp_reg_imm(MachineMode::Int64, REG_RESULT, 0);
+        self.masm.jump_if(CondCode::Equal, no_handler);
+        self.load_register(val);
+        self.store_register(VirtualRegister::argument(0));
+        self.masm.copy_reg(MachineMode::Int64,REG_RESULT,REG_TMP2);
+        self.masm.load_int_const(MachineMode::Int64,REG_TMP2,0);
+        // jump to handler in current function.
+        self.masm.jump_reg(REG_RESULT);
+        self.masm.bind_label(no_handler);
+
+        // restore Err discriminant
+        self.load_register(val);
+        self.masm.copy_reg(MachineMode::Int64,REG_RESULT2,REG_RESULT);
+        self.masm
+            .load_int_const(MachineMode::Int64, REG_RESULT, unsafe {
+                std::mem::transmute::<_, i64>(disc)
+            });
+
+        self.masm.jump(self.ret);
+
     }
+
     pub fn compile(&mut self, has_table: bool) {
         let mut labels = HashMap::new();
         for bb in self.code.code.iter() {
@@ -428,6 +444,10 @@ impl FullCodegen {
                             slow_paths.push(Box::new(x));
                         }
                     }
+                    Ins::Throw {src} => {
+                        self.throw(src);
+                    }
+
                     Ins::Return { val } => {
                         self.load_register(val);
                         self.masm
@@ -527,7 +547,10 @@ impl FullCodegen {
                     }
                     Ins::TryCatch { try_, catch, .. } => {
                         let lbl = labels.get(&catch).copied().unwrap();
-                        self.masm.load_label(CCALL_REG_PARAMS[1], lbl);
+
+                        self.masm.load_label(REG_RESULT, lbl);
+                        self.masm.emit_current_pos(REG_RESULT2);
+                        self.masm.int_add(MachineMode::Int64,CCALL_REG_PARAMS[1],REG_RESULT,REG_RESULT2);
                         self.masm
                             .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
                         self.masm.raw_call(CallFrame::push_handler as *const u8);
@@ -564,6 +587,7 @@ impl FullCodegen {
                         self.masm.raw_call(__jit_close_env as *const u8);
                         self.store_register(dst);
                     }
+
                     Ins::LoopHint { fdbk } => {
                         let id = self.masm.new_osr_entry();
                         match &mut self.code.feedback[fdbk as usize] {
@@ -708,7 +732,8 @@ pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
 }
 
 pub unsafe extern "C" fn __safepoint(rt: &mut Runtime) {
-    (&mut *rt).heap.safepoint();
+
+    (&mut *rt).safepoint();
 }
 use capstone::prelude::*;
 #[cfg(target_arch = "x86_64")]

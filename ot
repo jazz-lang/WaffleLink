@@ -1,0 +1,2170 @@
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,604 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,605 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,605 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,605 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecompiler::strength_reduction] Code before removing empty blocks:
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0001] load_this loc257
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0002] load_global loc258,id1
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0003] load_up loc261,0
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0004] load_up loc262,1
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0005] mul loc260,loc261,loc262
+2020-05-16 07:06:19,605 TRACE [waffle2::bytecode]   [0006] mul loc259,loc260,loc256
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0007] mov arg0,loc259
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0008] call loc263,loc258,loc257,arg0-arg0
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0009] safepoint
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0010] return loc263
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecompiler::strength_reduction] After: 
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0001] load_this loc257
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0002] load_global loc258,id1
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0003] load_up loc261,0
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0004] load_up loc262,1
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0005] mul loc260,loc261,loc262
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0006] mul loc259,loc260,loc256
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0007] mov arg0,loc259
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0008] call loc263,loc258,loc257,arg0-arg0
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0009] safepoint
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecode]   [0010] return loc263
+2020-05-16 07:06:19,606 INFO  [waffle2::bytecompiler::interference_graph] ---start building live set---
+2020-05-16 07:06:19,606 INFO  [waffle2::bytecompiler::interference_graph] ---local liveness analysis---
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecompiler::interference_graph] ---block 0---
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 0, pred: [], succ: [], uses: [], defs: [VirtualRegister(-257), VirtualRegister(-258), VirtualRegister(-259), VirtualRegister(-262), VirtualRegister(-263), VirtualRegister(-261), VirtualRegister(-260), VirtualRegister(-264)] }
+2020-05-16 07:06:19,606 INFO  [waffle2::bytecompiler::interference_graph] ---global liveness analysis---
+2020-05-16 07:06:19,606 INFO  [waffle2::bytecompiler::interference_graph] 1 blocks
+2020-05-16 07:06:19,606 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 0---
+2020-05-16 07:06:19,607 INFO  [waffle2::bytecompiler::interference_graph] finished in 1 iterations
+2020-05-16 07:06:19,607 INFO  [waffle2::bytecompiler::interference_graph] ---finish building live set---
+2020-05-16 07:06:19,607 INFO  [waffle2::bytecompiler::interference_graph] ---start building interference graph---
+2020-05-16 07:06:19,610 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,610 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc258
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc259
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc257
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc259
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc258
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc260
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc257
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc260
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc256
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc260
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc258
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc262
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc257
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc262
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc256
+2020-05-16 07:06:19,611 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc262
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc261
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc262
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc258
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc261
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc257
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc261
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc256
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc261
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc257
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc258
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc256
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc258
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc256
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc257
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,612 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,612 INFO  [waffle2::bytecompiler::interference_graph] ---finish building interference graph---
+2020-05-16 07:06:19,624 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,624 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecompiler::strength_reduction] Code before removing empty blocks:
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0001] jmp [%1]
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode] %1: 
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0000] mov loc257,id1
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0001] mov loc259,id1
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0002] get_by_id loc258,loc259,id2
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0003] load_up loc260,0
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0004] mov loc261,id3
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0005] mov arg0,loc260
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0006] mov arg1,loc256
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0007] close_env loc262, loc261, arg0-arg1
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0008] mov arg1,loc262
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0009] call loc263,loc258,loc257,arg1-arg1
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0010] safepoint
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode]   [0011] return loc263
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecompiler::strength_reduction] After: 
+2020-05-16 07:06:19,624 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0001] jmp [%1]
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode] %1: 
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0000] mov loc257,id1
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0001] mov loc259,id1
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0002] get_by_id loc258,loc259,id2
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0003] load_up loc260,0
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0004] mov loc261,id3
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0005] mov arg0,loc260
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0006] mov arg1,loc256
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0007] close_env loc262, loc261, arg0-arg1
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0008] mov arg1,loc262
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0009] call loc263,loc258,loc257,arg1-arg1
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0010] safepoint
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecode]   [0011] return loc263
+2020-05-16 07:06:19,625 INFO  [waffle2::bytecompiler::interference_graph] ---start building live set---
+2020-05-16 07:06:19,625 INFO  [waffle2::bytecompiler::interference_graph] ---local liveness analysis---
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecompiler::interference_graph] ---block 0---
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 0, pred: [], succ: [1], uses: [], defs: [VirtualRegister(-257)] }
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecompiler::interference_graph] ---block 1---
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 1, pred: [0], succ: [], uses: [VirtualRegister(-257)], defs: [VirtualRegister(-258), VirtualRegister(-260), VirtualRegister(-259), VirtualRegister(-261), VirtualRegister(-262), VirtualRegister(-263), VirtualRegister(-264)] }
+2020-05-16 07:06:19,625 INFO  [waffle2::bytecompiler::interference_graph] ---global liveness analysis---
+2020-05-16 07:06:19,625 INFO  [waffle2::bytecompiler::interference_graph] 2 blocks
+2020-05-16 07:06:19,625 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 0---
+2020-05-16 07:06:19,626 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 1---
+2020-05-16 07:06:19,626 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 2---
+2020-05-16 07:06:19,626 INFO  [waffle2::bytecompiler::interference_graph] finished in 3 iterations
+2020-05-16 07:06:19,626 INFO  [waffle2::bytecompiler::interference_graph] ---finish building live set---
+2020-05-16 07:06:19,626 INFO  [waffle2::bytecompiler::interference_graph] ---start building interference graph---
+2020-05-16 07:06:19,628 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 07:06:19,628 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 07:06:19,628 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc258
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc262
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc257
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc262
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,629 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc258
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc261
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc257
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc261
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc256
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc261
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc260
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc261
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc258
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc260
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc257
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc260
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc256
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc260
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc257
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc258
+2020-05-16 07:06:19,630 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc256
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc258
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc257
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc259
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc256
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc259
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc256
+2020-05-16 07:06:19,631 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc256 and loc257
+2020-05-16 07:06:19,631 INFO  [waffle2::bytecompiler::interference_graph] ---finish building interference graph---
+2020-05-16 07:06:19,641 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,641 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,641 TRACE [waffle2::bytecompiler::strength_reduction] Code before removing empty blocks:
+2020-05-16 07:06:19,641 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] jmp [%1]
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode] %1: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] mov loc256,id0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0001] mov loc257,loc256
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0002] mov loc258,id1
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0003] mov loc260,id1
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0004] get_by_id loc259,loc260,id2
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0005] mov loc261,id3
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0006] mov arg0,loc257
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0007] close_env loc262, loc261, arg0-arg0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0008] mov arg0,loc262
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0009] call loc263,loc259,loc258,arg0-arg0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0010] mov loc264,id4
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0011] safepoint
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0012] return loc264
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode] %2: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] safepoint
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0001] return loc264
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecompiler::strength_reduction] After: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode] %0: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] jmp [%1]
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode] %1: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] mov loc256,id0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0001] mov loc257,loc256
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0002] mov loc258,id1
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0003] mov loc260,id1
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0004] get_by_id loc259,loc260,id2
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0005] mov loc261,id3
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0006] mov arg0,loc257
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0007] close_env loc262, loc261, arg0-arg0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0008] mov arg0,loc262
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0009] call loc263,loc259,loc258,arg0-arg0
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0010] mov loc264,id4
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0011] safepoint
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0012] return loc264
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode] %2: 
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0000] safepoint
+2020-05-16 07:06:19,642 TRACE [waffle2::bytecode]   [0001] return loc264
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] ---start building live set---
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] ---local liveness analysis---
+2020-05-16 07:06:19,643 TRACE [waffle2::bytecompiler::interference_graph] ---block 0---
+2020-05-16 07:06:19,643 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 0, pred: [], succ: [1], uses: [], defs: [] }
+2020-05-16 07:06:19,643 TRACE [waffle2::bytecompiler::interference_graph] ---block 1---
+2020-05-16 07:06:19,643 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 1, pred: [0], succ: [], uses: [], defs: [VirtualRegister(-257), VirtualRegister(-258), VirtualRegister(-259), VirtualRegister(-261), VirtualRegister(-260), VirtualRegister(-262), VirtualRegister(-263), VirtualRegister(-264), VirtualRegister(-265)] }
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] ---global liveness analysis---
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] 2 blocks
+2020-05-16 07:06:19,643 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 0---
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] finished in 1 iterations
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] ---finish building live set---
+2020-05-16 07:06:19,643 INFO  [waffle2::bytecompiler::interference_graph] ---start building interference graph---
+2020-05-16 07:06:19,646 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 07:06:19,646 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 07:06:19,646 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,646 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,646 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,646 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,646 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc259
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc262
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc262 and loc258
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc262
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc259
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc261
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc258
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc261
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc257
+2020-05-16 07:06:19,647 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc261
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc258
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc259
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc257
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc259
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc258
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc260
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc257
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc260
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc257
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc257 and loc258
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] add move loc256 -> loc257
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-257)) does not interference with defines)
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 07:06:19,648 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 07:06:19,648 INFO  [waffle2::bytecompiler::interference_graph] ---finish building interference graph---
+2020-05-16 07:06:19,658 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,658 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,659 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,659 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19,659 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 2
+2020-05-16 07:06:19: 4
+2020-05-16 07:06:19: 6
+2020-05-16 07:06:19: 8
+2020-05-16 07:06:19,659 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 4
+2020-05-16 07:06:19: 8
+2020-05-16 07:06:19: 12
+2020-05-16 07:06:19: 16
+2020-05-16 07:06:19,659 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 6
+2020-05-16 07:06:19: 12
+2020-05-16 07:06:19: 18
+2020-05-16 07:06:19: 24
+2020-05-16 07:06:19,660 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19,660 TRACE [waffle2::runtime] Disassembly for '<anonymous>'
+  0x7f5e0b5b1040: pushq		%rbp
+  0x7f5e0b5b1041: movq		%rsp, %rbp
+  0x7f5e0b5b1044: subq		$0, %rsp
+  0x7f5e0b5b104b: movq		%rdi, %r15
+  0x7f5e0b5b104e: movq		%rsi, %r14
+  0x7f5e0b5b1051: jmpq		*%rdx
+		  // mov loc4,arg0
+  0x7f5e0b5b1053: movq		0x7f8(%r14), %rax
+  0x7f5e0b5b105a: movq		(%rax), %rax
+  0x7f5e0b5b105d: leaq		(%r14), %r10
+  0x7f5e0b5b1060: movq		%rax, 0x20(%r10)
+		  // load_this loc3
+  0x7f5e0b5b1064: movq		0x810(%r14), %rax
+  0x7f5e0b5b106b: leaq		(%r14), %r10
+  0x7f5e0b5b106e: movq		%rax, 0x18(%r10)
+		  // load_global loc2,id1
+  0x7f5e0b5b1072: movq		%r15, %rdi
+  0x7f5e0b5b1075: movabsq		$0x55594563fcd0, %rsi
+  0x7f5e0b5b107f: movq		-0x4e(%rip), %rax
+  0x7f5e0b5b1086: callq		*%rax
+  0x7f5e0b5b1088: cmpq		$1, %rax
+  0x7f5e0b5b108c: jne		0x7f5e0b5b10c4
+  0x7f5e0b5b1092: movq		%r14, %rdi
+  0x7f5e0b5b1095: movabsq		$0x55594434a6f0, %r10
+  0x7f5e0b5b109f: cmpq		$0, %rax
+  0x7f5e0b5b10a3: je		0x7f5e0b5b10b8
+  0x7f5e0b5b10a9: movq		%rdx, %rax
+  0x7f5e0b5b10ac: movq		0x7f8(%r14), %r10
+  0x7f5e0b5b10b3: movq		%rax, (%r10)
+  0x7f5e0b5b10b6: jmpq		*%rax
+  0x7f5e0b5b10b8: movq		$1, %rax
+  0x7f5e0b5b10bf: jmp		0x7f5e0b5b11c0
+  0x7f5e0b5b10c4: movq		%rdx, %rax
+  0x7f5e0b5b10c7: leaq		(%r14), %r10
+  0x7f5e0b5b10ca: movq		%rax, 0x10(%r10)
+		  // load_up loc1,0
+  0x7f5e0b5b10ce: movq		%r14, %rdi
+  0x7f5e0b5b10d1: xorl		%esi, %esi
+  0x7f5e0b5b10d3: movq		-0xaa(%rip), %rax
+  0x7f5e0b5b10da: callq		*%rax
+  0x7f5e0b5b10dc: leaq		(%r14), %r10
+  0x7f5e0b5b10df: movq		%rax, 8(%r10)
+		  // load_up loc0,1
+  0x7f5e0b5b10e3: movq		%r14, %rdi
+  0x7f5e0b5b10e6: movl		$1, %esi
+  0x7f5e0b5b10eb: movq		-0xca(%rip), %rax
+  0x7f5e0b5b10f2: callq		*%rax
+  0x7f5e0b5b10f4: leaq		(%r14), %r10
+  0x7f5e0b5b10f7: movq		%rax, (%r10)
+		  // mul loc0,loc1,loc0
+  0x7f5e0b5b10fa: leaq		(%r14), %rax
+  0x7f5e0b5b10fd: movq		8(%rax), %rdi
+  0x7f5e0b5b1101: movq		(%rax), %rsi
+  0x7f5e0b5b1104: movq		-0xeb(%rip), %rax
+  0x7f5e0b5b110b: callq		*%rax
+  0x7f5e0b5b110d: leaq		(%r14), %r10
+  0x7f5e0b5b1110: movq		%rax, (%r10)
+		  // mul loc0,loc0,loc4
+  0x7f5e0b5b1113: leaq		(%r14), %rax
+  0x7f5e0b5b1116: movq		(%rax), %rdi
+  0x7f5e0b5b1119: movq		0x20(%rax), %rsi
+  0x7f5e0b5b111d: movq		-0x10c(%rip), %rax
+  0x7f5e0b5b1124: callq		*%rax
+  0x7f5e0b5b1126: leaq		(%r14), %r10
+  0x7f5e0b5b1129: movq		%rax, (%r10)
+		  // mov arg0,loc0
+  0x7f5e0b5b112c: leaq		(%r14), %rax
+  0x7f5e0b5b112f: movq		(%rax), %rax
+  0x7f5e0b5b1132: movq		0x7f8(%r14), %r10
+  0x7f5e0b5b1139: movq		%rax, (%r10)
+		  // call loc0,loc2,loc3,arg0-arg0
+  0x7f5e0b5b113c: leaq		(%r14), %rax
+  0x7f5e0b5b113f: movq		0x10(%rax), %rdi
+  0x7f5e0b5b1143: leaq		(%r14), %rax
+  0x7f5e0b5b1146: movq		0x18(%rax), %rsi
+  0x7f5e0b5b114a: movq		%r15, %rdx
+  0x7f5e0b5b114d: movq		%r14, %rcx
+  0x7f5e0b5b1150: xorl		%r8d, %r8d
+  0x7f5e0b5b1153: xorl		%r9d, %r9d
+  0x7f5e0b5b1156: movq		-0x14d(%rip), %rax
+  0x7f5e0b5b115d: callq		*%rax
+  0x7f5e0b5b115f: cmpq		$1, %rax
+  0x7f5e0b5b1163: jne		0x7f5e0b5b119b
+  0x7f5e0b5b1169: movq		%r14, %rdi
+  0x7f5e0b5b116c: movabsq		$0x55594434a6f0, %r10
+  0x7f5e0b5b1176: cmpq		$0, %rax
+  0x7f5e0b5b117a: je		0x7f5e0b5b118f
+  0x7f5e0b5b1180: movq		%rdx, %rax
+  0x7f5e0b5b1183: movq		0x7f8(%r14), %r10
+  0x7f5e0b5b118a: movq		%rax, (%r10)
+  0x7f5e0b5b118d: jmpq		*%rax
+  0x7f5e0b5b118f: movq		$1, %rax
+  0x7f5e0b5b1196: jmp		0x7f5e0b5b11c0
+  0x7f5e0b5b119b: movq		%rdx, %rax
+  0x7f5e0b5b119e: leaq		(%r14), %r10
+  0x7f5e0b5b11a1: movq		%rax, (%r10)
+		  // safepoint
+  0x7f5e0b5b11a4: movq		%r15, %rdi
+  0x7f5e0b5b11a7: movq		-0x1a6(%rip), %rax
+  0x7f5e0b5b11ae: callq		*%rax
+		  // return loc0
+  0x7f5e0b5b11b0: leaq		(%r14), %rax
+  0x7f5e0b5b11b3: movq		(%rax), %rax
+  0x7f5e0b5b11b6: movq		%rax, %rdx
+  0x7f5e0b5b11b9: xorl		%eax, %eax
+  0x7f5e0b5b11bb: jmp		0x7f5e0b5b11c0
+  0x7f5e0b5b11c0: movq		%rbp, %rsp
+  0x7f5e0b5b11c3: popq		%rbp
+  0x7f5e0b5b11c4: retq		
+
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 8
+2020-05-16 07:06:19: 16
+2020-05-16 07:06:19: 24
+2020-05-16 07:06:19: 32
+2020-05-16 07:06:19,661 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 10
+2020-05-16 07:06:19: 20
+2020-05-16 07:06:19: 30
+2020-05-16 07:06:19: 40
+2020-05-16 07:06:19,661 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 12
+2020-05-16 07:06:19: 24
+2020-05-16 07:06:19: 36
+2020-05-16 07:06:19: 48
+2020-05-16 07:06:19,661 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 14
+2020-05-16 07:06:19: 28
+2020-05-16 07:06:19: 42
+2020-05-16 07:06:19: 56
+2020-05-16 07:06:19,661 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 16
+2020-05-16 07:06:19: 32
+2020-05-16 07:06:19: 48
+2020-05-16 07:06:19: 64
+2020-05-16 07:06:19,662 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 18
+2020-05-16 07:06:19: 36
+2020-05-16 07:06:19: 54
+2020-05-16 07:06:19: 72
+2020-05-16 07:06:19,662 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 20
+2020-05-16 07:06:19: 40
+2020-05-16 07:06:19: 60
+2020-05-16 07:06:19: 80
+2020-05-16 07:06:19,662 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 22
+2020-05-16 07:06:19: 44
+2020-05-16 07:06:19: 66
+2020-05-16 07:06:19: 88
+2020-05-16 07:06:19,662 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 24
+2020-05-16 07:06:19: 48
+2020-05-16 07:06:19: 72
+2020-05-16 07:06:19: 96
+2020-05-16 07:06:19,663 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 26
+2020-05-16 07:06:19: 52
+2020-05-16 07:06:19: 78
+2020-05-16 07:06:19: 104
+2020-05-16 07:06:19,663 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 28
+2020-05-16 07:06:19: 56
+2020-05-16 07:06:19: 84
+2020-05-16 07:06:19: 112
+2020-05-16 07:06:19,663 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 30
+2020-05-16 07:06:19: 60
+2020-05-16 07:06:19: 90
+2020-05-16 07:06:19: 120
+2020-05-16 07:06:19,663 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 32
+2020-05-16 07:06:19: 64
+2020-05-16 07:06:19: 96
+2020-05-16 07:06:19: 128
+2020-05-16 07:06:19,664 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 34
+2020-05-16 07:06:19: 68
+2020-05-16 07:06:19: 102
+2020-05-16 07:06:19: 136
+2020-05-16 07:06:19,664 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 36
+2020-05-16 07:06:19: 72
+2020-05-16 07:06:19: 108
+2020-05-16 07:06:19: 144
+2020-05-16 07:06:19,664 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 38
+2020-05-16 07:06:19: 76
+2020-05-16 07:06:19: 114
+2020-05-16 07:06:19: 152
+2020-05-16 07:06:19,664 TRACE [waffle2::runtime] Disassembly for '<anonymous>'
+  0x7f5e0b580030: pushq		%rbp
+  0x7f5e0b580031: movq		%rsp, %rbp
+  0x7f5e0b580034: subq		$0, %rsp
+  0x7f5e0b58003b: movq		%rdi, %r15
+  0x7f5e0b58003e: movq		%rsi, %r14
+  0x7f5e0b580041: jmpq		*%rdx
+		  // mov loc4,arg0
+  0x7f5e0b580043: movq		0x7f8(%r14), %rax
+  0x7f5e0b58004a: movq		(%rax), %rax
+  0x7f5e0b58004d: leaq		(%r14), %r10
+  0x7f5e0b580050: movq		%rax, 0x20(%r10)
+		  // jmp [%1]
+  0x7f5e0b580054: jmp		0x7f5e0b580059
+		  // mov loc3,id1
+  0x7f5e0b580059: movabsq		$0xfffe000000000005, %rax
+  0x7f5e0b580063: leaq		(%r14), %r10
+  0x7f5e0b580066: movq		%rax, 0x18(%r10)
+		  // mov loc0,id1
+  0x7f5e0b58006a: movabsq		$0xfffe000000000005, %rax
+  0x7f5e0b580074: leaq		(%r14), %r10
+  0x7f5e0b580077: movq		%rax, (%r10)
+		  // get_by_id loc2,loc0,id2
+  0x7f5e0b58007a: movq		%r15, %rdi
+  0x7f5e0b58007d: leaq		(%r14), %rax
+  0x7f5e0b580080: movq		(%rax), %rax
+  0x7f5e0b580083: movq		%rax, %rsi
+  0x7f5e0b580086: movabsq		$0x55594563c720, %rax
+  0x7f5e0b580090: movq		%rax, %rdx
+  0x7f5e0b580093: movq		-0x72(%rip), %rax
+  0x7f5e0b58009a: callq		*%rax
+  0x7f5e0b58009c: cmpq		$1, %rax
+  0x7f5e0b5800a0: jne		0x7f5e0b5800d8
+  0x7f5e0b5800a6: movq		%r14, %rdi
+  0x7f5e0b5800a9: movabsq		$0x55594434a6f0, %r10
+  0x7f5e0b5800b3: cmpq		$0, %rax
+  0x7f5e0b5800b7: je		0x7f5e0b5800cc
+  0x7f5e0b5800bd: movq		%rdx, %rax
+  0x7f5e0b5800c0: movq		0x7f8(%r14), %r10
+  0x7f5e0b5800c7: movq		%rax, (%r10)
+  0x7f5e0b5800ca: jmpq		*%rax
+  0x7f5e0b5800cc: movq		$1, %rax
+  0x7f5e0b5800d3: jmp		0x7f5e0b5801e7
+  0x7f5e0b5800d8: movq		%rdx, %rax
+  0x7f5e0b5800db: leaq		(%r14), %r10
+  0x7f5e0b5800de: movq		%rax, 0x10(%r10)
+		  // load_up loc1,0
+  0x7f5e0b5800e2: movq		%r14, %rdi
+  0x7f5e0b5800e5: xorl		%esi, %esi
+  0x7f5e0b5800e7: movq		-0xce(%rip), %rax
+  0x7f5e0b5800ee: callq		*%rax
+  0x7f5e0b5800f0: leaq		(%r14), %r10
+  0x7f5e0b5800f3: movq		%rax, 8(%r10)
+		  // mov loc0,id3
+  0x7f5e0b5800f7: movabsq		$0x555945641840, %rax
+  0x7f5e0b580101: leaq		(%r14), %r10
+  0x7f5e0b580104: movq		%rax, (%r10)
+		  // mov arg0,loc1
+  0x7f5e0b580107: leaq		(%r14), %rax
+  0x7f5e0b58010a: movq		8(%rax), %rax
+  0x7f5e0b58010e: movq		0x7f8(%r14), %r10
+  0x7f5e0b580115: movq		%rax, (%r10)
+		  // mov arg1,loc4
+  0x7f5e0b580118: leaq		(%r14), %rax
+  0x7f5e0b58011b: movq		0x20(%rax), %rax
+  0x7f5e0b58011f: movq		0x7f8(%r14), %r10
+  0x7f5e0b580126: movq		%rax, 8(%r10)
+		  // close_env loc0, loc0, arg0-arg1
+  0x7f5e0b58012a: movq		%r14, %rdi
+  0x7f5e0b58012d: leaq		(%r14), %rax
+  0x7f5e0b580130: movq		(%rax), %rsi
+  0x7f5e0b580133: xorl		%edx, %edx
+  0x7f5e0b580135: movl		$1, %ecx
+  0x7f5e0b58013a: movq		%r15, %r8
+  0x7f5e0b58013d: movq		-0x12c(%rip), %rax
+  0x7f5e0b580144: callq		*%rax
+  0x7f5e0b580146: leaq		(%r14), %r10
+  0x7f5e0b580149: movq		%rax, (%r10)
+		  // mov arg1,loc0
+  0x7f5e0b58014c: leaq		(%r14), %rax
+  0x7f5e0b58014f: movq		(%rax), %rax
+  0x7f5e0b580152: movq		0x7f8(%r14), %r10
+  0x7f5e0b580159: movq		%rax, 8(%r10)
+		  // call loc0,loc2,loc3,arg1-arg1
+  0x7f5e0b58015d: leaq		(%r14), %rax
+  0x7f5e0b580160: movq		0x10(%rax), %rdi
+  0x7f5e0b580164: leaq		(%r14), %rax
+  0x7f5e0b580167: movq		0x18(%rax), %rsi
+  0x7f5e0b58016b: movq		%r15, %rdx
+  0x7f5e0b58016e: movq		%r14, %rcx
+  0x7f5e0b580171: movl		$1, %r8d
+  0x7f5e0b580177: movl		$1, %r9d
+  0x7f5e0b58017d: movq		-0x174(%rip), %rax
+  0x7f5e0b580184: callq		*%rax
+  0x7f5e0b580186: cmpq		$1, %rax
+  0x7f5e0b58018a: jne		0x7f5e0b5801c2
+  0x7f5e0b580190: movq		%r14, %rdi
+  0x7f5e0b580193: movabsq		$0x55594434a6f0, %r10
+  0x7f5e0b58019d: cmpq		$0, %rax
+  0x7f5e0b5801a1: je		0x7f5e0b5801b6
+  0x7f5e0b5801a7: movq		%rdx, %rax
+  0x7f5e0b5801aa: movq		0x7f8(%r14), %r10
+  0x7f5e0b5801b1: movq		%rax, (%r10)
+  0x7f5e0b5801b4: jmpq		*%rax
+  0x7f5e0b5801b6: movq		$1, %rax
+  0x7f5e0b5801bd: jmp		0x7f5e0b5801e7
+  0x7f5e0b5801c2: movq		%rdx, %rax
+  0x7f5e0b5801c5: leaq		(%r14), %r10
+  0x7f5e0b5801c8: movq		%rax, (%r10)
+		  // safepoint
+  0x7f5e0b5801cb: movq		%r15, %rdi
+  0x7f5e0b5801ce: movq		-0x1cd(%rip), %rax
+  0x7f5e0b5801d5: callq		*%rax
+		  // return loc0
+  0x7f5e0b5801d7: leaq		(%r14), %rax
+  0x7f5e0b5801da: movq		(%rax), %rax
+  0x7f5e0b5801dd: movq		%rax, %rdx
+  0x7f5e0b5801e0: xorl		%eax, %eax
+  0x7f5e0b5801e2: jmp		0x7f5e0b5801e7
+  0x7f5e0b5801e7: movq		%rbp, %rsp
+  0x7f5e0b5801ea: popq		%rbp
+  0x7f5e0b5801eb: retq		
+
+2020-05-16 07:06:19,665 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 40
+2020-05-16 07:06:19: 80
+2020-05-16 07:06:19: 120
+2020-05-16 07:06:19: 160
+2020-05-16 07:06:19,665 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 42
+2020-05-16 07:06:19: 84
+2020-05-16 07:06:19: 126
+2020-05-16 07:06:19: 168
+2020-05-16 07:06:19,665 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 44
+2020-05-16 07:06:19: 88
+2020-05-16 07:06:19: 132
+2020-05-16 07:06:19: 176
+2020-05-16 07:06:19,666 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 46
+2020-05-16 07:06:19: 92
+2020-05-16 07:06:19: 138
+2020-05-16 07:06:19: 184
+2020-05-16 07:06:19,666 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 48
+2020-05-16 07:06:19: 96
+2020-05-16 07:06:19: 144
+2020-05-16 07:06:19: 192
+2020-05-16 07:06:19,666 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 50
+2020-05-16 07:06:19: 100
+2020-05-16 07:06:19: 150
+2020-05-16 07:06:19: 200
+2020-05-16 07:06:19,666 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 52
+2020-05-16 07:06:19: 104
+2020-05-16 07:06:19: 156
+2020-05-16 07:06:19: 208
+2020-05-16 07:06:19,667 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 54
+2020-05-16 07:06:19: 108
+2020-05-16 07:06:19: 162
+2020-05-16 07:06:19: 216
+2020-05-16 07:06:19,667 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 56
+2020-05-16 07:06:19: 112
+2020-05-16 07:06:19: 168
+2020-05-16 07:06:19: 224
+2020-05-16 07:06:19,667 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 58
+2020-05-16 07:06:19: 116
+2020-05-16 07:06:19: 174
+2020-05-16 07:06:19: 232
+2020-05-16 07:06:19,667 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 60
+2020-05-16 07:06:19: 120
+2020-05-16 07:06:19: 180
+2020-05-16 07:06:19: 240
+2020-05-16 07:06:19,668 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 62
+2020-05-16 07:06:19: 124
+2020-05-16 07:06:19: 186
+2020-05-16 07:06:19: 248
+2020-05-16 07:06:19,668 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 64
+2020-05-16 07:06:19: 128
+2020-05-16 07:06:19: 192
+2020-05-16 07:06:19: 256
+2020-05-16 07:06:19,668 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 66
+2020-05-16 07:06:19: 132
+2020-05-16 07:06:19: 198
+2020-05-16 07:06:19: 264
+2020-05-16 07:06:19,668 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 68
+2020-05-16 07:06:19: 136
+2020-05-16 07:06:19: 204
+2020-05-16 07:06:19: 272
+2020-05-16 07:06:19,668 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 70
+2020-05-16 07:06:19: 140
+2020-05-16 07:06:19: 210
+2020-05-16 07:06:19: 280
+2020-05-16 07:06:19,669 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 72
+2020-05-16 07:06:19: 144
+2020-05-16 07:06:19: 216
+2020-05-16 07:06:19: 288
+2020-05-16 07:06:19,669 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 74
+2020-05-16 07:06:19: 148
+2020-05-16 07:06:19: 222
+2020-05-16 07:06:19: 296
+2020-05-16 07:06:19,669 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 76
+2020-05-16 07:06:19: 152
+2020-05-16 07:06:19: 228
+2020-05-16 07:06:19: 304
+2020-05-16 07:06:19,669 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 78
+2020-05-16 07:06:19: 156
+2020-05-16 07:06:19: 234
+2020-05-16 07:06:19: 312
+2020-05-16 07:06:19,670 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 80
+2020-05-16 07:06:19: 160
+2020-05-16 07:06:19: 240
+2020-05-16 07:06:19: 320
+2020-05-16 07:06:19,670 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 82
+2020-05-16 07:06:19: 164
+2020-05-16 07:06:19: 246
+2020-05-16 07:06:19: 328
+2020-05-16 07:06:19,670 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 84
+2020-05-16 07:06:19: 168
+2020-05-16 07:06:19: 252
+2020-05-16 07:06:19: 336
+2020-05-16 07:06:19,670 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 86
+2020-05-16 07:06:19: 172
+2020-05-16 07:06:19: 258
+2020-05-16 07:06:19: 344
+2020-05-16 07:06:19,671 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 88
+2020-05-16 07:06:19: 176
+2020-05-16 07:06:19: 264
+2020-05-16 07:06:19: 352
+2020-05-16 07:06:19,671 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 90
+2020-05-16 07:06:19: 180
+2020-05-16 07:06:19: 270
+2020-05-16 07:06:19: 360
+2020-05-16 07:06:19,671 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 92
+2020-05-16 07:06:19: 184
+2020-05-16 07:06:19: 276
+2020-05-16 07:06:19: 368
+2020-05-16 07:06:19,671 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 94
+2020-05-16 07:06:19: 188
+2020-05-16 07:06:19: 282
+2020-05-16 07:06:19: 376
+2020-05-16 07:06:19,671 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 96
+2020-05-16 07:06:19: 192
+2020-05-16 07:06:19: 288
+2020-05-16 07:06:19: 384
+2020-05-16 07:06:19,672 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 98
+2020-05-16 07:06:19: 196
+2020-05-16 07:06:19: 294
+2020-05-16 07:06:19: 392
+2020-05-16 07:06:19,672 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 100
+2020-05-16 07:06:19: 200
+2020-05-16 07:06:19: 300
+2020-05-16 07:06:19: 400
+2020-05-16 07:06:19,672 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 102
+2020-05-16 07:06:19: 204
+2020-05-16 07:06:19: 306
+2020-05-16 07:06:19: 408
+2020-05-16 07:06:19,672 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 104
+2020-05-16 07:06:19: 208
+2020-05-16 07:06:19: 312
+2020-05-16 07:06:19: 416
+2020-05-16 07:06:19,673 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 106
+2020-05-16 07:06:19: 212
+2020-05-16 07:06:19: 318
+2020-05-16 07:06:19: 424
+2020-05-16 07:06:19,673 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 108
+2020-05-16 07:06:19: 216
+2020-05-16 07:06:19: 324
+2020-05-16 07:06:19: 432
+2020-05-16 07:06:19,673 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 110
+2020-05-16 07:06:19: 220
+2020-05-16 07:06:19: 330
+2020-05-16 07:06:19: 440
+2020-05-16 07:06:19,673 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 112
+2020-05-16 07:06:19: 224
+2020-05-16 07:06:19: 336
+2020-05-16 07:06:19: 448
+2020-05-16 07:06:19,673 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 114
+2020-05-16 07:06:19: 228
+2020-05-16 07:06:19: 342
+2020-05-16 07:06:19: 456
+2020-05-16 07:06:19,674 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 116
+2020-05-16 07:06:19: 232
+2020-05-16 07:06:19: 348
+2020-05-16 07:06:19: 464
+2020-05-16 07:06:19,674 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 118
+2020-05-16 07:06:19: 236
+2020-05-16 07:06:19: 354
+2020-05-16 07:06:19: 472
+2020-05-16 07:06:19,674 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 120
+2020-05-16 07:06:19: 240
+2020-05-16 07:06:19: 360
+2020-05-16 07:06:19: 480
+2020-05-16 07:06:19,674 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 122
+2020-05-16 07:06:19: 244
+2020-05-16 07:06:19: 366
+2020-05-16 07:06:19: 488
+2020-05-16 07:06:19,675 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 124
+2020-05-16 07:06:19: 248
+2020-05-16 07:06:19: 372
+2020-05-16 07:06:19: 496
+2020-05-16 07:06:19,675 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 126
+2020-05-16 07:06:19: 252
+2020-05-16 07:06:19: 378
+2020-05-16 07:06:19: 504
+2020-05-16 07:06:19,675 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 128
+2020-05-16 07:06:19: 256
+2020-05-16 07:06:19: 384
+2020-05-16 07:06:19: 512
+2020-05-16 07:06:19,675 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 130
+2020-05-16 07:06:19: 260
+2020-05-16 07:06:19: 390
+2020-05-16 07:06:19: 520
+2020-05-16 07:06:19,676 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 132
+2020-05-16 07:06:19: 264
+2020-05-16 07:06:19: 396
+2020-05-16 07:06:19: 528
+2020-05-16 07:06:19,676 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 134
+2020-05-16 07:06:19: 268
+2020-05-16 07:06:19: 402
+2020-05-16 07:06:19: 536
+2020-05-16 07:06:19,676 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 136
+2020-05-16 07:06:19: 272
+2020-05-16 07:06:19: 408
+2020-05-16 07:06:19: 544
+2020-05-16 07:06:19,676 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 138
+2020-05-16 07:06:19: 276
+2020-05-16 07:06:19: 414
+2020-05-16 07:06:19: 552
+2020-05-16 07:06:19,676 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 140
+2020-05-16 07:06:19: 280
+2020-05-16 07:06:19: 420
+2020-05-16 07:06:19: 560
+2020-05-16 07:06:19,677 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 142
+2020-05-16 07:06:19: 284
+2020-05-16 07:06:19: 426
+2020-05-16 07:06:19: 568
+2020-05-16 07:06:19,677 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 144
+2020-05-16 07:06:19: 288
+2020-05-16 07:06:19: 432
+2020-05-16 07:06:19: 576
+2020-05-16 07:06:19,677 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 146
+2020-05-16 07:06:19: 292
+2020-05-16 07:06:19: 438
+2020-05-16 07:06:19: 584
+2020-05-16 07:06:19,677 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 148
+2020-05-16 07:06:19: 296
+2020-05-16 07:06:19: 444
+2020-05-16 07:06:19: 592
+2020-05-16 07:06:19,678 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 150
+2020-05-16 07:06:19: 300
+2020-05-16 07:06:19: 450
+2020-05-16 07:06:19: 600
+2020-05-16 07:06:19,678 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 152
+2020-05-16 07:06:19: 304
+2020-05-16 07:06:19: 456
+2020-05-16 07:06:19: 608
+2020-05-16 07:06:19,678 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 154
+2020-05-16 07:06:19: 308
+2020-05-16 07:06:19: 462
+2020-05-16 07:06:19: 616
+2020-05-16 07:06:19,678 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 156
+2020-05-16 07:06:19: 312
+2020-05-16 07:06:19: 468
+2020-05-16 07:06:19: 624
+2020-05-16 07:06:19,679 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 158
+2020-05-16 07:06:19: 316
+2020-05-16 07:06:19: 474
+2020-05-16 07:06:19: 632
+2020-05-16 07:06:19,679 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 160
+2020-05-16 07:06:19: 320
+2020-05-16 07:06:19: 480
+2020-05-16 07:06:19: 640
+2020-05-16 07:06:19,679 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 162
+2020-05-16 07:06:19: 324
+2020-05-16 07:06:19: 486
+2020-05-16 07:06:19: 648
+2020-05-16 07:06:19,679 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 164
+2020-05-16 07:06:19: 328
+2020-05-16 07:06:19: 492
+2020-05-16 07:06:19: 656
+2020-05-16 07:06:19,680 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 166
+2020-05-16 07:06:19: 332
+2020-05-16 07:06:19: 498
+2020-05-16 07:06:19: 664
+2020-05-16 07:06:19,680 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 168
+2020-05-16 07:06:19: 336
+2020-05-16 07:06:19: 504
+2020-05-16 07:06:19: 672
+2020-05-16 07:06:19,680 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 170
+2020-05-16 07:06:19: 340
+2020-05-16 07:06:19: 510
+2020-05-16 07:06:19: 680
+2020-05-16 07:06:19,680 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 172
+2020-05-16 07:06:19: 344
+2020-05-16 07:06:19: 516
+2020-05-16 07:06:19: 688
+2020-05-16 07:06:19,681 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 174
+2020-05-16 07:06:19: 348
+2020-05-16 07:06:19: 522
+2020-05-16 07:06:19: 696
+2020-05-16 07:06:19,681 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 176
+2020-05-16 07:06:19: 352
+2020-05-16 07:06:19: 528
+2020-05-16 07:06:19: 704
+2020-05-16 07:06:19,681 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 178
+2020-05-16 07:06:19: 356
+2020-05-16 07:06:19: 534
+2020-05-16 07:06:19: 712
+2020-05-16 07:06:19,681 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 180
+2020-05-16 07:06:19: 360
+2020-05-16 07:06:19: 540
+2020-05-16 07:06:19: 720
+2020-05-16 07:06:19,681 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 182
+2020-05-16 07:06:19: 364
+2020-05-16 07:06:19: 546
+2020-05-16 07:06:19: 728
+2020-05-16 07:06:19,682 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 184
+2020-05-16 07:06:19: 368
+2020-05-16 07:06:19: 552
+2020-05-16 07:06:19: 736
+2020-05-16 07:06:19,682 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 186
+2020-05-16 07:06:19: 372
+2020-05-16 07:06:19: 558
+2020-05-16 07:06:19: 744
+2020-05-16 07:06:19,682 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 188
+2020-05-16 07:06:19: 376
+2020-05-16 07:06:19: 564
+2020-05-16 07:06:19: 752
+2020-05-16 07:06:19,682 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 190
+2020-05-16 07:06:19: 380
+2020-05-16 07:06:19: 570
+2020-05-16 07:06:19: 760
+2020-05-16 07:06:19,683 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 192
+2020-05-16 07:06:19: 384
+2020-05-16 07:06:19: 576
+2020-05-16 07:06:19: 768
+2020-05-16 07:06:19,683 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 194
+2020-05-16 07:06:19: 388
+2020-05-16 07:06:19: 582
+2020-05-16 07:06:19: 776
+2020-05-16 07:06:19,683 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 196
+2020-05-16 07:06:19: 392
+2020-05-16 07:06:19: 588
+2020-05-16 07:06:19: 784
+2020-05-16 07:06:19,683 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 198
+2020-05-16 07:06:19: 396
+2020-05-16 07:06:19: 594
+2020-05-16 07:06:19: 792
+2020-05-16 07:06:19,684 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 200
+2020-05-16 07:06:19: 400
+2020-05-16 07:06:19: 600
+2020-05-16 07:06:19: 800
+2020-05-16 07:06:19,684 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 202
+2020-05-16 07:06:19: 404
+2020-05-16 07:06:19: 606
+2020-05-16 07:06:19: 808
+2020-05-16 07:06:19,684 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 204
+2020-05-16 07:06:19: 408
+2020-05-16 07:06:19: 612
+2020-05-16 07:06:19: 816
+2020-05-16 07:06:19,684 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 206
+2020-05-16 07:06:19: 412
+2020-05-16 07:06:19: 618
+2020-05-16 07:06:19: 824
+2020-05-16 07:06:19,685 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 208
+2020-05-16 07:06:19: 416
+2020-05-16 07:06:19: 624
+2020-05-16 07:06:19: 832
+2020-05-16 07:06:19,685 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 210
+2020-05-16 07:06:19: 420
+2020-05-16 07:06:19: 630
+2020-05-16 07:06:19: 840
+2020-05-16 07:06:19,685 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 212
+2020-05-16 07:06:19: 424
+2020-05-16 07:06:19: 636
+2020-05-16 07:06:19: 848
+2020-05-16 07:06:19,685 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 214
+2020-05-16 07:06:19: 428
+2020-05-16 07:06:19: 642
+2020-05-16 07:06:19: 856
+2020-05-16 07:06:19,686 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 216
+2020-05-16 07:06:19: 432
+2020-05-16 07:06:19: 648
+2020-05-16 07:06:19: 864
+2020-05-16 07:06:19,686 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 218
+2020-05-16 07:06:19: 436
+2020-05-16 07:06:19: 654
+2020-05-16 07:06:19: 872
+2020-05-16 07:06:19,686 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 220
+2020-05-16 07:06:19: 440
+2020-05-16 07:06:19: 660
+2020-05-16 07:06:19: 880
+2020-05-16 07:06:19,686 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 222
+2020-05-16 07:06:19: 444
+2020-05-16 07:06:19: 666
+2020-05-16 07:06:19: 888
+2020-05-16 07:06:19,686 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 224
+2020-05-16 07:06:19: 448
+2020-05-16 07:06:19: 672
+2020-05-16 07:06:19: 896
+2020-05-16 07:06:19,687 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 226
+2020-05-16 07:06:19: 452
+2020-05-16 07:06:19: 678
+2020-05-16 07:06:19: 904
+2020-05-16 07:06:19,687 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 228
+2020-05-16 07:06:19: 456
+2020-05-16 07:06:19: 684
+2020-05-16 07:06:19: 912
+2020-05-16 07:06:19,687 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 230
+2020-05-16 07:06:19: 460
+2020-05-16 07:06:19: 690
+2020-05-16 07:06:19: 920
+2020-05-16 07:06:19,687 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 232
+2020-05-16 07:06:19: 464
+2020-05-16 07:06:19: 696
+2020-05-16 07:06:19: 928
+2020-05-16 07:06:19,688 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 234
+2020-05-16 07:06:19: 468
+2020-05-16 07:06:19: 702
+2020-05-16 07:06:19: 936
+2020-05-16 07:06:19,688 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 236
+2020-05-16 07:06:19: 472
+2020-05-16 07:06:19: 708
+2020-05-16 07:06:19: 944
+2020-05-16 07:06:19,688 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 238
+2020-05-16 07:06:19: 476
+2020-05-16 07:06:19: 714
+2020-05-16 07:06:19: 952
+2020-05-16 07:06:19,688 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 240
+2020-05-16 07:06:19: 480
+2020-05-16 07:06:19: 720
+2020-05-16 07:06:19: 960
+2020-05-16 07:06:19,689 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 242
+2020-05-16 07:06:19: 484
+2020-05-16 07:06:19: 726
+2020-05-16 07:06:19: 968
+2020-05-16 07:06:19,689 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 244
+2020-05-16 07:06:19: 488
+2020-05-16 07:06:19: 732
+2020-05-16 07:06:19: 976
+2020-05-16 07:06:19,689 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 246
+2020-05-16 07:06:19: 492
+2020-05-16 07:06:19: 738
+2020-05-16 07:06:19: 984
+2020-05-16 07:06:19,689 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 248
+2020-05-16 07:06:19: 496
+2020-05-16 07:06:19: 744
+2020-05-16 07:06:19: 992
+2020-05-16 07:06:19,690 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 250
+2020-05-16 07:06:19: 500
+2020-05-16 07:06:19: 750
+2020-05-16 07:06:19: 1000
+2020-05-16 07:06:19,690 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 252
+2020-05-16 07:06:19: 504
+2020-05-16 07:06:19: 756
+2020-05-16 07:06:19: 1008
+2020-05-16 07:06:19,690 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 254
+2020-05-16 07:06:19: 508
+2020-05-16 07:06:19: 762
+2020-05-16 07:06:19: 1016
+2020-05-16 07:06:19,690 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 256
+2020-05-16 07:06:19: 512
+2020-05-16 07:06:19: 768
+2020-05-16 07:06:19: 1024
+2020-05-16 07:06:19,690 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 258
+2020-05-16 07:06:19: 516
+2020-05-16 07:06:19: 774
+2020-05-16 07:06:19: 1032
+2020-05-16 07:06:19,691 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 260
+2020-05-16 07:06:19: 520
+2020-05-16 07:06:19: 780
+2020-05-16 07:06:19: 1040
+2020-05-16 07:06:19,691 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 262
+2020-05-16 07:06:19: 524
+2020-05-16 07:06:19: 786
+2020-05-16 07:06:19: 1048
+2020-05-16 07:06:19,691 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 264
+2020-05-16 07:06:19: 528
+2020-05-16 07:06:19: 792
+2020-05-16 07:06:19: 1056
+2020-05-16 07:06:19,691 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 266
+2020-05-16 07:06:19: 532
+2020-05-16 07:06:19: 798
+2020-05-16 07:06:19: 1064
+2020-05-16 07:06:19,692 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 268
+2020-05-16 07:06:19: 536
+2020-05-16 07:06:19: 804
+2020-05-16 07:06:19: 1072
+2020-05-16 07:06:19,692 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 270
+2020-05-16 07:06:19: 540
+2020-05-16 07:06:19: 810
+2020-05-16 07:06:19: 1080
+2020-05-16 07:06:19,692 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 272
+2020-05-16 07:06:19: 544
+2020-05-16 07:06:19: 816
+2020-05-16 07:06:19: 1088
+2020-05-16 07:06:19,692 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 274
+2020-05-16 07:06:19: 548
+2020-05-16 07:06:19: 822
+2020-05-16 07:06:19: 1096
+2020-05-16 07:06:19,692 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 276
+2020-05-16 07:06:19: 552
+2020-05-16 07:06:19: 828
+2020-05-16 07:06:19: 1104
+2020-05-16 07:06:19,693 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 278
+2020-05-16 07:06:19: 556
+2020-05-16 07:06:19: 834
+2020-05-16 07:06:19: 1112
+2020-05-16 07:06:19,693 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 280
+2020-05-16 07:06:19: 560
+2020-05-16 07:06:19: 840
+2020-05-16 07:06:19: 1120
+2020-05-16 07:06:19,693 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 282
+2020-05-16 07:06:19: 564
+2020-05-16 07:06:19: 846
+2020-05-16 07:06:19: 1128
+2020-05-16 07:06:19,693 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 284
+2020-05-16 07:06:19: 568
+2020-05-16 07:06:19: 852
+2020-05-16 07:06:19: 1136
+2020-05-16 07:06:19,694 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 286
+2020-05-16 07:06:19: 572
+2020-05-16 07:06:19: 858
+2020-05-16 07:06:19: 1144
+2020-05-16 07:06:19,694 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 288
+2020-05-16 07:06:19: 576
+2020-05-16 07:06:19: 864
+2020-05-16 07:06:19: 1152
+2020-05-16 07:06:19,694 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 290
+2020-05-16 07:06:19: 580
+2020-05-16 07:06:19: 870
+2020-05-16 07:06:19: 1160
+2020-05-16 07:06:19,694 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 292
+2020-05-16 07:06:19: 584
+2020-05-16 07:06:19: 876
+2020-05-16 07:06:19: 1168
+2020-05-16 07:06:19,695 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 294
+2020-05-16 07:06:19: 588
+2020-05-16 07:06:19: 882
+2020-05-16 07:06:19: 1176
+2020-05-16 07:06:19,695 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 296
+2020-05-16 07:06:19: 592
+2020-05-16 07:06:19: 888
+2020-05-16 07:06:19: 1184
+2020-05-16 07:06:19,695 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 298
+2020-05-16 07:06:19: 596
+2020-05-16 07:06:19: 894
+2020-05-16 07:06:19: 1192
+2020-05-16 07:06:19,695 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 300
+2020-05-16 07:06:19: 600
+2020-05-16 07:06:19: 900
+2020-05-16 07:06:19: 1200
+2020-05-16 07:06:19,695 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 302
+2020-05-16 07:06:19: 604
+2020-05-16 07:06:19: 906
+2020-05-16 07:06:19: 1208
+2020-05-16 07:06:19,696 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 304
+2020-05-16 07:06:19: 608
+2020-05-16 07:06:19: 912
+2020-05-16 07:06:19: 1216
+2020-05-16 07:06:19,696 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 306
+2020-05-16 07:06:19: 612
+2020-05-16 07:06:19: 918
+2020-05-16 07:06:19: 1224
+2020-05-16 07:06:19,696 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 308
+2020-05-16 07:06:19: 616
+2020-05-16 07:06:19: 924
+2020-05-16 07:06:19: 1232
+2020-05-16 07:06:19,696 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 310
+2020-05-16 07:06:19: 620
+2020-05-16 07:06:19: 930
+2020-05-16 07:06:19: 1240
+2020-05-16 07:06:19,697 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 312
+2020-05-16 07:06:19: 624
+2020-05-16 07:06:19: 936
+2020-05-16 07:06:19: 1248
+2020-05-16 07:06:19,697 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 314
+2020-05-16 07:06:19: 628
+2020-05-16 07:06:19: 942
+2020-05-16 07:06:19: 1256
+2020-05-16 07:06:19,697 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 316
+2020-05-16 07:06:19: 632
+2020-05-16 07:06:19: 948
+2020-05-16 07:06:19: 1264
+2020-05-16 07:06:19,697 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 318
+2020-05-16 07:06:19: 636
+2020-05-16 07:06:19: 954
+2020-05-16 07:06:19: 1272
+2020-05-16 07:06:19,697 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 320
+2020-05-16 07:06:19: 640
+2020-05-16 07:06:19: 960
+2020-05-16 07:06:19: 1280
+2020-05-16 07:06:19,698 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 322
+2020-05-16 07:06:19: 644
+2020-05-16 07:06:19: 966
+2020-05-16 07:06:19: 1288
+2020-05-16 07:06:19,698 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 324
+2020-05-16 07:06:19: 648
+2020-05-16 07:06:19: 972
+2020-05-16 07:06:19: 1296
+2020-05-16 07:06:19,698 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 326
+2020-05-16 07:06:19: 652
+2020-05-16 07:06:19: 978
+2020-05-16 07:06:19: 1304
+2020-05-16 07:06:19,698 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 328
+2020-05-16 07:06:19: 656
+2020-05-16 07:06:19: 984
+2020-05-16 07:06:19: 1312
+2020-05-16 07:06:19,699 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 330
+2020-05-16 07:06:19: 660
+2020-05-16 07:06:19: 990
+2020-05-16 07:06:19: 1320
+2020-05-16 07:06:19,699 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 332
+2020-05-16 07:06:19: 664
+2020-05-16 07:06:19: 996
+2020-05-16 07:06:19: 1328
+2020-05-16 07:06:19,699 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 334
+2020-05-16 07:06:19: 668
+2020-05-16 07:06:19: 1002
+2020-05-16 07:06:19: 1336
+2020-05-16 07:06:19,699 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 336
+2020-05-16 07:06:19: 672
+2020-05-16 07:06:19: 1008
+2020-05-16 07:06:19: 1344
+2020-05-16 07:06:19,700 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 338
+2020-05-16 07:06:19: 676
+2020-05-16 07:06:19: 1014
+2020-05-16 07:06:19: 1352
+2020-05-16 07:06:19,700 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 340
+2020-05-16 07:06:19: 680
+2020-05-16 07:06:19: 1020
+2020-05-16 07:06:19: 1360
+2020-05-16 07:06:19,700 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 342
+2020-05-16 07:06:19: 684
+2020-05-16 07:06:19: 1026
+2020-05-16 07:06:19: 1368
+2020-05-16 07:06:19,700 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 344
+2020-05-16 07:06:19: 688
+2020-05-16 07:06:19: 1032
+2020-05-16 07:06:19: 1376
+2020-05-16 07:06:19,700 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 346
+2020-05-16 07:06:19: 692
+2020-05-16 07:06:19: 1038
+2020-05-16 07:06:19: 1384
+2020-05-16 07:06:19,701 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 348
+2020-05-16 07:06:19: 696
+2020-05-16 07:06:19: 1044
+2020-05-16 07:06:19: 1392
+2020-05-16 07:06:19,701 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 350
+2020-05-16 07:06:19: 700
+2020-05-16 07:06:19: 1050
+2020-05-16 07:06:19: 1400
+2020-05-16 07:06:19,701 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 352
+2020-05-16 07:06:19: 704
+2020-05-16 07:06:19: 1056
+2020-05-16 07:06:19: 1408
+2020-05-16 07:06:19,701 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 354
+2020-05-16 07:06:19: 708
+2020-05-16 07:06:19: 1062
+2020-05-16 07:06:19: 1416
+2020-05-16 07:06:19,702 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 356
+2020-05-16 07:06:19: 712
+2020-05-16 07:06:19: 1068
+2020-05-16 07:06:19: 1424
+2020-05-16 07:06:19,702 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 358
+2020-05-16 07:06:19: 716
+2020-05-16 07:06:19: 1074
+2020-05-16 07:06:19: 1432
+2020-05-16 07:06:19,702 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 360
+2020-05-16 07:06:19: 720
+2020-05-16 07:06:19: 1080
+2020-05-16 07:06:19: 1440
+2020-05-16 07:06:19,702 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 362
+2020-05-16 07:06:19: 724
+2020-05-16 07:06:19: 1086
+2020-05-16 07:06:19: 1448
+2020-05-16 07:06:19,703 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 364
+2020-05-16 07:06:19: 728
+2020-05-16 07:06:19: 1092
+2020-05-16 07:06:19: 1456
+2020-05-16 07:06:19,703 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 366
+2020-05-16 07:06:19: 732
+2020-05-16 07:06:19: 1098
+2020-05-16 07:06:19: 1464
+2020-05-16 07:06:19,703 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 368
+2020-05-16 07:06:19: 736
+2020-05-16 07:06:19: 1104
+2020-05-16 07:06:19: 1472
+2020-05-16 07:06:19,703 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 370
+2020-05-16 07:06:19: 740
+2020-05-16 07:06:19: 1110
+2020-05-16 07:06:19: 1480
+2020-05-16 07:06:19,703 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 372
+2020-05-16 07:06:19: 744
+2020-05-16 07:06:19: 1116
+2020-05-16 07:06:19: 1488
+2020-05-16 07:06:19,704 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 374
+2020-05-16 07:06:19: 748
+2020-05-16 07:06:19: 1122
+2020-05-16 07:06:19: 1496
+2020-05-16 07:06:19,704 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 376
+2020-05-16 07:06:19: 752
+2020-05-16 07:06:19: 1128
+2020-05-16 07:06:19: 1504
+2020-05-16 07:06:19,704 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 378
+2020-05-16 07:06:19: 756
+2020-05-16 07:06:19: 1134
+2020-05-16 07:06:19: 1512
+2020-05-16 07:06:19,704 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 380
+2020-05-16 07:06:19: 760
+2020-05-16 07:06:19: 1140
+2020-05-16 07:06:19: 1520
+2020-05-16 07:06:19,705 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 382
+2020-05-16 07:06:19: 764
+2020-05-16 07:06:19: 1146
+2020-05-16 07:06:19: 1528
+2020-05-16 07:06:19,705 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 384
+2020-05-16 07:06:19: 768
+2020-05-16 07:06:19: 1152
+2020-05-16 07:06:19: 1536
+2020-05-16 07:06:19,705 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 386
+2020-05-16 07:06:19: 772
+2020-05-16 07:06:19: 1158
+2020-05-16 07:06:19: 1544
+2020-05-16 07:06:19,705 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 388
+2020-05-16 07:06:19: 776
+2020-05-16 07:06:19: 1164
+2020-05-16 07:06:19: 1552
+2020-05-16 07:06:19,706 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 390
+2020-05-16 07:06:19: 780
+2020-05-16 07:06:19: 1170
+2020-05-16 07:06:19: 1560
+2020-05-16 07:06:19,706 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 392
+2020-05-16 07:06:19: 784
+2020-05-16 07:06:19: 1176
+2020-05-16 07:06:19: 1568
+2020-05-16 07:06:19,706 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 394
+2020-05-16 07:06:19: 788
+2020-05-16 07:06:19: 1182
+2020-05-16 07:06:19: 1576
+2020-05-16 07:06:19,706 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 396
+2020-05-16 07:06:19: 792
+2020-05-16 07:06:19: 1188
+2020-05-16 07:06:19: 1584
+2020-05-16 07:06:19,707 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 07:06:19: 0
+2020-05-16 07:06:19: 398
+2020-05-16 07:06:19: 796
+2020-05-16 07:06:19: 1194
+2020-05-16 07:06:19: 1592
+2020-05-16 07:06:19,707 DEBUG [waffle2::runtime] 37800 bytes allocated when threshold is 8192, running GC cycle.
+2020-05-16 07:06:19,707 TRACE [waffle2::heap::heap] Sweeped 200 object(s)
+Executed in 48 ms or 48474993 ns
+Result: 0
+2020-05-16 08:38:50,548 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,548 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,548 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,549 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,550 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecompiler::strength_reduction] Code before removing empty blocks:
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %0: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0001] jmp [%1]
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %1: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] try_catch [%2] [%4],->arg0
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %2: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] jmp [%3]
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %3: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] throw loc256
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0001] mov loc258,id1
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0002] mov loc257,loc258
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0003] jmp [%6]
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %4: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] mov loc259,arg0
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0001] jmp [%5]
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %5: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] load_this loc260
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0001] load_global loc261,id2
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0002] mov arg0,loc259
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0003] call loc262,loc261,loc260,arg0-arg0
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0004] mov loc263,loc262
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0005] PopCatch
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0006] mov loc257,loc263
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0007] jmp [%6]
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode] %6: 
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0000] mov loc264,loc257
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0001] safepoint
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecode]   [0002] return loc264
+2020-05-16 08:38:50,550 TRACE [waffle2::bytecompiler::strength_reduction] After: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %0: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] mov loc256,arg0
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0001] jmp [%1]
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %1: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] try_catch [%3] [%4],->arg0
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %2: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] jmp [%3]
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %3: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] throw loc256
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0001] mov loc258,id1
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0002] mov loc257,loc258
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0003] jmp [%6]
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %4: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] mov loc259,arg0
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0001] jmp [%5]
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %5: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] load_this loc260
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0001] load_global loc261,id2
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0002] mov arg0,loc259
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0003] call loc262,loc261,loc260,arg0-arg0
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0004] mov loc263,loc262
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0005] PopCatch
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0006] mov loc257,loc263
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0007] jmp [%6]
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode] %6: 
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0000] mov loc264,loc257
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0001] safepoint
+2020-05-16 08:38:50,551 TRACE [waffle2::bytecode]   [0002] return loc264
+2020-05-16 08:38:50,552 INFO  [waffle2::bytecompiler::interference_graph] ---start building live set---
+2020-05-16 08:38:50,552 INFO  [waffle2::bytecompiler::interference_graph] ---local liveness analysis---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] ---block 0---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 0, pred: [], succ: [1], uses: [], defs: [VirtualRegister(-257)] }
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] ---block 1---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 1, pred: [0], succ: [2, 3], uses: [], defs: [] }
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] ---block 2---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 2, pred: [1], succ: [5], uses: [VirtualRegister(-257)], defs: [VirtualRegister(-259), VirtualRegister(-258)] }
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] ---block 3---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 3, pred: [1], succ: [4], uses: [], defs: [VirtualRegister(-260)] }
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] ---block 4---
+2020-05-16 08:38:50,552 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 4, pred: [3], succ: [5], uses: [VirtualRegister(-260)], defs: [VirtualRegister(-261), VirtualRegister(-262), VirtualRegister(-263), VirtualRegister(-264), VirtualRegister(-258)] }
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---block 5---
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 5, pred: [2, 4], succ: [], uses: [VirtualRegister(-258)], defs: [VirtualRegister(-265)] }
+2020-05-16 08:38:50,553 INFO  [waffle2::bytecompiler::interference_graph] ---global liveness analysis---
+2020-05-16 08:38:50,553 INFO  [waffle2::bytecompiler::interference_graph] 6 blocks
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 0---
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 1---
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 2---
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 3---
+2020-05-16 08:38:50,553 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 4---
+2020-05-16 08:38:50,553 INFO  [waffle2::bytecompiler::interference_graph] finished in 5 iterations
+2020-05-16 08:38:50,554 INFO  [waffle2::bytecompiler::interference_graph] ---finish building live set---
+2020-05-16 08:38:50,554 INFO  [waffle2::bytecompiler::interference_graph] ---start building interference graph---
+2020-05-16 08:38:50,557 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,557 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,557 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,557 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,557 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,558 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] add move loc258 -> loc257
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-259)) does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] add move loc263 -> loc257
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-264)) does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] add move loc262 -> loc263
+2020-05-16 08:38:50,558 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-263)) does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc260
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc261
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc259
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc261
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc259
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc260
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] add move loc257 -> loc264
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,559 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-258)) does not interference with defines)
+2020-05-16 08:38:50,559 INFO  [waffle2::bytecompiler::interference_graph] ---finish building interference graph---
+2020-05-16 08:38:50,568 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,568 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecompiler::strength_reduction] Code before removing empty blocks:
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode] %0: 
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0000] jmp [%1]
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode] %1: 
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0000] mov loc256,id0
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0001] mov loc257,loc256
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0002] mov loc258,id1
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0003] mov loc260,id1
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0004] get_by_id loc259,loc260,id2
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0005] mov loc261,id3
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0006] mov arg0,loc261
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0007] call loc262,loc259,loc258,arg0-arg0
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0008] mov loc263,id4
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0009] safepoint
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0010] return loc263
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0011] mov loc264,loc263
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0012] safepoint
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0013] return loc264
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecompiler::strength_reduction] After: 
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode] %0: 
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0000] jmp [%1]
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode] %1: 
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0000] mov loc256,id0
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0001] mov loc257,loc256
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0002] mov loc258,id1
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0003] mov loc260,id1
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0004] get_by_id loc259,loc260,id2
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0005] mov loc261,id3
+2020-05-16 08:38:50,569 TRACE [waffle2::bytecode]   [0006] mov arg0,loc261
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0007] call loc262,loc259,loc258,arg0-arg0
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0008] mov loc263,id4
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0009] safepoint
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0010] return loc263
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0011] mov loc264,loc263
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0012] safepoint
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecode]   [0013] return loc264
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] ---start building live set---
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] ---local liveness analysis---
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecompiler::interference_graph] ---block 0---
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 0, pred: [], succ: [1], uses: [], defs: [] }
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecompiler::interference_graph] ---block 1---
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecompiler::interference_graph] as CFGNode CFGBlockNode { block: 1, pred: [0], succ: [], uses: [], defs: [VirtualRegister(-257), VirtualRegister(-258), VirtualRegister(-259), VirtualRegister(-261), VirtualRegister(-260), VirtualRegister(-262), VirtualRegister(-263), VirtualRegister(-264), VirtualRegister(-265)] }
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] ---global liveness analysis---
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] 2 blocks
+2020-05-16 08:38:50,570 TRACE [waffle2::bytecompiler::interference_graph] ---iteration 0---
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] finished in 1 iterations
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] ---finish building live set---
+2020-05-16 08:38:50,570 INFO  [waffle2::bytecompiler::interference_graph] ---start building interference graph---
+2020-05-16 08:38:50,574 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,574 DEBUG [waffle2::bytecompiler::interference_graph] loop depth = 0
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] add move loc263 -> loc264
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-264)) does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,574 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc259
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc261
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc261 and loc258
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc261
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc259 and loc258
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc259
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc260 and loc258
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add edge between loc258 and loc260
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] add move loc256 -> loc257
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source Some(VirtualRegister(-257)) does not interference with defines)
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] for every defines in the instruction, add edge...
+2020-05-16 08:38:50,575 TRACE [waffle2::bytecompiler::interference_graph] (move source None does not interference with defines)
+2020-05-16 08:38:50,576 INFO  [waffle2::bytecompiler::interference_graph] ---finish building interference graph---
+2020-05-16 08:38:50,585 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50,585 DEBUG [waffle2::heap::heap] Allocate cell(168 bytes)
+2020-05-16 08:38:50: 0
+2020-05-16 08:38:50: 1
+2020-05-16 08:38:50: 2
+2020-05-16 08:38:50: 3
+2020-05-16 08:38:50: 4
+2020-05-16 08:38:50: 5
+2020-05-16 08:38:50: 6
+2020-05-16 08:38:50: 7
+2020-05-16 08:38:50: 8
+2020-05-16 08:38:50: 9
+2020-05-16 08:38:50: 10
+2020-05-16 08:38:50: 11
+2020-05-16 08:38:50: 12
+2020-05-16 08:38:50: 13
+2020-05-16 08:38:50: 14
+2020-05-16 08:38:50: 15
+2020-05-16 08:38:50: 16
+2020-05-16 08:38:50: 17
+2020-05-16 08:38:50: 18
+2020-05-16 08:38:50: 19
+2020-05-16 08:38:50,586 TRACE [waffle2::runtime] Disassembly for '<anonymous>'
+  0x7f37d2d26030: pushq		%rbp
+  0x7f37d2d26031: movq		%rsp, %rbp
+  0x7f37d2d26034: subq		$0, %rsp
+  0x7f37d2d2603b: movq		%rdi, %r15
+  0x7f37d2d2603e: movq		%rsi, %r14
+  0x7f37d2d26041: jmpq		*%rdx
+		  // mov loc0,arg0
+  0x7f37d2d26043: movq		0x7f8(%r14), %rax
+  0x7f37d2d2604a: movq		(%rax), %rax
+  0x7f37d2d2604d: leaq		(%r14), %r10
+  0x7f37d2d26050: movq		%rax, (%r10)
+		  // jmp [%1]
+  0x7f37d2d26053: jmp		0x7f37d2d26058
+		  // try_catch [%2] [%3],->arg0
+  0x7f37d2d26058: movl		$0x84, %eax
+  0x7f37d2d2605d: movabsq		$0x7f37d2d26030, %rdx
+  0x7f37d2d26067: addq		%rdx, %rax
+  0x7f37d2d2606a: movq		%rax, %rsi
+  0x7f37d2d2606d: movq		%r14, %rdi
+  0x7f37d2d26070: movq		-0x4f(%rip), %rax
+  0x7f37d2d26077: callq		*%rax
+  0x7f37d2d26079: jmp		0x7f37d2d2607e
+		  // throw loc0
+  0x7f37d2d2607e: leaq		(%r14), %rax
+  0x7f37d2d26081: movq		(%rax), %rax
+  0x7f37d2d26084: movq		%rax, %rdx
+  0x7f37d2d26087: movl		$1, %eax
+  0x7f37d2d2608c: cmpq		$1, %rax
+  0x7f37d2d26090: jne		0x7f37d2d260cf
+  0x7f37d2d26096: movq		%r14, %rdi
+  0x7f37d2d26099: movabsq		$0x55b1c1f6c090, %r10
+  0x7f37d2d260a3: callq		*%r10
+  0x7f37d2d260a6: movq		%rax, %r10
+  0x7f37d2d260a9: cmpq		$0, %rax
+  0x7f37d2d260ad: je		0x7f37d2d260c3
+  0x7f37d2d260b3: movq		%rdx, %rax
+  0x7f37d2d260b6: movq		0x7f8(%r14), %r10
+  0x7f37d2d260bd: movq		%rax, (%r10)
+  0x7f37d2d260c0: jmpq		*%r10
+  0x7f37d2d260c3: movq		$1, %rax
+  0x7f37d2d260ca: jmp		0x7f37d2d26213
+		  // mov loc0,id1
+  0x7f37d2d260cf: movq		$0xa, %rax
+  0x7f37d2d260d6: leaq		(%r14), %r10
+  0x7f37d2d260d9: movq		%rax, (%r10)
+		  // jmp [%5]
+  0x7f37d2d260dc: jmp		0x7f37d2d261f7
+		  // mov loc2,arg0
+  0x7f37d2d260e1: movq		0x7f8(%r14), %rax
+  0x7f37d2d260e8: movq		(%rax), %rax
+  0x7f37d2d260eb: leaq		(%r14), %r10
+  0x7f37d2d260ee: movq		%rax, 0x10(%r10)
+		  // jmp [%4]
+  0x7f37d2d260f2: jmp		0x7f37d2d260f7
+		  // load_this loc1
+  0x7f37d2d260f7: movq		0x810(%r14), %rax
+  0x7f37d2d260fe: leaq		(%r14), %r10
+  0x7f37d2d26101: movq		%rax, 8(%r10)
+		  // load_global loc0,id2
+  0x7f37d2d26105: movq		%r15, %rdi
+  0x7f37d2d26108: movabsq		$0x55b1c3687280, %rsi
+  0x7f37d2d26112: movq		-0xf9(%rip), %rax
+  0x7f37d2d26119: callq		*%rax
+  0x7f37d2d2611b: cmpq		$1, %rax
+  0x7f37d2d2611f: jne		0x7f37d2d2615e
+  0x7f37d2d26125: movq		%r14, %rdi
+  0x7f37d2d26128: movabsq		$0x55b1c1f6c090, %r10
+  0x7f37d2d26132: callq		*%r10
+  0x7f37d2d26135: movq		%rax, %r10
+  0x7f37d2d26138: cmpq		$0, %rax
+  0x7f37d2d2613c: je		0x7f37d2d26152
+  0x7f37d2d26142: movq		%rdx, %rax
+  0x7f37d2d26145: movq		0x7f8(%r14), %r10
+  0x7f37d2d2614c: movq		%rax, (%r10)
+  0x7f37d2d2614f: jmpq		*%r10
+  0x7f37d2d26152: movq		$1, %rax
+  0x7f37d2d26159: jmp		0x7f37d2d26213
+  0x7f37d2d2615e: movq		%rdx, %rax
+  0x7f37d2d26161: leaq		(%r14), %r10
+  0x7f37d2d26164: movq		%rax, (%r10)
+		  // mov arg0,loc2
+  0x7f37d2d26167: leaq		(%r14), %rax
+  0x7f37d2d2616a: movq		0x10(%rax), %rax
+  0x7f37d2d2616e: movq		0x7f8(%r14), %r10
+  0x7f37d2d26175: movq		%rax, (%r10)
+		  // call loc0,loc0,loc1,arg0-arg0
+  0x7f37d2d26178: leaq		(%r14), %rax
+  0x7f37d2d2617b: movq		(%rax), %rdi
+  0x7f37d2d2617e: leaq		(%r14), %rax
+  0x7f37d2d26181: movq		8(%rax), %rsi
+  0x7f37d2d26185: movq		%r15, %rdx
+  0x7f37d2d26188: movq		%r14, %rcx
+  0x7f37d2d2618b: xorl		%r8d, %r8d
+  0x7f37d2d2618e: xorl		%r9d, %r9d
+  0x7f37d2d26191: movq		-0x180(%rip), %rax
+  0x7f37d2d26198: callq		*%rax
+  0x7f37d2d2619a: cmpq		$1, %rax
+  0x7f37d2d2619e: jne		0x7f37d2d261dd
+  0x7f37d2d261a4: movq		%r14, %rdi
+  0x7f37d2d261a7: movabsq		$0x55b1c1f6c090, %r10
+  0x7f37d2d261b1: callq		*%r10
+  0x7f37d2d261b4: movq		%rax, %r10
+  0x7f37d2d261b7: cmpq		$0, %rax
+  0x7f37d2d261bb: je		0x7f37d2d261d1
+  0x7f37d2d261c1: movq		%rdx, %rax
+  0x7f37d2d261c4: movq		0x7f8(%r14), %r10
+  0x7f37d2d261cb: movq		%rax, (%r10)
+  0x7f37d2d261ce: jmpq		*%r10
+  0x7f37d2d261d1: movq		$1, %rax
+  0x7f37d2d261d8: jmp		0x7f37d2d26213
+  0x7f37d2d261dd: movq		%rdx, %rax
+  0x7f37d2d261e0: leaq		(%r14), %r10
+  0x7f37d2d261e3: movq		%rax, (%r10)
+		  // PopCatch
+  0x7f37d2d261e6: movq		%r14, %rdi
+  0x7f37d2d261e9: movq		-0x1e0(%rip), %rax
+  0x7f37d2d261f0: callq		*%rax
+		  // jmp [%5]
+  0x7f37d2d261f2: jmp		0x7f37d2d261f7
+		  // safepoint
+  0x7f37d2d261f7: movq		%r15, %rdi
+  0x7f37d2d261fa: movq		-0x1f9(%rip), %rax
+  0x7f37d2d26201: callq		*%rax
+		  // return loc0
+  0x7f37d2d26203: leaq		(%r14), %rax
+  0x7f37d2d26206: movq		(%rax), %rax
+  0x7f37d2d26209: movq		%rax, %rdx
+  0x7f37d2d2620c: xorl		%eax, %eax
+  0x7f37d2d2620e: jmp		0x7f37d2d26213
+  0x7f37d2d26213: movq		%rbp, %rsp
+  0x7f37d2d26216: popq		%rbp
+  0x7f37d2d26217: retq		
+

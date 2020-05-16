@@ -64,7 +64,9 @@ impl CallFrame {
     }
 
     pub extern "C" fn pop_handler_or_zero(mut this: &mut Self) -> usize {
-        this.handlers.pop().unwrap_or(0)
+        let h = this.handlers.pop().unwrap_or(0);
+
+        h
     }
 }
 

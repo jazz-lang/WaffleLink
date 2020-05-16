@@ -64,6 +64,8 @@ pub enum TokenKind {
     True,
     False,
     Nil,
+    Try,
+    Catch,
     Throw,
     Do,
 
@@ -133,6 +135,8 @@ impl TokenKind {
             TokenKind::RQuote => ">",
 
             // Keywords
+            TokenKind::Try => "try",
+            TokenKind::Catch => "catch",
             TokenKind::Class => "class",
             TokenKind::Implements => "implements",
             TokenKind::This => "this",

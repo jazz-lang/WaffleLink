@@ -1,7 +1,7 @@
 use super::{Assembler, Register};
 
 impl Register {
-    fn low_bits(self) -> u8 {
+    pub(crate) fn low_bits(self) -> u8 {
         self.0 & 0b111
     }
 
@@ -992,7 +992,7 @@ impl Assembler {
         }
     }
 
-    fn emit_rex32_rm_optional(&mut self, reg: Register) {
+    pub(crate) fn emit_rex32_rm_optional(&mut self, reg: Register) {
         if reg.needs_rex() {
             self.emit_rex(false, false, false, true);
         }
@@ -1014,7 +1014,7 @@ impl Assembler {
         self.emit_rex(true, false, false, false);
     }
 
-    fn emit_rex64_rm(&mut self, rm: Register) {
+    pub(crate) fn emit_rex64_rm(&mut self, rm: Register) {
         self.emit_rex(true, false, false, rm.needs_rex());
     }
 

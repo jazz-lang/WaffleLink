@@ -168,6 +168,7 @@ impl<'a> Parser<'a> {
             TokenKind::While => self.parse_while(),
             TokenKind::Return => self.parse_return(),
             TokenKind::Throw => self.parse_throw(),
+            TokenKind::Try => self.parse_try(),
             _ => self.parse_binary(0),
         }
     }
@@ -181,6 +182,16 @@ impl<'a> Parser<'a> {
         let pos = self.token.position;
         self.advance_token()?;
         Ok(expr!(ExprKind::Throw(self.parse_expression()?), pos))
+    }
+
+    fn parse_try(&mut self) -> EResult {
+        let pos = self.token.position;
+        self.advance_token()?;
+        let e = self.parse_expression()?;
+        self.expect_token(TokenKind::Catch)?;
+        let name = self.expect_identifier()?;
+        let c = self.parse_expression()?;
+        return Ok(expr!(ExprKind::Try(e,name,c),pos));
     }
 
     fn parse_while(&mut self) -> EResult {

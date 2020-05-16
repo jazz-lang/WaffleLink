@@ -33,6 +33,13 @@ pub struct HeapCell {
 
 use std::collections::VecDeque;
 impl Heap {
+    pub fn allocated(&self) -> usize {
+        self.allocated
+    }
+
+    pub fn threshold(&self) -> usize {
+        self.threshold
+    }
     pub fn new() -> Self {
         Self {
             heap: vec![],
@@ -106,7 +113,7 @@ impl Heap {
     pub fn allocate(&mut self, cell: Cell) -> CellPointer {
         //self.safepoint();
         let ptr = Box::into_raw(Box::new(cell));
-
+        log::debug!("Allocate cell({} bytes)",std::mem::size_of::<Cell>());
         unsafe {
 
             self.allocated += std::mem::size_of::<Cell>();
@@ -156,8 +163,10 @@ impl<'a> Collection<'a> {
     }
 
     fn sweep(&mut self) {
+        let mut count = 0;
         self.rt.heap.heap.retain(|item| {
             if !item.marked {
+                count += 1;
                 unsafe {
                     let _ = Box::from_raw(item.raw);
                 }
@@ -166,7 +175,10 @@ impl<'a> Collection<'a> {
                 item.get_mut().marked = false;
                 true
             }
-        })
+        });
+        if count != 0 {
+            log::trace!("Sweeped {} object(s)",count);
+        }
     }
     pub fn run(rt: &'a mut Runtime) {
         let mut rootset = Default::default();

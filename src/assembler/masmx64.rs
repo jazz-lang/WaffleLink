@@ -12,6 +12,10 @@ use func::*;
 use jit::*;
 use masm::*;
 use types::*;
+use crate::jit::types::MachineMode;
+use crate::assembler::masm::{MacroAssembler, Label};
+use crate::bytecompiler::interference_graph::NodeType::Machine;
+use crate::assembler::Register;
 
 impl From<FReg> for XmmRegister {
     fn from(reg: FReg) -> XmmRegister {
@@ -74,6 +78,48 @@ impl MacroAssembler {
         self.load_int_const(MachineMode::Int64, REG_TMP1, -562949953421312);
         self.int_add(MachineMode::Int64, src, src, REG_TMP1);
         self.int_as_float(MachineMode::Float64, dest, MachineMode::Int64, src);
+    }
+
+    pub fn cvt_int32_to_double(&mut self,src: Reg,dest: FReg) {
+        self.int_to_float(MachineMode::Float64,dest,MachineMode::Int64,src);
+    }
+    pub fn new_int(&mut self, src: Reg, dst: Reg) {
+        /*self.load_int_const(
+            MachineMode::Int64,
+            RAX.into(),
+            runtime::value::Value::NUMBER_TAG,
+        );*/
+        if src != RCX.into() {
+            self.copy_reg(MachineMode::Int64, RCX.into(), src);
+        }
+        self.load_int_const(MachineMode::Int64, RAX.into(), -562949953421312);
+        self.asm.orq_rr(RCX.into(), RAX.into());
+        self.mov_rr(true, dst.into(), RCX.into());
+    }
+    pub fn new_number(&mut self,src: FReg) {
+        /*
+        cvttsd2si	%xmm0, %ecx
+        cvtsi2sd	%ecx, %xmm1
+        movabsq	$-562949953421312, %rax
+        orq	%rcx, %rax
+        movq	%xmm0, %rcx
+        movabsq	$562949953421312, %rdx
+        addq	%rcx, %rdx
+        ucomisd	%xmm0, %xmm1
+        cmovneq	%rdx, %rax
+        cmovpq	%rdx, %rax
+        */
+        self.asm.cvttsd2sid_rr(REG_TMP1.into(),src.into());
+        self.asm.cvtsi2sdd_rr(FREG_TMP1.into(),REG_TMP1.into());
+        self.load_int_const(MachineMode::Int64, REG_RESULT.into(), -562949953421312);
+        self.asm.orq_rr(REG_RESULT.into(),REG_TMP1.into());
+        self.asm.movq_rx(REG_TMP1.into(),src.into());
+        self.load_int_const(MachineMode::Int64,REG_TMP2,562949953421312);
+        self.int_add(MachineMode::Int64,REG_TMP1.into(),REG_TMP1.into(),REG_TMP2.into());
+        self.asm.ucomisd_rr(src.into(),FREG_TMP1.into());
+        self.asm.cmovq(Condition::NotEqual,REG_RESULT.into(),REG_TMP1.into());
+        self.asm.cmovq(Condition::Parity,REG_RESULT.into(),REG_TMP1.into());
+
     }
     pub fn is_int32(&mut self, src: Reg, dst: Reg) {
         let r = self.get_scratch().reg();
@@ -242,19 +288,7 @@ impl MacroAssembler {
         self.asm.movq_xr(dst.into(), RAX.into());
     }
 
-    pub fn new_int(&mut self, src: Reg, dst: Reg) {
-        /*self.load_int_const(
-            MachineMode::Int64,
-            RAX.into(),
-            runtime::value::Value::NUMBER_TAG,
-        );*/
-        if src != RCX.into() {
-            self.copy_reg(MachineMode::Int64, RCX.into(), src);
-        }
-        self.load_int_const(MachineMode::Int64, RAX.into(), -562949953421312);
-        self.asm.orq_rr(RCX.into(), RAX.into());
-        self.mov_rr(true, dst.into(), RCX.into());
-    }
+
 
     pub fn new_double(&mut self, src: FReg, dst: Reg) {
         self.asm.movq_rx(RAX.into(), src.into());
@@ -1297,7 +1331,26 @@ impl MacroAssembler {
             }
         }
     }
+    pub fn emit_current_pos(&mut self,to: Reg) {
+        let dest: Register = to.into();
+        let lpos = self.pos();
+        self.asm.emit_rex64_rm(dest);
+        self.asm.emit_u8(0xB8 + dest.low_bits());
+        self.handlers.push(Handler {
+            offset: self.pos(),
+            pointer: 0,
+            load: lpos
+        });
+        self.emit_u64(0);
 
+    }
+    pub fn load_label(&mut self,dst: Reg,lbl: Label) {
+        let reg: Register = dst.into();
+        self.asm.emit_rex32_rm_optional(reg);
+
+        self.asm.emit_u8(0xB8 + reg.low_bits());
+        self.emit_label(lbl);
+    }
     pub fn fix_forward_jumps(&mut self) {
         for jmp in &self.jumps {
             let target = self.labels[jmp.to.0].expect("label not defined");
@@ -1309,14 +1362,7 @@ impl MacroAssembler {
 
     }
 
-    pub fn load_label(&mut self, dst: Reg, lbl: Label) {
-        self.asm.movl_ri(dst.into(), Immediate(0));
-        self.asm.code_mut().pop();
-        self.asm.code_mut().pop();
-        self.asm.code_mut().pop();
-        self.asm.code_mut().pop();
-        self.emit_label(lbl);
-    }
+    pub fn new_handler(&mut self,to: usize) {}
 
     fn mov_rr(&mut self, x64: bool, lhs: AsmRegister, rhs: AsmRegister) {
         if x64 {
