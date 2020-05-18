@@ -78,7 +78,11 @@ return i
 fn jit_call(c: &mut Criterion) {
     let mut rt = Runtime::new(Configs::default().no_jit());
 
-    let f = waffle2::unwrap!(rt.compile_function("bench", "bench", "1000.times(|i| return i * i)"));
+    let f = waffle2::unwrap!(rt.compile_function(
+        "bench",
+        "bench",
+        "1000.times(|i|{ var j = 0 while j < 10000 {j = j + 1} return i})"
+    ));
     c.bench_function("times-no-jit", |b| {
         b.iter(|| {
             let _ = rt.call(f, Value::undefined(), &[]);
@@ -86,7 +90,11 @@ fn jit_call(c: &mut Criterion) {
     });
     let mut rt = Runtime::new(Configs::default());
 
-    let f = waffle2::unwrap!(rt.compile_function("bench", "bench", "1000.times(|i| return i * i)"));
+    let f = waffle2::unwrap!(rt.compile_function(
+        "bench",
+        "bench",
+        "1000.times(|i|{ var j = 0 while j < 10000 {j = j + 1} return i})"
+    ));
     c.bench_function("times-with-jit", |b| {
         b.iter(|| {
             let _ = rt.call(f, Value::undefined(), &[]);
