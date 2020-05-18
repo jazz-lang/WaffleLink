@@ -10,22 +10,16 @@ use waffle2::interpreter::callstack::CallFrame;
 use waffle2::jit::JITResult;
 use waffle2::runtime::*;
 fn main() {
-    simple_logger::init().unwrap();
+    //simple_logger::init().unwrap();
     let mut heap = {
-        let mut rt = Runtime::new(Configs::default());
+        let mut rt = Runtime::new(Configs::default().no_jit());
         let reader = Reader::from_string(
             "
-var x = 2
-30.times(|i| {
-    try {
-        throw i
-    } catch e {
-        log(e)
-    }
-
-})
-
-return 0
+var i = 0 
+while i < 10000000 {
+    i = i + 1
+}
+return i
 ",
         );
         let mut ast = vec![];
@@ -41,20 +35,24 @@ return 0
                 return;
             }
         };
-        let f = function_from_codeblock(&mut rt, code.clone(), "<main>");
+        let mut f = function_from_codeblock(&mut rt, code.clone(), "<main>");
         let x = std::time::Instant::now();
-        let res = rt.call(f, Value::undefined(), &[]);
+        let mut xx = &mut f;
+        for _ in 0..10 {
+            let res = rt.call(*xx, Value::undefined(), &[]);
+        }
+        let yy = *xx;
         let e = x.elapsed();
         let ms = e.as_millis();
         let ns = e.as_nanos();
         println!("Executed in {} ms or {} ns", ms, ns);
-        match res {
+        /*match res {
             Ok(x) => match x.to_string(&mut rt) {
                 Ok(x) => println!("Result: {}", x),
                 _ => unreachable!(),
             },
             Err(e) => println!("Err {}", waffle2::unwrap!(e.to_string(&mut rt))),
-        }
+        }*/
         #[cfg(feautre = "perf")]
         {
             rt.perf.print_perf();

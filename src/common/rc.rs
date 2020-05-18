@@ -99,6 +99,7 @@ impl<T> DerefMut for Rc<T> {
 }
 
 impl<T> Clone for Rc<T> {
+    #[inline(never)]
     fn clone(&self) -> Rc<T> {
         self.inner_mut().references += 1;
         Rc { inner: self.inner }
@@ -106,6 +107,7 @@ impl<T> Clone for Rc<T> {
 }
 
 impl<T> Drop for Rc<T> {
+    #[inline(never)]
     fn drop(&mut self) {
         unsafe {
             if self.inner().references == 1 {

@@ -113,7 +113,7 @@ mod tests {
                     $($param:expr),+
             )
         ) => {{
-            let mut rt = crate::runtime::Runtime::new();
+            let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
             let mut buf = MacroAssembler::new();
             $name(&mut buf, $($param,)*);
             let expected = vec![$($expr,)*];
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_zero() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::Zero, lbl);
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_non_zero() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::NonZero, lbl);
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_greater() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::Greater, lbl);
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_greater_or_equal() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::GreaterEq, lbl);
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_less() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::Less, lbl);
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_less_or_equal() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::LessEq, lbl);
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_unsigned_greater() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::UnsignedGreater, lbl);
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_unsigned_greater_or_equal() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::UnsignedGreaterEq, lbl);
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_unsigned_less() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::UnsignedLess, lbl);
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_emit_jcc_unsigned_less_or_equal() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jcc(&mut buf, CondCode::UnsignedLessEq, lbl);
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_emit_jmp() {
-        let mut rt = crate::runtime::Runtime::new();
+        let mut rt = crate::runtime::Runtime::new(crate::runtime::Configs::default());
         let mut buf = MacroAssembler::new();
         let lbl = buf.create_label();
         emit_jmp(&mut buf, lbl);

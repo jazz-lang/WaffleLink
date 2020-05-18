@@ -24,7 +24,6 @@
   <component name="ChangeListManager">
     <list default="true" id="715bd4a6-ee19-4e98-9bcc-1efbdf5a70df" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -53,6 +52,7 @@
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_ADD_EXTERNAL_FILES" value="true" />
     <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
@@ -65,8 +65,10 @@
     <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/api.rs" value="true" />
     <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/heap.rs" value="true" />
     <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/heap/mod.rs" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/lljit/width.rs" value="true" />
+    <property name="org.rust.hideDetachedFileNotifications/home/aprokurov/Projects/waffle/src/runtime/builtins/generator.rs" value="true" />
     <property name="restartRequiresConfirmation" value="false" />
-    <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors" />
+    <property name="settings.editor.selected.configurable" value="preferences.lookFeel" />
   </component>
   <component name="RunManager" selected="Cargo Command.Run">
     <configuration name="Build" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
@@ -110,8 +112,8 @@
     </configuration>
     <list>
       <item itemvalue="Cargo Command.Build" />
-      <item itemvalue="Cargo Command.Run" />
       <item itemvalue="Cargo Command.Run release" />
+      <item itemvalue="Cargo Command.Run" />
     </list>
   </component>
   <component name="RustProjectSettings">
@@ -131,6 +133,9 @@
     </task>
     <servers />
   </component>
+  <component name="UnknownFeatures">
+    <option featureType="com.intellij.fileTypeFactory" implementationName="*.h" />
+  </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
       <map>
@@ -142,6 +147,9 @@
       </map>
     </option>
     <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
   </component>
   <component name="WindowStateProjectService">
     <state x="560" y="166" key="#Plugins" timestamp="1589605386805">
@@ -156,31 +164,39 @@
       <screen x="0" y="0" width="1920" height="1032" />
     </state>
     <state x="632" y="203" key="#com.intellij.refactoring.safeDelete.UnsafeUsagesDialog/0.0.1920.1032@0.0.1920.1032" timestamp="1589391132686" />
-    <state width="1876" height="266" key="GridCell.Tab.0.bottom" timestamp="1589609193093">
+    <state width="1876" height="266" key="GridCell.Tab.0.bottom" timestamp="1589626159894">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
-    <state width="1876" height="266" key="GridCell.Tab.0.bottom/0.0.1920.1044@0.0.1920.1044" timestamp="1589609193093" />
-    <state width="1876" height="266" key="GridCell.Tab.0.center" timestamp="1589609193091">
+    <state width="1876" height="266" key="GridCell.Tab.0.bottom/0.0.1920.1044@0.0.1920.1044" timestamp="1589626159894" />
+    <state width="1876" height="266" key="GridCell.Tab.0.center" timestamp="1589626159894">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
-    <state width="1876" height="266" key="GridCell.Tab.0.center/0.0.1920.1044@0.0.1920.1044" timestamp="1589609193091" />
-    <state width="1876" height="266" key="GridCell.Tab.0.left" timestamp="1589609193090">
+    <state width="1876" height="266" key="GridCell.Tab.0.center/0.0.1920.1044@0.0.1920.1044" timestamp="1589626159894" />
+    <state width="1876" height="266" key="GridCell.Tab.0.left" timestamp="1589626159894">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
-    <state width="1876" height="266" key="GridCell.Tab.0.left/0.0.1920.1044@0.0.1920.1044" timestamp="1589609193090" />
-    <state width="1876" height="266" key="GridCell.Tab.0.right" timestamp="1589609193092">
+    <state width="1876" height="266" key="GridCell.Tab.0.left/0.0.1920.1044@0.0.1920.1044" timestamp="1589626159894" />
+    <state width="1876" height="266" key="GridCell.Tab.0.right" timestamp="1589626159894">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
-    <state width="1876" height="266" key="GridCell.Tab.0.right/0.0.1920.1044@0.0.1920.1044" timestamp="1589609193092" />
-    <state x="640" y="169" width="1280" height="729" key="SettingsEditor" timestamp="1589605450077">
+    <state width="1876" height="266" key="GridCell.Tab.0.right/0.0.1920.1044@0.0.1920.1044" timestamp="1589626159894" />
+    <state x="177" y="225" width="1280" height="729" key="SettingsEditor" timestamp="1589610940888">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
     <state x="0" y="0" width="1920" height="1032" key="SettingsEditor/0.0.1920.1032@0.0.1920.1032" timestamp="1589215537035" />
-    <state x="640" y="169" width="1280" height="729" key="SettingsEditor/0.0.1920.1044@0.0.1920.1044" timestamp="1589605450077" />
-    <state x="1084" y="81" width="836" height="963" key="find.popup" timestamp="1589609655409">
+    <state x="177" y="225" width="1280" height="729" key="SettingsEditor/0.0.1920.1044@0.0.1920.1044" timestamp="1589610940888" />
+    <state x="1084" y="81" width="836" height="963" key="find.popup" timestamp="1589767702482">
       <screen x="0" y="0" width="1920" height="1044" />
     </state>
-    <state x="558" y="40" width="836" height="951" key="find.popup/0.0.1920.1032@0.0.1920.1032" timestamp="1589557332425" />
-    <state x="1084" y="81" width="836" height="963" key="find.popup/0.0.1920.1044@0.0.1920.1044" timestamp="1589609655409" />
+    <state x="558" y="40" width="836" height="951" key="find.popup/0.0.1920.1032@0.0.1920.1032" timestamp="1589719626602" />
+    <state x="1084" y="81" width="836" height="963" key="find.popup/0.0.1920.1044@0.0.1920.1044" timestamp="1589767702482" />
+    <state x="0" y="38" key="new project wizard" timestamp="1589717820750">
+      <screen x="0" y="0" width="1920" height="1032" />
+    </state>
+    <state x="0" y="38" key="new project wizard/0.0.1920.1032@0.0.1920.1032" timestamp="1589717820750" />
+    <state x="495" y="0" width="928" height="1030" key="search.everywhere.popup" timestamp="1589717288193">
+      <screen x="0" y="0" width="1920" height="1032" />
+    </state>
+    <state x="495" y="0" width="928" height="1030" key="search.everywhere.popup/0.0.1920.1032@0.0.1920.1032" timestamp="1589717288193" />
   </component>
 </project>

@@ -8,7 +8,7 @@ pub mod value;
 use crate::common::*;
 use crate::fullcodegen::FullCodegen;
 use crate::heap::api::*;
-use crate::heap::heap::{Heap, Collection};
+use crate::heap::heap::{Collection, Heap};
 use crate::interpreter::callstack::{CallFrame, StackEntry};
 use crate::jit::*;
 use cell::*;
@@ -57,8 +57,8 @@ impl CodeAllocator {
 }
 
 use crate::jit::osr::*;
-use std::cell::RefCell;
 use smallvec::SmallVec;
+use std::cell::RefCell;
 thread_local! {
     static OSR_STUB: RefCell<OSRStub> = RefCell::new(OSRStub::new());
 }
@@ -129,13 +129,16 @@ impl Runtime {
     }
     pub fn safepoint(&mut self) {
         if self.heap.safepoint() {
-            log::debug!("{} bytes allocated when threshold is {}, running GC cycle.",self.heap.allocated(),self.heap.threshold());
+            log::debug!(
+                "{} bytes allocated when threshold is {}, running GC cycle.",
+                self.heap.allocated(),
+                self.heap.threshold()
+            );
             Collection::run(self);
-
         }
     }
 
-    pub fn each_pointer(&mut self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+    pub fn each_pointer(&mut self, stack: &mut std::collections::VecDeque<*const CellPointer>) {
         stack.push_back(&self.array_prototype);
         stack.push_back(&self.object_prototype);
         stack.push_back(&self.number_prototype);
@@ -147,10 +150,10 @@ impl Runtime {
         stack.push_back(&self.file_prototype);
         stack.push_back(&self.string_prototype);
         stack.push_back(&self.module_prototype);
-        for (_,val) in self.globals.iter() {
+        for (_, val) in self.globals.iter() {
             val.each_pointer(stack);
         }
-        for (_,val) in self.strings.iter() {
+        for (_, val) in self.strings.iter() {
             val.each_pointer(stack);
         }
 
@@ -160,10 +163,13 @@ impl Runtime {
                     f.registers.iter().for_each(|item| item.each_pointer(stack));
                     f.entries.iter().for_each(|item| item.each_pointer(stack));
                     f.func.each_pointer(stack);
-                    f.code.constants_.iter().for_each(|item| item.each_pointer(stack));
+                    f.code
+                        .constants_
+                        .iter()
+                        .for_each(|item| item.each_pointer(stack));
                     f.this.each_pointer(stack);
                 }
-                _ => ()
+                _ => (),
             }
         }
     }
@@ -192,7 +198,7 @@ impl Runtime {
 
         self.allocate_cell(cell)
     }
-
+    #[inline(never)]
     pub extern "C" fn call(
         &mut self,
         func: Value,
@@ -247,8 +253,9 @@ impl Runtime {
                                         self.stack.current_frame().entries[i] = *arg;
                                     }
                                     assert!(regular.code.jit_enter == 0);
+                                    call!(before);
                                     let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
-                                    self.stack.pop();
+                                    call!(after);
                                     match res {
                                         JITResult::Err(e) => return Err(e),
                                         JITResult::Ok(x) => return Ok(x),
@@ -295,20 +302,13 @@ impl Runtime {
                                             let e = code.osr_table.labels[0];
                                             regular.code.jit_code = Some(code);
                                             let mut cur = self.stack.current_frame();
-                                            match func(
-                                                self,
-                                                cur.get_mut(),
-                                                e,
-                                            ) {
+                                            call!(before);
+                                            match func(self, cur.get_mut(), e) {
                                                 JITResult::Ok(val) => {
-                                                    self.stack.pop();
-
-
+                                                    call!(after);
                                                     return Ok(val);
                                                 }
                                                 JITResult::Err(e) => {
-                                                    self.stack.pop();
-
                                                     return Err(e);
                                                 }
                                                 _ => unimplemented!(),
@@ -338,7 +338,6 @@ impl Runtime {
                             match self.interpret() {
                                 Return::Return(val) => return Ok(val),
                                 Return::Error(e) => return Err(e),
-                                Return::Yield { .. } => unimplemented!("TODO: Generators"),
                             }
                         }
                     }

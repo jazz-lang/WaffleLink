@@ -18,7 +18,6 @@ use virtual_reg::*;
 pub enum Return {
     Error(Value),
     Return(Value),
-    Yield(VirtualRegister, Value),
 }
 
 enum C {
@@ -160,6 +159,7 @@ impl Runtime {
             false
         }
     }
+    #[inline(never)]
     extern "C" fn call_interp(&mut self, func: Value, this: Value, args: &[Value]) -> C {
         let ptr = self as *mut Self;
         if func.is_cell() == false {
@@ -205,8 +205,9 @@ impl Runtime {
                                         }
                                         self.stack.current_frame().entries[i] = *arg;
                                     }
+                                    call!(before);
                                     let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
-                                    self.stack.pop();
+                                    call!(after);
                                     match res {
                                         JITResult::Err(e) => return C::Err(e),
                                         JITResult::Ok(x) => return C::Ok(x),
@@ -255,18 +256,17 @@ impl Runtime {
                                                 }
                                                 self.stack.current_frame().entries[i] = *arg;
                                             }
-                                            let res =
-                                                func(self, cur.get_mut(), code.osr_table.labels[0]);
+                                            let enter = code.osr_table.labels[0];
+                                            regular.code.jit_code = Some(code);
+                                            call!(before);
+                                            let res = func(self, cur.get_mut(), enter);
+                                            call!(after);
                                             //self.stack.pop();
                                             match res {
                                                 JITResult::Ok(val) => {
-                                                    self.stack.pop();
-                                                    regular.code.jit_code = Some(code);
                                                     return C::Ok(val);
                                                 }
                                                 JITResult::Err(e) => {
-                                                    self.stack.pop();
-                                                    regular.code.jit_code = Some(code);
                                                     return C::Err(e);
                                                 }
                                                 _ => unimplemented!(),
@@ -337,7 +337,7 @@ impl Runtime {
                     *r = src;
                 }
                 Ins::Yield { dst, res } => {
-                    return Return::Yield(dst, current.r(res));
+                    panic!();
                 }
                 Ins::LoadI32 { dst, imm } => {
                     *current.r_mut(dst) = Value::new_int(imm);
@@ -364,24 +364,21 @@ impl Runtime {
                                         match func(self, current.get_mut(), osr.labels[*osr_enter])
                                         {
                                             JITResult::Err(e) => {
-                                                self.stack.pop();
                                                 return Return::Error(e);
                                             }
                                             JITResult::Ok(x) => {
-                                                self.stack.pop();
                                                 return Return::Return(x);
                                             }
                                             _ => unimplemented!(),
                                         }
                                     }
                                 } else {
-                                    if *hotness >= 1000 {
+                                    if *hotness >= 100 {
                                         log::trace!("Loop is hot! Doin OSR");
                                         let mut gen = FullCodegen::new(current.code.clone());
                                         gen.compile(false);
                                         let code = gen.finish(self, true);
-                                        let osr = &code.osr_table;
-                                        let osr_enter = osr_enter.unwrap();
+                                        let osr = code.osr_table.labels[osr_enter.unwrap()];
                                         let mut bytecode = current.code.clone();
 
                                         let func: extern "C" fn(
@@ -392,21 +389,18 @@ impl Runtime {
                                             -> JITResult = unsafe {
                                             std::mem::transmute(code.instruction_start())
                                         };
-                                        match func(self, current.get_mut(), osr.labels[osr_enter]) {
+                                        bytecode.jit_code = Some(code);
+                                        match func(self, current.get_mut(), osr) {
                                             JITResult::Err(e) => {
-                                                bytecode.jit_code = Some(code);
-                                                self.stack.pop();
                                                 return Return::Error(e);
                                             }
                                             JITResult::Ok(x) => {
-                                                bytecode.jit_code = Some(code);
-                                                self.stack.pop();
                                                 return Return::Return(x);
                                             }
                                             _ => unimplemented!(),
                                         }
                                     } else {
-                                        *hotness += 10;
+                                        *hotness += 1;
                                     }
                                 }
                             }

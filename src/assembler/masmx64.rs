@@ -1,4 +1,8 @@
+use crate::assembler::masm::{Label, MacroAssembler};
+use crate::assembler::Register;
+use crate::bytecompiler::interference_graph::NodeType::Machine;
 use crate::frontend::token::Position;
+use crate::jit::types::MachineMode;
 use crate::runtime::tld::*;
 use crate::runtime::*;
 use crate::*;
@@ -12,10 +16,6 @@ use func::*;
 use jit::*;
 use masm::*;
 use types::*;
-use crate::jit::types::MachineMode;
-use crate::assembler::masm::{MacroAssembler, Label};
-use crate::bytecompiler::interference_graph::NodeType::Machine;
-use crate::assembler::Register;
 
 impl From<FReg> for XmmRegister {
     fn from(reg: FReg) -> XmmRegister {
@@ -80,8 +80,8 @@ impl MacroAssembler {
         self.int_as_float(MachineMode::Float64, dest, MachineMode::Int64, src);
     }
 
-    pub fn cvt_int32_to_double(&mut self,src: Reg,dest: FReg) {
-        self.int_to_float(MachineMode::Float64,dest,MachineMode::Int64,src);
+    pub fn cvt_int32_to_double(&mut self, src: Reg, dest: FReg) {
+        self.int_to_float(MachineMode::Float64, dest, MachineMode::Int64, src);
     }
     pub fn new_int(&mut self, src: Reg, dst: Reg) {
         /*self.load_int_const(
@@ -96,7 +96,7 @@ impl MacroAssembler {
         self.asm.orq_rr(RCX.into(), RAX.into());
         self.mov_rr(true, dst.into(), RCX.into());
     }
-    pub fn new_number(&mut self,src: FReg) {
+    pub fn new_number(&mut self, src: FReg) {
         /*
         cvttsd2si	%xmm0, %ecx
         cvtsi2sd	%ecx, %xmm1
@@ -109,17 +109,23 @@ impl MacroAssembler {
         cmovneq	%rdx, %rax
         cmovpq	%rdx, %rax
         */
-        self.asm.cvttsd2sid_rr(REG_TMP1.into(),src.into());
-        self.asm.cvtsi2sdd_rr(FREG_TMP1.into(),REG_TMP1.into());
+        self.asm.cvttsd2sid_rr(REG_TMP1.into(), src.into());
+        self.asm.cvtsi2sdd_rr(FREG_TMP1.into(), REG_TMP1.into());
         self.load_int_const(MachineMode::Int64, REG_RESULT.into(), -562949953421312);
-        self.asm.orq_rr(REG_RESULT.into(),REG_TMP1.into());
-        self.asm.movq_rx(REG_TMP1.into(),src.into());
-        self.load_int_const(MachineMode::Int64,REG_TMP2,562949953421312);
-        self.int_add(MachineMode::Int64,REG_TMP1.into(),REG_TMP1.into(),REG_TMP2.into());
-        self.asm.ucomisd_rr(src.into(),FREG_TMP1.into());
-        self.asm.cmovq(Condition::NotEqual,REG_RESULT.into(),REG_TMP1.into());
-        self.asm.cmovq(Condition::Parity,REG_RESULT.into(),REG_TMP1.into());
-
+        self.asm.orq_rr(REG_RESULT.into(), REG_TMP1.into());
+        self.asm.movq_rx(REG_TMP1.into(), src.into());
+        self.load_int_const(MachineMode::Int64, REG_TMP2, 562949953421312);
+        self.int_add(
+            MachineMode::Int64,
+            REG_TMP1.into(),
+            REG_TMP1.into(),
+            REG_TMP2.into(),
+        );
+        self.asm.ucomisd_rr(src.into(), FREG_TMP1.into());
+        self.asm
+            .cmovq(Condition::NotEqual, REG_RESULT.into(), REG_TMP1.into());
+        self.asm
+            .cmovq(Condition::Parity, REG_RESULT.into(), REG_TMP1.into());
     }
     pub fn is_int32(&mut self, src: Reg, dst: Reg) {
         let r = self.get_scratch().reg();
@@ -288,8 +294,6 @@ impl MacroAssembler {
         self.asm.movq_xr(dst.into(), RAX.into());
     }
 
-
-
     pub fn new_double(&mut self, src: FReg, dst: Reg) {
         self.asm.movq_rx(RAX.into(), src.into());
         self.int_add_imm(
@@ -311,12 +315,11 @@ impl MacroAssembler {
     }
 
     pub fn prolog(&mut self) -> usize {
+        /**/
         self.asm.pushq_r(RBP.into());
         self.asm.movq_rr(RBP.into(), RSP.into());
-
         self.asm.subq_ri32(RSP.into(), Immediate(0));
         let patch_offset = self.pos() - 4;
-
         patch_offset
     }
 
@@ -348,6 +351,11 @@ impl MacroAssembler {
     pub fn epilog(&mut self) {
         self.asm.movq_rr(RSP.into(), RBP.into());
         self.asm.popq_r(RBP.into());
+        /*self.asm.popq_r(R15.into());
+        self.asm.popq_r(R14.into());
+        self.asm.popq_r(R13.into());
+        self.asm.popq_r(R12.into());
+        self.asm.popq_r(RBX.into());*/
         self.asm.retq();
     }
 
@@ -909,7 +917,7 @@ impl MacroAssembler {
     pub fn new_osr_entry(&mut self) -> usize {
         let id = self.osr_table.labels.len();
         self.osr_table.labels.push(0);
-        self.to_finish_osr.push((self.pos(),id));
+        self.to_finish_osr.push((self.pos(), id));
         id
     }
 
@@ -1331,7 +1339,7 @@ impl MacroAssembler {
             }
         }
     }
-    pub fn emit_current_pos(&mut self,to: Reg) {
+    pub fn emit_current_pos(&mut self, to: Reg) {
         let dest: Register = to.into();
         let lpos = self.pos();
         self.asm.emit_rex64_rm(dest);
@@ -1339,12 +1347,11 @@ impl MacroAssembler {
         self.handlers.push(Handler {
             offset: self.pos(),
             pointer: 0,
-            load: lpos
+            load: lpos,
         });
         self.emit_u64(0);
-
     }
-    pub fn load_label(&mut self,dst: Reg,lbl: Label) {
+    pub fn load_label(&mut self, dst: Reg, lbl: Label) {
         let reg: Register = dst.into();
         self.asm.emit_rex32_rm_optional(reg);
 
@@ -1359,10 +1366,9 @@ impl MacroAssembler {
             let mut slice = &mut self.asm.code_mut()[jmp.at..];
             slice.write_u32::<LittleEndian>(diff as u32).unwrap();
         }
-
     }
 
-    pub fn new_handler(&mut self,to: usize) {}
+    pub fn new_handler(&mut self, to: usize) {}
 
     fn mov_rr(&mut self, x64: bool, lhs: AsmRegister, rhs: AsmRegister) {
         if x64 {

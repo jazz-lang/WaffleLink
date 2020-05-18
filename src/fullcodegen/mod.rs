@@ -204,15 +204,15 @@ impl FullCodegen {
             CallFrame::pop_handler_or_zero as usize as i64,
         );
         self.masm.call_reg(REG_TMP1);
-        self.masm.copy_reg(MachineMode::Int64,REG_TMP2,REG_RESULT);
+        self.masm.copy_reg(MachineMode::Int64, REG_TMP2, REG_RESULT);
         let no_handler = self.masm.create_label();
         self.masm.cmp_reg_imm(MachineMode::Int64, REG_RESULT, 0);
         self.masm.jump_if(CondCode::Equal, no_handler);
         self.masm
             .copy_reg(MachineMode::Int64, REG_RESULT, REG_RESULT2);
         self.store_register(VirtualRegister::argument(0));
-        self.masm.copy_reg(MachineMode::Int64,REG_RESULT,REG_TMP2);
-        self.masm.load_int_const(MachineMode::Int64,REG_TMP2,0);
+        self.masm.copy_reg(MachineMode::Int64, REG_RESULT, REG_TMP2);
+        self.masm.load_int_const(MachineMode::Int64, REG_TMP2, 0);
         // jump to handler in current function.
         self.masm.jump_reg(REG_RESULT);
         self.masm.bind_label(no_handler);
@@ -227,8 +227,7 @@ impl FullCodegen {
         self.masm.bind_label(end);
     }
 
-    pub fn throw(&mut self,val: VirtualRegister) {
-
+    pub fn throw(&mut self, val: VirtualRegister) {
         let disc = std::mem::discriminant(&JITResult::Err(Value::undefined()));
 
         self.masm
@@ -239,28 +238,28 @@ impl FullCodegen {
             CallFrame::pop_handler_or_zero as usize as i64,
         );
         self.masm.call_reg(REG_TMP1);
-        self.masm.copy_reg(MachineMode::Int64,REG_TMP2,REG_RESULT);
+        self.masm.copy_reg(MachineMode::Int64, REG_TMP2, REG_RESULT);
         let no_handler = self.masm.create_label();
         self.masm.cmp_reg_imm(MachineMode::Int64, REG_RESULT, 0);
         self.masm.jump_if(CondCode::Equal, no_handler);
         self.load_register(val);
         self.store_register(VirtualRegister::argument(0));
-        self.masm.copy_reg(MachineMode::Int64,REG_RESULT,REG_TMP2);
-        self.masm.load_int_const(MachineMode::Int64,REG_TMP2,0);
+        self.masm.copy_reg(MachineMode::Int64, REG_RESULT, REG_TMP2);
+        self.masm.load_int_const(MachineMode::Int64, REG_TMP2, 0);
         // jump to handler in current function.
         self.masm.jump_reg(REG_RESULT);
         self.masm.bind_label(no_handler);
 
         // restore Err discriminant
         self.load_register(val);
-        self.masm.copy_reg(MachineMode::Int64,REG_RESULT2,REG_RESULT);
+        self.masm
+            .copy_reg(MachineMode::Int64, REG_RESULT2, REG_RESULT);
         self.masm
             .load_int_const(MachineMode::Int64, REG_RESULT, unsafe {
                 std::mem::transmute::<_, i64>(disc)
             });
 
         self.masm.jump(self.ret);
-
     }
 
     pub fn compile(&mut self, has_table: bool) {
@@ -444,7 +443,7 @@ impl FullCodegen {
                             slow_paths.push(Box::new(x));
                         }
                     }
-                    Ins::Throw {src} => {
+                    Ins::Throw { src } => {
                         self.throw(src);
                     }
 
@@ -452,6 +451,9 @@ impl FullCodegen {
                         self.load_register(val);
                         self.masm
                             .copy_reg(MachineMode::Int64, REG_RESULT2, REG_RESULT);
+                        self.masm
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_THREAD);
+                        self.masm.raw_call(pop_stack as *const _);
                         self.masm.load_int_const(MachineMode::Int32, REG_RESULT, 0);
                         self.masm.jump(self.ret);
                     }
@@ -550,7 +552,12 @@ impl FullCodegen {
 
                         self.masm.load_label(REG_RESULT, lbl);
                         self.masm.emit_current_pos(REG_RESULT2);
-                        self.masm.int_add(MachineMode::Int64,CCALL_REG_PARAMS[1],REG_RESULT,REG_RESULT2);
+                        self.masm.int_add(
+                            MachineMode::Int64,
+                            CCALL_REG_PARAMS[1],
+                            REG_RESULT,
+                            REG_RESULT2,
+                        );
                         self.masm
                             .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_CALLFRAME);
                         self.masm.raw_call(CallFrame::push_handler as *const u8);
@@ -732,7 +739,6 @@ pub extern "C" fn __sub_slow_path(x: Value, y: Value) -> Value {
 }
 
 pub unsafe extern "C" fn __safepoint(rt: &mut Runtime) {
-
     (&mut *rt).safepoint();
 }
 use capstone::prelude::*;
@@ -840,4 +846,8 @@ pub extern "C" fn __put(rt: &mut Runtime, mut base: Value, id: Value, val: Value
         Err(e) => JITResult::Err(e),
         _ => JITResult::Ok(Value::undefined()),
     }
+}
+
+pub extern "C" fn pop_stack(rt: &mut Runtime) {
+    rt.stack.pop();
 }
