@@ -23,25 +23,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="715bd4a6-ee19-4e98-9bcc-1efbdf5a70df" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/src/assembler/asm_buffer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/discord.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/discord.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/masm.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/masm.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/masmx64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/masmx64.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assembler/x64.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/assembler/x64.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/bytecompiler/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/bytecompiler/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/ast.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/ast.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/lexer.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/lexer.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/parser.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/parser.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/token.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/token.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fullcodegen/jitdiv_generator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/jitdiv_generator.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/fullcodegen/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/fullcodegen/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/heap/heap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/heap/heap.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/interpreter/callstack.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/interpreter/callstack.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/interpreter/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/interpreter/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/jit/func.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/jit/func.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/runtime/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/runtime/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

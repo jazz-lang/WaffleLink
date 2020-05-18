@@ -292,20 +292,23 @@ impl Runtime {
                                                 }
                                                 self.stack.current_frame().entries[i] = *arg;
                                             }
+                                            let e = code.osr_table.labels[0];
+                                            regular.code.jit_code = Some(code);
                                             let mut cur = self.stack.current_frame();
                                             match func(
                                                 self,
                                                 cur.get_mut(),
-                                                code.osr_table.labels[0],
+                                                e,
                                             ) {
                                                 JITResult::Ok(val) => {
                                                     self.stack.pop();
-                                                    regular.code.jit_code = Some(code);
+
+
                                                     return Ok(val);
                                                 }
                                                 JITResult::Err(e) => {
                                                     self.stack.pop();
-                                                    regular.code.jit_code = Some(code);
+
                                                     return Err(e);
                                                 }
                                                 _ => unimplemented!(),
