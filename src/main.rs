@@ -10,6 +10,10 @@ use waffle2::interpreter::callstack::CallFrame;
 use waffle2::jit::JITResult;
 use waffle2::runtime::*;
 fn main() {
+    let mem = waffle2::common::os::allocator::reserve(4096);
+    unsafe {
+        *mem.to_mut_ptr::<usize>() = 4;
+    }
     //simple_logger::init().unwrap();
     let mut heap = {
         let mut rt = Runtime::new(Configs::default().no_jit());

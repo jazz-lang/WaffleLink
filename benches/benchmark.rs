@@ -74,12 +74,30 @@ return i
         })
     });
 }
-fn interp_loop(c: &mut Criterion) {}
+
+fn jit_call(c: &mut Criterion) {
+    let mut rt = Runtime::new(Configs::default().no_jit());
+
+    let f = waffle2::unwrap!(rt.compile_function("bench", "bench", "1000.times(|i| return i * i)"));
+    c.bench_function("times-no-jit", |b| {
+        b.iter(|| {
+            let _ = rt.call(f, Value::undefined(), &[]);
+        })
+    });
+    let mut rt = Runtime::new(Configs::default());
+
+    let f = waffle2::unwrap!(rt.compile_function("bench", "bench", "1000.times(|i| return i * i)"));
+    c.bench_function("times-with-jit", |b| {
+        b.iter(|| {
+            let _ = rt.call(f, Value::undefined(), &[]);
+        })
+    });
+}
 
 criterion_group! (
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = jit_loop
+    targets = jit_loop,jit_call
 );
 
 criterion_main!(benches);

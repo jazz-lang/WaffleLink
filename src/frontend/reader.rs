@@ -4,7 +4,7 @@ use std::io::{self, Error, Read};
 use super::token::Position;
 
 pub struct Reader {
-    filename: String,
+    pub filename: String,
     src: String,
 
     pos: usize,

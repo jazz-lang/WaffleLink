@@ -351,6 +351,57 @@ impl Runtime {
         }
         return Err(Value::from(self.allocate_string("not a function")));
     }
+
+    pub fn compile_script(&mut self, name: &str, src: &str) -> Result<Value, Value> {
+        use crate::bytecompiler::*;
+        use crate::frontend::*;
+        use msg::*;
+        use parser::*;
+        use reader::*;
+        let mut reader = Reader::from_string(src);
+        reader.filename = name.to_owned();
+        let mut ast = vec![];
+        let mut p = Parser::new(reader, &mut ast);
+        if let Err(e) = p.parse() {
+            return Err(Value::from(self.allocate_string(e.to_string())));
+        }
+        let code = match compile(self, &ast) {
+            Ok(code) => code,
+            Err(e) => {
+                return Err(Value::from(self.allocate_string(e.to_string())));
+            }
+        };
+        let mut f = function_from_codeblock(self, code.clone(), "<anonymous>");
+        return Ok(f);
+    }
+    pub fn compile_function(
+        &mut self,
+        filename: &str,
+        name: &str,
+        src: &str,
+    ) -> Result<Value, Value> {
+        use crate::bytecompiler::*;
+        use crate::frontend::*;
+        use msg::*;
+        use parser::*;
+        use reader::*;
+        let mut reader = Reader::from_string(src);
+        reader.filename = filename.to_owned();
+        let mut ast = vec![];
+        let mut p = Parser::new(reader, &mut ast);
+        if let Err(e) = p.parse() {
+            return Err(Value::from(self.allocate_string(e.to_string())));
+        }
+        let code = match compile(self, &ast) {
+            Ok(code) => code,
+            Err(e) => {
+                return Err(Value::from(self.allocate_string(e.to_string())));
+            }
+        };
+        let f = function_from_codeblock(self, code.clone(), name);
+        self.globals.insert(name.to_owned(), f);
+        return Ok(f);
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
