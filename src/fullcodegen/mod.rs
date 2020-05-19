@@ -450,11 +450,11 @@ impl FullCodegen {
                     Ins::Return { val } => {
                         self.load_register(val);
                         self.masm
-                            .copy_reg(MachineMode::Int64, REG_RESULT2, REG_RESULT);
+                            .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[1], REG_RESULT);
+
                         self.masm
                             .copy_reg(MachineMode::Int64, CCALL_REG_PARAMS[0], REG_THREAD);
                         self.masm.raw_call(pop_stack as *const _);
-                        self.masm.load_int_const(MachineMode::Int32, REG_RESULT, 0);
                         self.masm.jump(self.ret);
                     }
                     Ins::Safepoint => {
@@ -848,6 +848,7 @@ pub extern "C" fn __put(rt: &mut Runtime, mut base: Value, id: Value, val: Value
     }
 }
 
-pub extern "C" fn pop_stack(rt: &mut Runtime) {
+pub extern "C" fn pop_stack(rt: &mut Runtime, val: Value) -> JITResult {
     rt.stack.pop();
+    JITResult::Ok(val)
 }

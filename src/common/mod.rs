@@ -1,3 +1,4 @@
+pub mod bitmap;
 pub mod bitvec;
 pub mod data_segment;
 pub mod mem;

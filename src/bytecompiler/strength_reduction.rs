@@ -369,7 +369,6 @@ pub fn regalloc_and_reduce_strength(
     //ConstantFolding::run(code);
 
     super::loopanalysis::loopanalysis(code.clone());
-
     let ra = super::graph_coloring::GraphColoring::start(
         code.clone(),
         &code.loopanalysis.as_ref().unwrap(),

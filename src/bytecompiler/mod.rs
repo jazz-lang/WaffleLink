@@ -1,7 +1,8 @@
 pub mod graph_coloring;
 pub mod interference_graph;
+pub mod linear_scan;
 pub mod loopanalysis;
-
+pub mod minira;
 pub mod strength_reduction;
 use crate::bytecode::*;
 use crate::heap::api::*;
@@ -69,7 +70,7 @@ impl ByteCompiler {
             strs: Default::default(),
         }
     }
-    pub fn try_catch(&mut self) -> (impl FnMut(),impl FnMut()) {
+    pub fn try_catch(&mut self) -> (impl FnMut(), impl FnMut()) {
         let p = self.current;
         let p2 = self.code.code[p as usize].code.len();
         self.code.code[p as usize].code.push(Ins::Jump { dst: 0 }); // this is replaced later.
@@ -80,29 +81,26 @@ impl ByteCompiler {
                 this.code.code[p as usize].code[p2 as usize] = Ins::TryCatch {
                     try_: this.current,
                     reg: VirtualRegister::argument(0),
-                    catch: 0
+                    catch: 0,
                 }
             },
-            move || {
-                match &mut this2.code.code[p as usize].code[p2 as usize] {
-                    Ins::TryCatch {
-                        catch,..
-                    } => {
-                        *catch = this2.current;
-                    }
-                    _ => unreachable!()
+            move || match &mut this2.code.code[p as usize].code[p2 as usize] {
+                Ins::TryCatch { catch, .. } => {
+                    *catch = this2.current;
                 }
-            }
+                _ => unreachable!(),
+            },
         )
     }
     pub fn cjmp(&mut self, val: VirtualRegister) -> (impl FnMut(), impl FnMut()) {
         let p = self.current;
         let p2 = self.code.code[p as usize].code.len();
         self.code.code[p as usize].code.push(Ins::Jump { dst: 0 }); // this is replaced later.
-        let this = unsafe { &mut *(self as *mut Self) };
-        let this2 = unsafe { &mut *(self as *mut Self) };
+        let this = unsafe { (self as *mut Self) };
+        let this2 = unsafe { (self as *mut Self) };
         (
             move || {
+                let this = unsafe { &mut *this };
                 this.code.code[p as usize].code[p2 as usize] = Ins::JumpConditional {
                     cond: val,
                     if_true: this.current,
@@ -110,6 +108,7 @@ impl ByteCompiler {
                 };
             },
             move || {
+                let this2 = unsafe { &mut *this2 };
                 if let Ins::JumpConditional {
                     cond: _,
                     if_true: _,
@@ -138,8 +137,12 @@ impl ByteCompiler {
         let p = self.current;
         let p2 = self.code.code[p as usize].code.len();
         self.code.code[p as usize].code.push(Ins::Jump { dst: 0 }); // this is replaced later.
-        let this = unsafe { &mut *(self as *mut Self) };
-        move || this.code.code[p as usize].code[p2 as usize] = Ins::Jump { dst: this.current }
+        let ptr = unsafe { self as *mut Self };
+        move || unsafe {
+            (&mut *ptr).code.code[p as usize].code[p2 as usize] = Ins::Jump {
+                dst: (unsafe { &*ptr }).current,
+            }
+        }
     }
 
     pub fn create_new_block(&mut self) -> u32 {
@@ -569,34 +572,32 @@ impl<'a> Context<'a> {
             ExprKind::Function(name, params, body) => {
                 self.compile_function(params, body, name.clone())
             }
-            ExprKind::Try(t,name,c) => {
-                let (mut try_,mut catch) = self.builder.try_catch();
+            ExprKind::Try(t, name, c) => {
+                let (mut try_, mut catch) = self.builder.try_catch();
                 let dst = self.builder.vreg();
                 let bb = self.builder.create_new_block();
                 self.builder.switch_to_block(bb);
                 try_();
                 let e = self.compile(t)?;
-                self.builder.mov(dst,e);
+                self.builder.mov(dst, e);
                 let mut j = self.builder.jmp();
                 let bb = self.builder.create_new_block();
                 self.builder.switch_to_block(bb);
                 catch();
                 let locals = self.builder.vars.clone();
                 let v = self.builder.vreg();
-                self.builder.mov(v,VirtualRegister::argument(0));
-                self.builder.def_var(name.to_owned(),v);
+                self.builder.mov(v, VirtualRegister::argument(0));
+                self.builder.def_var(name.to_owned(), v);
                 let e = self.compile(c)?;
                 self.builder.vars = locals;
                 self.builder.emit(Ins::PopCatch);
-                self.builder.mov(dst,e);
+                self.builder.mov(dst, e);
                 let mut j2 = self.builder.jmp();
                 let bb = self.builder.create_new_block();
                 self.builder.switch_to_block(bb);
                 j();
                 j2();
                 Ok(dst)
-
-
             }
             ExprKind::Throw(e) => {
                 let x = self.compile(e)?;
@@ -653,7 +654,7 @@ impl<'a> Context<'a> {
                         return Ok(dst);
                     } else {
                         let r = self.builder.vreg();
-                        self.builder.emit(Ins::Mov {dst: r,src: last});
+                        self.builder.emit(Ins::Mov { dst: r, src: last });
                         return Ok(r);
                     }
                 }
@@ -941,12 +942,14 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<crate::Rc<CodeBloc
         pos: Position::new(0, 0),
         expr: ExprKind::Block(ast.to_vec()),
     });
+
     let mut ctx = Context::new(
         rt,
         Rc::new(RefCell::new(Default::default())),
         Rc::new(RefCell::new(Default::default())),
         None,
     );
+    let start = std::time::Instant::now();
     let r = ctx.compile(&ast)?;
     ctx.builder.emit(Ins::Safepoint);
     let r = if r.is_local() && r.to_local() == 0 {
@@ -959,7 +962,12 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<crate::Rc<CodeBloc
     };
     ctx.builder.emit(Ins::Return { val: r });
 
-    Ok(ctx.builder.finish(rt))
+    let res = Ok(ctx.builder.finish(rt));
+    let e = start.elapsed();
+    let ms = e.as_millis();
+    let ns = e.as_nanos();
+    println!("compiled in {}ms or {}ns", ms, ns);
+    res
 }
 
 use frontend::token::*;

@@ -82,7 +82,7 @@ pub enum JSTag {
 
 #[derive(Copy, Clone)]
 pub struct Value {
-    pub(crate) u: EncodedValueDescriptor,
+    pub u: EncodedValueDescriptor,
 }
 
 #[cfg(feature = "value32-64")]
@@ -655,7 +655,7 @@ impl Value {
         }
     }
 
-    pub fn each_pointer(&self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+    pub fn each_pointer(&self, stack: &mut std::collections::VecDeque<*const CellPointer>) {
         if self.is_cell() {
             stack.push_back(self.as_cell_ref());
         }
@@ -710,8 +710,8 @@ impl From<CellPointer> for Value {
         }
     }
 }
-use std::hash::{Hash, Hasher};
 use smallvec::SmallVec;
+use std::hash::{Hash, Hasher};
 
 impl Hash for Value {
     fn hash<H: Hasher>(&self, s: &mut H) {
