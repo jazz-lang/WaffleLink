@@ -27,7 +27,7 @@ capstone = "0.7"
 [features]
 value64 = []
 value32-64 = []
-default = ["value64"]
+default = ["value64","perf"]
 perf = []
 
 [target.'cfg(windows)'.dependencies]

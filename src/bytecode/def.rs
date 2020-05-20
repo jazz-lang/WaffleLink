@@ -1,8 +1,9 @@
 use super::virtual_reg::*;
 use derive_more::Display;
 
-#[derive(Copy, Clone, Display)]
+#[derive(Copy, Clone, Display, Debug)]
 pub enum Ins {
+    Nop,
     // dst = src
     #[display(fmt = "mov {},{}", dst, src)]
     Mov {
@@ -281,7 +282,8 @@ pub enum Ins {
     PopCatch,
 }
 #[rustfmt::skip]
-pub static INS_NAME: [&'static str; 45] = [
+pub static INS_NAME: [&'static str; 46] = [
+    "nop",
     "mov", 
     "load_i32", 
     "new_generator_func", 
@@ -345,6 +347,8 @@ pub enum BinaryOp {
     UShr,
     Shr,
     Shl,
+    LoadID,
+    LoadVal,
 }
 
 impl Ins {
@@ -372,7 +376,25 @@ impl Ins {
             UShr { lhs, src, .. } => Some((lhs, BinaryOp::UShr, src)),
             Shr { lhs, src, .. } => Some((lhs, BinaryOp::Shr, src)),
             Shl { lhs, src, .. } => Some((lhs, BinaryOp::Shl, src)),
+            GetById { base, id, .. } => Some((base, BinaryOp::LoadID, id)),
+            GetByVal { base, val, .. } => Some((base, BinaryOp::LoadVal, val)),
             _ => None,
+        }
+    }
+    pub fn has_side_effects(self) -> bool {
+        use Ins::*;
+        match self {
+            Return { .. } => true,
+            Throw { .. } => true,
+            Call { .. } | CallNoArgs { .. } | Construct { .. } | ConstructNoArgs { .. } => true,
+            Ins::PutByVal { .. } | Ins::PutById { .. } => true,
+            Ins::TryCatch { .. } => true,
+            Ins::JumpConditional { .. } | Ins::Jump { .. } => true,
+            Await { .. } | Yield { .. } => true,
+            Ins::PopCatch => true,
+            CloseEnv { .. } => true,
+            Ins::Safepoint => true,
+            _ => false,
         }
     }
     pub fn is_final(&self) -> bool {

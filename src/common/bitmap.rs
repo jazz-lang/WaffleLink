@@ -3,12 +3,17 @@ use smallvec::SmallVec;
 const WORDS: usize = ((255 + 1) + 4 * 8 - 1) / (4 * 8);
 pub const WORD_SIZE: usize = 4 * 8;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct BitMap {
     bits: SmallVec<[u32; WORDS]>,
 }
 const ONE: u32 = 1;
 impl BitMap {
+    pub fn new() -> Self {
+        Self {
+            bits: SmallVec::new(),
+        }
+    }
     pub fn size(&self) -> usize {
         256
     }

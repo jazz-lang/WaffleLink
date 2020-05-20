@@ -4,24 +4,18 @@ use reader::*;
 use value::*;
 use waffle2::bytecompiler::*;
 use waffle2::frontend::*;
-use waffle2::fullcodegen::FullCodegen;
-use waffle2::heap::api::*;
-use waffle2::interpreter::callstack::CallFrame;
-use waffle2::jit::JITResult;
 use waffle2::runtime::*;
 fn main() {
-    let mut heap = {
+    simple_logger::init().unwrap();
+    let _heap = {
         let mut rt = Runtime::new(Configs::default());
         let reader = Reader::from_string(
             "
-function fac(x) {
-    if x < 2 {
-        return 1
-    } else {
-        fac(x - 1) * x
-    }
-}
-log(fac(5))
+function foo(x) {
+    var y = x.x
+    var z = x.x
+    return y+z
+} 
 return 0
 ",
         );

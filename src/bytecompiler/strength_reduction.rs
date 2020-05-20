@@ -365,10 +365,15 @@ pub fn regalloc_and_reduce_strength(
     CleanPass::remove_dead_blocks(code.clone());
     code.cfg = Some(Box::new(build_cfg_for_code(&code.code)));
 
+    //super::minira::run_minira(&mut *code, regalloc::AlgorithmWithDefaults::LinearScan, _rt);
     LocalCSE::run(code.clone());
     //ConstantFolding::run(code);
 
     super::loopanalysis::loopanalysis(code.clone());
+    #[cfg(feature = "perf")]
+    {
+        _rt.perf.get_perf(crate::runtime::perf::Perf::REGALLOC);
+    }
     let ra = super::graph_coloring::GraphColoring::start(
         code.clone(),
         &code.loopanalysis.as_ref().unwrap(),
@@ -380,6 +385,10 @@ pub fn regalloc_and_reduce_strength(
                 ins.replace_reg(temp, real);
             }
         }
+    }
+    #[cfg(feature = "perf")]
+    {
+        _rt.perf.get_perf(crate::runtime::perf::Perf::REGALLOC);
     }
 
     code.code.iter_mut().for_each(|bb| {

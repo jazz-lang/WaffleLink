@@ -29,6 +29,8 @@ pub struct Perf {
 impl Perf {
     pub const CODEGEN: u8 = 253;
     pub const EXTERN: u8 = 254;
+    pub const REGALLOC: u8 = 252;
+    pub const INTERFERENCE_GRAPH: u8 = 251;
     pub const INVALID: u8 = 255;
     pub fn new() -> Self {
         Perf {
@@ -94,6 +96,10 @@ impl Perf {
                     "CODEGEN"
                 } else if i as u8 == Perf::EXTERN {
                     "EXTERN"
+                } else if i as u8 == Perf::REGALLOC {
+                    "REGALLOC"
+                } else if i as u8 == Perf::INTERFERENCE_GRAPH {
+                    "IINTERFERENCE GRAPH"
                 } else {
                     INS_NAME[i as usize]
                 },

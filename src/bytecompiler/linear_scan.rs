@@ -31,11 +31,17 @@ use indexmap::*;
 
 use crate::common::bitmap::*;
 
+#[derive(Clone, PartialEq)]
 pub struct RegisterSet {
     bits: BitMap,
 }
 
 impl RegisterSet {
+    pub fn new() -> Self {
+        Self {
+            bits: BitMap::new(),
+        }
+    }
     const SPEC: usize = 256;
 
     pub fn for_each(&self, mut f: impl FnMut(VirtualRegister)) {
@@ -112,6 +118,85 @@ impl<'a> LinearScan<'a> {
         }
         self.registers = bank.clone();
         self.register_set.set_all(bank.iter());
-        //self.unified.merge(&bank);
+        self.unified.merge(&self.register_set);
+    }
+}
+
+pub struct RegLiveness {
+    live_at_head: IndexMap<u32, RegisterSet>,
+    live_at_tail: IndexMap<u32, RegisterSet>,
+    actions: IndexMap<u32, ActionsForBoundary>,
+}
+use crate::bytecode::*;
+impl RegLiveness {
+    pub fn new(code: &CodeBlock) {
+        let mut this = Self {
+            live_at_head: IndexMap::with_capacity(code.code.len()),
+            live_at_tail: IndexMap::with_capacity(code.code.len()),
+            actions: IndexMap::with_capacity(code.code.len()),
+        };
+
+        for bb in code.code.iter() {
+            this.actions.insert(bb.id, Vec::new());
+            this.live_at_head.insert(bb.id, RegisterSet::new());
+            this.live_at_tail.insert(bb.id, RegisterSet::new());
+        }
+
+        for bb in code.code.iter() {
+            let mut actions = &mut this.actions[&bb.id];
+            actions.resize_with(bb.size() + 1, || Actions::default());
+            for idx in bb.size()..0 {
+                let inst = bb.code[idx];
+                let defs = inst.get_defs();
+                let uses = inst.get_uses();
+                for r in defs.iter() {
+                    actions[idx].d.add(*r);
+                }
+                for r in uses.iter() {
+                    actions[idx].u.add(*r);
+                }
+            }
+        }
+
+        for block in code.code.iter() {
+            let live = &mut this.live_at_tail[&block.id];
+            block.last().get_uses().iter().for_each(|r| {
+                live.add(*r);
+            });
+        }
+        let mut dirty_blocks = bv::BitVec::<u64>::new();
+        for idx in code.code.len()..0 {
+            dirty_blocks.set(idx as _, true);
+        }
+        let mut changed = false;
+        while {
+            changed = false;
+            for bidx in code.code.len()..0 {
+                let block = &code.code[bidx];
+                if dirty_blocks.get(bidx as _) {
+                    dirty_blocks.set(bidx as _, false);
+                    continue;
+                }
+            }
+
+            changed
+        } {}
+    }
+}
+
+type ActionsForBoundary = Vec<Actions>;
+
+#[derive(Clone)]
+struct Actions {
+    pub u: RegisterSet,
+    pub d: RegisterSet,
+}
+
+impl Default for Actions {
+    fn default() -> Self {
+        Self {
+            u: RegisterSet::new(),
+            d: RegisterSet::new(),
+        }
     }
 }

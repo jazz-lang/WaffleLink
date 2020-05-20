@@ -685,6 +685,8 @@ impl<'a> Context<'a> {
                 let val = self.compile(e)?;
                 self.builder.emit(Ins::Safepoint);
                 self.builder.emit(Ins::Return { val });
+                let bb = self.builder.create_new_block();
+                self.builder.switch_to_block(bb);
                 return Ok(val);
             }
 
@@ -973,9 +975,12 @@ pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<crate::Rc<CodeBloc
 use frontend::token::*;
 
 pub fn function_from_codeblock(rt: &mut Runtime, code: crate::Rc<CodeBlock>, name: &str) -> Value {
-    //let mut b = String::new();
-    //code.dump(&mut b, rt).unwrap();
-    //println!("\nfunction {}(...): \n{}", name, b);
+    if log::log_enabled!(log::Level::Trace) {
+        let mut b = String::new();
+        code.dump(&mut b, rt).unwrap();
+
+        println!("\nfunction {}(...): \n{}", name, b);
+    }
     use crate::runtime::cell::*;
     let name = Value::from(rt.allocate_string(name));
     let func = RegularFunction {
