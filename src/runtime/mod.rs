@@ -1,4 +1,3 @@
-pub mod builtins;
 pub mod cell;
 pub mod deref_ptr;
 pub mod perf;
@@ -6,13 +5,9 @@ pub mod pure_nan;
 pub mod tld;
 pub mod value;
 use crate::common::*;
-use crate::fullcodegen::FullCodegen;
 use crate::heap::api::*;
 use crate::heap::heap::{Collection, Heap};
-use crate::interpreter::callstack::{CallFrame, StackEntry};
-use crate::jit::*;
 use cell::*;
-use osr::*;
 use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
 use value::*;
@@ -56,12 +51,8 @@ impl CodeAllocator {
     }
 }
 
-use crate::jit::osr::*;
 use smallvec::SmallVec;
 use std::cell::RefCell;
-thread_local! {
-    static OSR_STUB: RefCell<OSRStub> = RefCell::new(OSRStub::new());
-}
 
 pub struct Runtime {
     pub configs: Configs,
@@ -80,23 +71,11 @@ pub struct Runtime {
     pub boolean_prototype: CellPointer,
     pub byte_array_prototype: CellPointer,
     pub globals: HashMap<String, Value>,
-    pub stack: crate::interpreter::callstack::CallStack,
     pub code_space: CodeAllocator,
     pub strings: HashMap<String, Value>,
 }
 
 impl Runtime {
-    pub fn get_osr(
-        &mut self,
-    ) -> extern "C" fn(&mut Runtime, &mut CallFrame, usize) -> super::jit::JITResult {
-        OSR_STUB.with(|x| {
-            if x.borrow().code.is_some() {
-                return x.borrow().get();
-            }
-            x.borrow_mut().generate(self);
-            x.borrow().get()
-        })
-    }
     pub fn new(c: Configs) -> Self {
         let mut heap = Heap::new();
         let object = heap.allocate(Cell::new(CellValue::None, None));
@@ -112,7 +91,6 @@ impl Runtime {
             array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
             byte_array_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
             globals: (HashMap::new()),
-            stack: (crate::interpreter::callstack::CallStack::new(999 * 2)),
             module_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
             file_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
             string_prototype: heap.allocate(Cell::new(CellValue::None, Some(object))),
@@ -124,7 +102,6 @@ impl Runtime {
             code_space: CodeAllocator::new(),
         };
 
-        builtins::initialize(&mut this);
         this
     }
     pub fn safepoint(&mut self) {
@@ -157,7 +134,7 @@ impl Runtime {
             val.each_pointer(stack);
         }
 
-        for frame in self.stack.stack.iter() {
+        /*for frame in self.stack.stack.iter() {
             match frame {
                 StackEntry::Frame(ref f) => {
                     f.registers.iter().for_each(|item| item.each_pointer(stack));
@@ -171,7 +148,7 @@ impl Runtime {
                 }
                 _ => (),
             }
-        }
+        }*/
     }
 
     #[inline]
@@ -197,210 +174,6 @@ impl Runtime {
         let cell = Cell::new(CellValue::String(Box::new(s)), Some(proto));
 
         self.allocate_cell(cell)
-    }
-    #[inline(never)]
-    pub extern "C" fn call(
-        &mut self,
-        func: Value,
-        this: Value,
-        args: &[Value],
-    ) -> Result<Value, Value> {
-        let ptr = self as *mut Self;
-        if func.is_empty() {
-            panic!();
-        }
-        if func.is_cell() == false {
-            return Err(Value::from(self.allocate_string("not a function")));
-        }
-        let val = func;
-        use crate::interpreter::Return;
-
-        if let CellValue::Function(ref mut func) = func.as_cell().value {
-            match func {
-                Function::Native { name: _, native } => match native(self, this, args) {
-                    Return::Error(e) => return Err(e),
-                    Return::Return(x) => return Ok(x),
-                    _ => unimplemented!("TODO: Generators"),
-                },
-                Function::Regular(ref mut regular) => {
-                    let regular: &mut RegularFunction = regular;
-                    match regular.kind {
-                        RegularFunctionKind::Generator => {
-                            unimplemented!("TODO: Instantiat generator");
-                        }
-                        _ => {
-                            if self.configs.enable_jit {
-                                if let Some(ref jit) = regular.code.jit_code {
-                                    self.stack.push(
-                                        unsafe { &mut *ptr },
-                                        val,
-                                        regular.code.clone(),
-                                        this,
-                                    )?;
-
-                                    let mut cur = self.stack.current_frame();
-                                    let func: extern "C" fn(
-                                        &mut Runtime,
-                                        &mut CallFrame,
-                                        usize,
-                                    )
-                                        -> JITResult =
-                                        unsafe { std::mem::transmute(jit.instruction_start()) };
-                                    for (i, arg) in args.iter().enumerate() {
-                                        if i >= self.stack.current_frame().entries.len() {
-                                            break;
-                                        }
-                                        self.stack.current_frame().entries[i] = *arg;
-                                    }
-                                    assert!(regular.code.jit_enter == 0);
-                                    call!(before);
-                                    let res = func(self, cur.get_mut(), jit.osr_table.labels[0]);
-                                    call!(after);
-                                    match res {
-                                        JITResult::Err(e) => return Err(e),
-                                        JITResult::Ok(x) => return Ok(x),
-                                        JITResult::OSRExit => {
-                                            /*self.stack.current_frame().ip = entry.to_ip;
-                                            self.stack.current_frame().bp = entry.to_bp;
-                                            match self.interpret() {
-                                                Return::Return(val) => return Ok(val),
-                                                Return::Error(e) => return Err(e),
-                                                Return::Yield { .. } => {
-                                                    unimplemented!("TODO: Generators")
-                                                }
-                                            }*/
-                                            unimplemented!();
-                                        }
-                                    }
-                                } else {
-                                    if regular.code.hotness >= 1000 {
-                                        if let RegularFunctionKind::Ordinal = regular.kind {
-                                            let mut gen = FullCodegen::new(regular.code.clone());
-                                            gen.compile(false);
-                                            log::trace!(
-                                                "Disassembly for '{}'",
-                                                unwrap!(regular.name.to_string(self))
-                                            );
-                                            let code = gen.finish(self, true);
-                                            let func: extern "C" fn(
-                                                &mut Runtime,
-                                                &mut CallFrame,
-                                                usize,
-                                            )
-                                                -> JITResult = unsafe {
-                                                std::mem::transmute(code.instruction_start())
-                                            };
-                                            let x = unsafe { &mut *ptr };
-                                            let _ =
-                                                self.stack.push(x, val, regular.code.clone(), this);
-                                            for (i, arg) in args.iter().enumerate() {
-                                                if i >= self.stack.current_frame().entries.len() {
-                                                    break;
-                                                }
-                                                self.stack.current_frame().entries[i] = *arg;
-                                            }
-                                            let e = code.osr_table.labels[0];
-                                            regular.code.jit_code = Some(code);
-                                            let mut cur = self.stack.current_frame();
-                                            call!(before);
-                                            match func(self, cur.get_mut(), e) {
-                                                JITResult::Ok(val) => {
-                                                    call!(after);
-                                                    return Ok(val);
-                                                }
-                                                JITResult::Err(e) => {
-                                                    return Err(e);
-                                                }
-                                                _ => unimplemented!(),
-                                            }
-                                        }
-                                    } else {
-                                        regular.code.get_mut().hotness =
-                                            regular.code.hotness.wrapping_add(50);
-                                    }
-                                }
-                            }
-                            // unsafe code block is actually safe,we just access heap.
-                            self.stack.push(
-                                unsafe { &mut *ptr },
-                                val,
-                                regular.code.clone(),
-                                this,
-                            )?;
-                            for (i, arg) in args.iter().enumerate() {
-                                if i >= self.stack.current_frame().entries.len() {
-                                    break;
-                                }
-                                self.stack.current_frame().entries[i] = *arg;
-                            }
-                            let _c = regular.code.clone();
-                            self.stack.current_frame().exit_on_return = true;
-                            match self.interpret() {
-                                Return::Return(val) => return Ok(val),
-                                Return::Error(e) => return Err(e),
-                            }
-                        }
-                    }
-                }
-                _ => unimplemented!("TODO: Async"),
-            }
-        }
-        let key = self.allocate_string("call");
-        if let Some(call) = func.lookup(self, Value::from(key))? {
-            return self.call(call, this, args);
-        }
-        return Err(Value::from(self.allocate_string("not a function")));
-    }
-
-    pub fn compile_script(&mut self, name: &str, src: &str) -> Result<Value, Value> {
-        use crate::bytecompiler::*;
-        use crate::frontend::*;
-        use msg::*;
-        use parser::*;
-        use reader::*;
-        let mut reader = Reader::from_string(src);
-        reader.filename = name.to_owned();
-        let mut ast = vec![];
-        let mut p = Parser::new(reader, &mut ast);
-        if let Err(e) = p.parse() {
-            return Err(Value::from(self.allocate_string(e.to_string())));
-        }
-        let code = match compile(self, &ast) {
-            Ok(code) => code,
-            Err(e) => {
-                return Err(Value::from(self.allocate_string(e.to_string())));
-            }
-        };
-        let mut f = function_from_codeblock(self, code.clone(), "<anonymous>");
-        return Ok(f);
-    }
-    pub fn compile_function(
-        &mut self,
-        filename: &str,
-        name: &str,
-        src: &str,
-    ) -> Result<Value, Value> {
-        use crate::bytecompiler::*;
-        use crate::frontend::*;
-        use msg::*;
-        use parser::*;
-        use reader::*;
-        let mut reader = Reader::from_string(src);
-        reader.filename = filename.to_owned();
-        let mut ast = vec![];
-        let mut p = Parser::new(reader, &mut ast);
-        if let Err(e) = p.parse() {
-            return Err(Value::from(self.allocate_string(e.to_string())));
-        }
-        let code = match compile(self, &ast) {
-            Ok(code) => code,
-            Err(e) => {
-                return Err(Value::from(self.allocate_string(e.to_string())));
-            }
-        };
-        let f = function_from_codeblock(self, code.clone(), name);
-        self.globals.insert(name.to_owned(), f);
-        return Ok(f);
     }
 }
 

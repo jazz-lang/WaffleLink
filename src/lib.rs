@@ -31,15 +31,9 @@ macro_rules! call {
     (after) => {};
 }
 
-pub mod assembler;
-pub mod bytecode;
-pub mod bytecompiler;
 pub mod common;
 pub mod frontend;
-pub mod fullcodegen;
 pub mod heap;
-pub mod interpreter;
-pub mod jit;
 pub mod runtime;
 
 #[global_allocator]
@@ -47,15 +41,4 @@ static GLOBAL: std::alloc::System = std::alloc::System;
 pub use common::rc::Rc;
 
 #[cfg(test)]
-mod tests {
-    use crate::bytecompiler::*;
-    use crate::frontend::*;
-    use crate::fullcodegen::FullCodegen;
-    use crate::heap::api::*;
-    use crate::interpreter::callstack::CallFrame;
-    use crate::jit::JITResult;
-    use crate::runtime::*;
-    use parser::*;
-    use reader::*;
-    use value::*;
-}
+mod tests {}

@@ -34,14 +34,10 @@ perf = []
 winapi = { version = "*", features = ["memoryapi"] }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
-raw-cpuid = "8.0.*"
+raw-cpuid = "8.1.*"
 
 [profile.release]
 debug = true
 
 [dev-dependencies]
 criterion = "0.3"
-
-[[bench]]
-name = "benchmark"
-harness = false

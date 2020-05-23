@@ -1,5 +1,3 @@
-use crate::bytecode::def::*;
-
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
@@ -101,7 +99,8 @@ impl Perf {
                 } else if i as u8 == Perf::INTERFERENCE_GRAPH {
                     "IINTERFERENCE GRAPH"
                 } else {
-                    INS_NAME[i as usize]
+                    "NO!"
+                    //INS_NAME[i as usize]
                 },
                 if *c > 10000_000 {
                     format!("{:>9}M", c / 1000_000)

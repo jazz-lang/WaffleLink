@@ -602,16 +602,7 @@ impl Value {
                 let x = self.lookup(rt, Value::from(key))?;
                 if let Some(to_string) = x {
                     if to_string.is_cell() {
-                        if let CellValue::Function(_) = to_string.as_cell().value {
-                            return match rt.call(to_string, *self, &[]) {
-                                Ok(x) => x.to_string(rt),
-                                Err(e) => Err(e),
-                            };
-                        } else {
-                            return Err(Value::from(
-                                rt.allocate_string("toString is not a function,expected function"),
-                            ));
-                        }
+                        unimplemented!()
                     }
                 }
                 unimplemented!()

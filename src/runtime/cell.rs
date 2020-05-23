@@ -4,17 +4,9 @@ use fancy_regex::Regex;
 use hashlink::*;
 use value::*;
 pub enum Function {
-    AsyncNative {
-        name: Value,
-        native: fn(
-            &mut Runtime,
-            Value,
-            &[Value],
-        ) -> Box<dyn std::future::Future<Output = crate::interpreter::Return>>,
-    },
     Native {
         name: Value,
-        native: fn(&mut Runtime, Value, &[Value]) -> crate::interpreter::Return,
+        native: fn(&mut Runtime, Value, &[Value]),
     },
     Regular(RegularFunction),
 }
@@ -24,7 +16,6 @@ pub struct RegularFunction {
     pub source: String,
     pub arguments: Vec<String>,
     pub env: Value,
-    pub code: crate::Rc<crate::bytecode::CodeBlock>,
     /// Generator functions compiled to simple state machine
     pub kind: RegularFunctionKind,
 }
@@ -41,7 +32,6 @@ pub enum CellValue {
     ByteArray(Box<Vec<u8>>),
     RegEx(Regex),
     File(std::fs::File),
-    Future(std::pin::Pin<Box<dyn std::future::Future<Output = crate::interpreter::Return>>>),
     Function(Function),
 }
 use indexmap::IndexMap;
@@ -209,33 +199,26 @@ pub struct CellPointer {
 }
 
 impl CellPointer {
-
-    pub fn each_pointer(&self,stack: &mut std::collections::VecDeque<*const CellPointer>) {
+    pub fn each_pointer(&self, stack: &mut std::collections::VecDeque<*const CellPointer>) {
         match self.prototype {
             Some(ref proto) => {
                 stack.push_back(proto);
             }
-            _ => ()
+            _ => (),
         }
 
-        for (_,property) in self.properties.iter() {
+        for (_, property) in self.properties.iter() {
             property.each_pointer(stack);
         }
         match self.value {
-            CellValue::Array(ref array) => {
-                array.iter().for_each(|item| item.each_pointer(stack))
-            }
-            CellValue::Function(ref f) => {
-                match f {
-                    Function::Native { name,..} => name.each_pointer(stack),
-                    Function::AsyncNative { name,..} => name.each_pointer(stack),
-                    Function::Regular(regular) => {
-                        regular.env.each_pointer(stack);
-                        regular.code.constants_.iter().for_each(|item| item.each_pointer(stack));
-                        regular.name.each_pointer(stack);
-                    }
+            CellValue::Array(ref array) => array.iter().for_each(|item| item.each_pointer(stack)),
+            CellValue::Function(ref f) => match f {
+                Function::Native { name, .. } => name.each_pointer(stack),
+                Function::Regular(regular) => {
+                    regular.env.each_pointer(stack);
+                    regular.name.each_pointer(stack);
                 }
-            }
+            },
 
             _ => {}
         }
@@ -249,8 +232,8 @@ impl CellPointer {
     }
 }
 
-use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
+use std::ops::{Deref, DerefMut};
 
 impl Deref for CellPointer {
     type Target = Cell;
