@@ -109,7 +109,7 @@ pub struct CodeBlock {
     pub hotness: usize,
     pub cfg: Option<Box<CodeCFG>>,
     pub loopanalysis: Option<crate::bytecompiler::loopanalysis::BCLoopAnalysisResult>,
-    pub jit_code: Option<Code>,
+    pub fullcodegen: Option<Code>,
     pub jit_enter: usize,
     pub feedback: Vec<FeedBack>,
 }
@@ -360,4 +360,12 @@ pub fn build_cfg_for_code(code: &Vec<BasicBlock>) -> CodeCFG {
     }
 
     ret
+}
+
+impl Drop for CodeBlock {
+    fn drop(&mut self) {
+        if let Some(mut jit) = self.fullcodegen.take() {
+            crate::common::os::allocator::uncommit(jit.code_start, jit.code_size);
+        }
+    }
 }

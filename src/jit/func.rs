@@ -4,10 +4,10 @@ use crate::frontend::token::Position;
 use crate::jit::osr::OSRTable;
 use crate::runtime::Runtime;
 use data_segment::*;
+use smallvec::alloc::alloc::handle_alloc_error;
 use std::collections::HashSet;
 use std::fmt;
 use std::ptr;
-use smallvec::alloc::alloc::handle_alloc_error;
 
 pub enum JitFct {
     Compiled(Code),
@@ -113,8 +113,8 @@ pub enum JitDescriptor {
 }
 
 pub struct Code {
-    code_start: Address,
-    code_end: Address,
+    pub code_start: Address,
+    pub code_end: Address,
 
     desc: JitDescriptor,
 
@@ -127,7 +127,7 @@ pub struct Code {
     gcpoints: GcPoints,
     comments: Comments,
     positions: PositionTable,
-    code_size: usize,
+    pub code_size: usize,
     handlers: Vec<Handler>,
 }
 
@@ -186,7 +186,9 @@ impl Code {
         for handler in &mut handlers {
             handler.pointer = instruction_start.offset(handler.load).to_usize();
             unsafe {
-                *instruction_start.offset(handler.offset).to_mut_ptr::<usize>() = handler.pointer;
+                *instruction_start
+                    .offset(handler.offset)
+                    .to_mut_ptr::<usize>() = handler.pointer;
             }
         }
         for (pos, id) in &to_finish {
@@ -432,7 +434,10 @@ pub enum LazyCompilationSite {
     /// 5: call <poly_ic_stub>
     /// ```
     ///
-    PolyIC,
+    PatchPoint {
+        size_to_nop: usize,
+        size: usize,
+    },
     Compile(usize, i32, TypeList, TypeList),
     VirtCompile(u32, TypeList, TypeList),
 }

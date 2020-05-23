@@ -4,21 +4,19 @@ use super::*;
 use crate::common;
 use crate::frontend::token::Position;
 use crate::jit::{func::*, types::*, *};
-use osr::*;
 use crate::runtime::*;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use common::{mem::*, os::*, *};
 use data_segment::*;
+use osr::*;
 use std::cell::Cell;
 use std::ops::Deref;
 use std::rc::Rc;
 
-
-
 pub struct MacroAssembler {
     pub asm: Assembler,
     pub osr_table: OSRTable,
-    pub to_finish_osr: Vec<(usize,usize)>,
+    pub to_finish_osr: Vec<(usize, usize)>,
     pub(crate) labels: Vec<Option<usize>>,
     pub(crate) jumps: Vec<ForwardJump>,
     pub(crate) bailouts: Vec<(Label, Trap, Position)>,
@@ -43,9 +41,7 @@ impl MacroAssembler {
             dseg: DataSegment::new(),
             gcpoints: GcPoints::new(),
             comments: Comments::new(),
-            osr_table: OSRTable {
-                labels: vec![]
-            },
+            osr_table: OSRTable { labels: vec![] },
             positions: PositionTable::new(),
             scratch_registers: ScratchRegisters::new(),
             handlers: vec![],
@@ -75,8 +71,6 @@ impl MacroAssembler {
             self.comments,
             self.positions,
             desc,
-
-
             self.to_finish_osr.clone(),
             self.osr_table.clone(),
             self.handlers,
@@ -160,6 +154,14 @@ impl MacroAssembler {
 
     pub fn emit_lazy_compilation_site(&mut self, info: LazyCompilationSite) {
         let pos = self.pos() as u32;
+        match info {
+            LazyCompilationSite::PatchPoint { size_to_nop, .. } => {
+                for _ in 0..size_to_nop {
+                    self.nop(); // we have to emit nops for patchpoint.
+                }
+            }
+            _ => (),
+        }
         self.lazy_compilation.insert(pos, info);
     }
 
@@ -210,9 +212,9 @@ impl MacroAssembler {
 
     pub fn emit_u32(&mut self, value: u32) {
         /*self.asm
-            .code_mut()
-            .write_u32::<LittleEndian>(value)
-            .unwrap();*/
+        .code_mut()
+        .write_u32::<LittleEndian>(value)
+        .unwrap();*/
 
         self.asm.emit_u32(value);
     }
@@ -230,7 +232,6 @@ impl MacroAssembler {
         */
         self.asm.emit_u64(value);
     }
-
 
     pub fn copy(&mut self, mode: MachineMode, dest: AnyReg, src: AnyReg) {
         assert!(dest.is_reg() == src.is_reg());
@@ -255,7 +256,6 @@ impl MacroAssembler {
             native: true,
         });
     }*/
-
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

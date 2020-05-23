@@ -55,7 +55,7 @@ impl ByteCompiler {
             code: Vec::new(),
             cfg: None,
             loopanalysis: None,
-            jit_code: None,
+            fullcodegen: None,
             feedback: vec![],
             jit_enter: 0,
         });

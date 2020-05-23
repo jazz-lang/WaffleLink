@@ -29,6 +29,7 @@ value64 = []
 value32-64 = []
 default = ["value64","perf"]
 perf = []
+no-interp = []
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "*", features = ["memoryapi"] }

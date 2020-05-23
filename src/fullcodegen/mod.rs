@@ -12,6 +12,7 @@ pub mod jitless_generator;
 pub mod jitlesseq_generator;
 pub mod jitmul_generator;
 pub mod jitnequal_generator;
+pub mod jitpatchpoint_generator;
 pub mod jitshl_generator;
 pub mod jitshr_generator;
 pub mod jitsub_generator;

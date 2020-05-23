@@ -183,7 +183,7 @@ impl Runtime {
                         }
                         _ => {
                             if self.configs.enable_jit {
-                                if let Some(ref jit) = regular.code.jit_code {
+                                if let Some(ref jit) = regular.code.fullcodegen {
                                     let _ = self.stack.push(
                                         unsafe { &mut *ptr },
                                         val,
@@ -257,7 +257,7 @@ impl Runtime {
                                                 self.stack.current_frame().entries[i] = *arg;
                                             }
                                             let enter = code.osr_table.labels[0];
-                                            regular.code.jit_code = Some(code);
+                                            regular.code.fullcodegen = Some(code);
                                             call!(before);
                                             let res = func(self, cur.get_mut(), enter);
                                             call!(after);
@@ -352,7 +352,7 @@ impl Runtime {
                         match &mut current.clone().code.feedback[fdbk as usize] {
                             FeedBack::Loop { osr_enter, hotness } => {
                                 if let Some(osr_enter) = osr_enter {
-                                    if let Some(ref jit) = current.clone().code.jit_code {
+                                    if let Some(ref jit) = current.clone().code.fullcodegen {
                                         let osr = &jit.osr_table;
                                         let func: extern "C" fn(
                                             &mut Runtime,
@@ -389,7 +389,7 @@ impl Runtime {
                                             -> JITResult = unsafe {
                                             std::mem::transmute(code.instruction_start())
                                         };
-                                        bytecode.jit_code = Some(code);
+                                        bytecode.fullcodegen = Some(code);
                                         match func(self, current.get_mut(), osr) {
                                             JITResult::Err(e) => {
                                                 return Return::Error(e);

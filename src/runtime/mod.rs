@@ -230,7 +230,7 @@ impl Runtime {
                         }
                         _ => {
                             if self.configs.enable_jit {
-                                if let Some(ref jit) = regular.code.jit_code {
+                                if let Some(ref jit) = regular.code.fullcodegen {
                                     self.stack.push(
                                         unsafe { &mut *ptr },
                                         val,
@@ -300,7 +300,7 @@ impl Runtime {
                                                 self.stack.current_frame().entries[i] = *arg;
                                             }
                                             let e = code.osr_table.labels[0];
-                                            regular.code.jit_code = Some(code);
+                                            regular.code.fullcodegen = Some(code);
                                             let mut cur = self.stack.current_frame();
                                             call!(before);
                                             match func(self, cur.get_mut(), e) {
