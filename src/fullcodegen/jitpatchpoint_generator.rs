@@ -25,13 +25,12 @@ const MIN_PATCHPOINT_SIZE: usize = 40;
 
 impl FullGenerator for JITPatchPointGenerator {
     fn fast_path(&mut self, gen: &mut FullCodegen) -> bool {
-        
         gen.masm
             .emit_lazy_compilation_site(LazyCompilationSite::PatchPoint {
-                size_to_nop:self.size,
-                size: MIN_PATCHPOINT_SIZE + self.size
+                size_to_nop: self.size,
+                size: MIN_PATCHPOINT_SIZE + self.size,
             });
-        unimplemented!()
+        unimplemented!();
         false
     }
     fn slow_path(&mut self, gen: &mut FullCodegen) {}

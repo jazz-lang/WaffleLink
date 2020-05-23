@@ -1,6 +1,7 @@
 pub mod builtins;
 pub mod cell;
 pub mod deref_ptr;
+pub mod module;
 pub mod perf;
 pub mod pure_nan;
 pub mod tld;
@@ -163,10 +164,7 @@ impl Runtime {
                     f.registers.iter().for_each(|item| item.each_pointer(stack));
                     f.entries.iter().for_each(|item| item.each_pointer(stack));
                     f.func.each_pointer(stack);
-                    f.code
-                        .constants_
-                        .iter()
-                        .for_each(|item| item.each_pointer(stack));
+
                     f.this.each_pointer(stack);
                 }
                 _ => (),
@@ -365,13 +363,19 @@ impl Runtime {
         if let Err(e) = p.parse() {
             return Err(Value::from(self.allocate_string(e.to_string())));
         }
-        let code = match compile(self, &ast) {
+        let code = match compile(self, &ast, name) {
             Ok(code) => code,
             Err(e) => {
                 return Err(Value::from(self.allocate_string(e.to_string())));
             }
         };
         let mut f = function_from_codeblock(self, code.clone(), "<anonymous>");
+        match f.as_cell().value {
+            CellValue::Function(Function::Regular(ref mut r)) => {
+                r.code.module.main = f;
+            }
+            _ => unreachable!(),
+        }
         return Ok(f);
     }
     pub fn compile_function(
@@ -392,13 +396,19 @@ impl Runtime {
         if let Err(e) = p.parse() {
             return Err(Value::from(self.allocate_string(e.to_string())));
         }
-        let code = match compile(self, &ast) {
+        let code = match compile(self, &ast, filename) {
             Ok(code) => code,
             Err(e) => {
                 return Err(Value::from(self.allocate_string(e.to_string())));
             }
         };
         let f = function_from_codeblock(self, code.clone(), name);
+        match f.as_cell().value {
+            CellValue::Function(Function::Regular(ref mut r)) => {
+                r.code.module.main = f;
+            }
+            _ => unreachable!(),
+        }
         self.globals.insert(name.to_owned(), f);
         return Ok(f);
     }

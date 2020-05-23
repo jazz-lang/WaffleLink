@@ -101,7 +101,7 @@ use crate::runtime::value::*;
 use crate::runtime::*;
 
 pub struct CodeBlock {
-    pub constants_: Vec<Value>,
+    pub module: crate::common::rc::Rc<module::Module>,
     pub constants: IndexMap<Value, usize>,
     pub arg_regs_count: u32,
     pub tmp_regs_count: u32,
@@ -136,20 +136,7 @@ impl CodeBlock {
                 writeln!(b, "  [{:04}] {}", i, ins)?;
             }
         }
-        writeln!(b, "Constant table: ")?;
-        for c in self.constants_.iter().enumerate() {
-            let i = c.0;
-            let c = c.1;
-            writeln!(
-                b,
-                "id{} = {}",
-                i,
-                match c.to_string(rt) {
-                    Ok(x) => x,
-                    Err(_) => unreachable!(),
-                }
-            )?;
-        }
+
         Ok(())
     }
 
@@ -158,22 +145,22 @@ impl CodeBlock {
             return virtual_reg::VirtualRegister::constant(*x as i32);
         }
 
-        let vreg = self.constants_.len();
-        self.constants_.push(val);
+        /*let vreg = self.constants_.len();
+        self.constants_.push(val);*/
+        let vreg = self.module.add_constant(val);
         self.constants.insert(val, vreg);
         virtual_reg::VirtualRegister::constant(vreg as _)
     }
     /// Creates new empty constant without inserting it into a constant map.
     pub fn creg(&mut self) -> virtual_reg::VirtualRegister {
-        let vreg = self.constants_.len();
-        self.constants_.push(Value::undefined());
+        let vreg = self.module.add_constant(Value::undefined());
         virtual_reg::VirtualRegister::constant(vreg as _)
     }
     pub fn get_constant(&self, x: i32) -> Value {
-        self.constants_[x as usize]
+        self.module.constants[x as usize]
     }
     pub fn get_constant_mut(&mut self, x: i32) -> &mut Value {
-        &mut self.constants_[x as usize]
+        &mut self.module.constants[x as usize]
     }
 
     pub fn successors_of(&self, bb: u32) -> &[u32] {

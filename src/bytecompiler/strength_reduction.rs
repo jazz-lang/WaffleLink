@@ -270,7 +270,7 @@ impl CleanPass {
     }
     /// Remove empty basic blocks from function.
     fn remove_empty_blocks(code: crate::Rc<CodeBlock>) {
-        const VERBOSE: bool = false;
+        const VERBOSE: bool = true;
         log::trace!("Code before removing empty blocks:");
         code.trace_code(true);
         let mut old_ids = HashMap::new();

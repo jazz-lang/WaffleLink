@@ -11,12 +11,10 @@ fn main() {
         let mut rt = Runtime::new(Configs::default());
         let reader = Reader::from_string(
             "
-function foo(x) {
-    var y = x.x
-    var z = x.x
-    return y+z
-} 
-return 0
+function foo() {
+    return 2
+}
+return foo()
 ",
         );
         let mut ast = vec![];
@@ -25,7 +23,7 @@ return 0
             eprintln!("{}", e);
             return;
         }
-        let code = match compile(&mut rt, &ast) {
+        let code = match compile(&mut rt, &ast, "<main>") {
             Ok(code) => code,
             Err(e) => {
                 eprintln!("{}", e);

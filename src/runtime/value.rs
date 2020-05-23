@@ -657,7 +657,9 @@ impl Value {
 
     pub fn each_pointer(&self, stack: &mut std::collections::VecDeque<*const CellPointer>) {
         if self.is_cell() {
-            stack.push_back(self.as_cell_ref());
+            if !self.as_cell().get().marked {
+                stack.push_back(self.as_cell_ref());
+            }
         }
     }
 }

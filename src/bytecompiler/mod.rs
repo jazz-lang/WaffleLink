@@ -45,11 +45,14 @@ impl ByteCompiler {
         self.emit(Ins::LoopHint { fdbk: id as _ });
         id as _
     }
-    pub fn new(rt: &mut Runtime) -> Self {
+    pub fn new(
+        rt: &mut Runtime,
+        module: crate::common::rc::Rc<crate::runtime::module::Module>,
+    ) -> Self {
         let block = crate::Rc::new(CodeBlock {
             constants: Default::default(),
-            constants_: vec![],
             arg_regs_count: 0,
+            module,
             tmp_regs_count: 255,
             hotness: 0,
             code: Vec::new(),
@@ -499,6 +502,7 @@ impl<'a> Context<'a> {
             Rc::new(RefCell::new(Default::default())),
             Rc::new(RefCell::new(Default::default())),
             Some(DerefPointer::new(self)),
+            self.builder.code.module.clone(),
         );
         let mut used = vec![];
         for p in params.iter() {
@@ -508,14 +512,13 @@ impl<'a> Context<'a> {
             ctx.builder.free_args.push_front(x);
         }
         let c = self.builder.code.creg();
-        let c2 = ctx.builder.code.creg();
         if vname.is_some() {
             self.fmap
                 .borrow_mut()
                 .insert(vname.as_ref().unwrap().to_owned(), c);
             ctx.fmap
                 .borrow_mut()
-                .insert(vname.as_ref().unwrap().to_owned(), c2);
+                .insert(vname.as_ref().unwrap().to_owned(), c);
         }
 
         let res = ctx.compile(e)?;
@@ -550,11 +553,10 @@ impl<'a> Context<'a> {
         );
         use crate::runtime::cell::*;
         if let CellValue::Function(Function::Regular(ref mut reg)) = f.as_cell().value {
-            reg.code.constants_[c2.to_constant() as usize] = f;
+            reg.code.module.constants[c.to_constant() as usize] = f;
         } else {
             unreachable!();
         }
-        self.builder.code.constants_[c.to_constant() as usize] = f;
         Ok(reg)
     }
     pub fn access_set(&mut self, acc: Access, val: VirtualRegister) -> Result<(), MsgWithPos> {
@@ -925,8 +927,9 @@ impl<'a> Context<'a> {
         fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
         functions: Rc<RefCell<Vec<(crate::Rc<CodeBlock>, VirtualRegister, String)>>>,
         parent: Option<DerefPointer<Context<'_>>>,
+        module: crate::common::rc::Rc<crate::runtime::module::Module>,
     ) -> Self {
-        let mut builder = ByteCompiler::new(rt);
+        let mut builder = ByteCompiler::new(rt, module);
         builder.create_new_block();
         Self {
             builder,
@@ -939,17 +942,22 @@ impl<'a> Context<'a> {
     }
 }
 
-pub fn compile(rt: &mut Runtime, ast: &[Box<Expr>]) -> Result<crate::Rc<CodeBlock>, MsgWithPos> {
+pub fn compile(
+    rt: &mut Runtime,
+    ast: &[Box<Expr>],
+    name: &str,
+) -> Result<crate::Rc<CodeBlock>, MsgWithPos> {
     let ast = Box::new(Expr {
         pos: Position::new(0, 0),
         expr: ExprKind::Block(ast.to_vec()),
     });
-
+    let mut module = crate::common::rc::Rc::new(module::Module::new(rt.intern(name)));
     let mut ctx = Context::new(
         rt,
         Rc::new(RefCell::new(Default::default())),
         Rc::new(RefCell::new(Default::default())),
         None,
+        module.clone(),
     );
     let start = std::time::Instant::now();
     let r = ctx.compile(&ast)?;

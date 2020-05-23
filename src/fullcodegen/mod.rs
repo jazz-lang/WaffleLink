@@ -112,7 +112,9 @@ impl FullCodegen {
         } else if vreg.is_constant() {
             self.masm
                 .load_int_const(MachineMode::Int64, REG_RESULT, unsafe {
-                    self.code.constants_[vreg.to_constant() as usize].u.as_int64
+                    self.code.module.constants[vreg.to_constant() as usize]
+                        .u
+                        .as_int64
                 });
         } else {
             self.masm.load_mem(
@@ -140,7 +142,9 @@ impl FullCodegen {
             );
         } else if vreg.is_constant() {
             self.masm.load_int_const(MachineMode::Int64, x, unsafe {
-                self.code.constants_[vreg.to_constant() as usize].u.as_int64
+                self.code.module.constants[vreg.to_constant() as usize]
+                    .u
+                    .as_int64
             });
         } else {
             if regs.is_none() {
