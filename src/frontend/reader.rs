@@ -2,10 +2,10 @@ use std::fs::File;
 use std::io::{self, Error, Read};
 
 use super::token::Position;
-
+use crate::common::rc::Rc;
 pub struct Reader {
-    pub filename: String,
-    src: String,
+    pub filename: Rc<String>,
+    src: Rc<String>,
 
     pos: usize,
     next_pos: usize,
@@ -85,6 +85,8 @@ impl Reader {
         Position {
             line: self.line as u32,
             column: self.col as u32,
+            file: self.filename.clone(),
+            source: self.src.clone(),
         }
     }
 
@@ -100,8 +102,8 @@ impl Reader {
 
 fn common_init(name: String, src: String) -> Reader {
     let mut reader = Reader {
-        filename: name,
-        src: src,
+        filename: Rc::new(name),
+        src: Rc::new(src),
         pos: 0,
         next_pos: 0,
 

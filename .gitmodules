@@ -1,0 +1,4 @@
+[submodule "cgc"]
+	path = cgc
+    url = https://github.com/playxe/cgc
+    branch = single-threaded

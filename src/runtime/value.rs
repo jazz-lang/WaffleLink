@@ -1,10 +1,6 @@
 //! Value implementation is exactly the same as in JSC and uses NaN-boxing.
-use super::cell::*;
 use super::pure_nan::*;
 use super::*;
-
-#[cfg(all(target_pointer_width = "64", feature = "value32-64"))]
-compile_error!("Cannot use value32-64 feature on 64 target");
 
 #[derive(Copy, Clone)]
 #[repr(C, align(8))]
@@ -12,7 +8,6 @@ pub union EncodedValueDescriptor {
     pub as_int64: i64,
     #[cfg(feature = "value32-64")]
     pub as_double: f64,
-    pub cell: CellPointer,
     pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -327,12 +322,6 @@ impl Value {
         }
     }
 
-    pub fn cell(x: CellPointer) -> Self {
-        Self {
-            u: EncodedValueDescriptor { cell: x },
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         unsafe { self.u.as_int64 == Self::VALUE_EMPTY }
     }
@@ -423,15 +412,6 @@ impl Value {
     pub fn as_double(&self) -> f64 {
         assert!(self.is_double());
         unsafe { f64::from_bits((self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET) as u64) }
-    }
-
-    pub fn as_cell(&self) -> CellPointer {
-        //assert!(self.is_cell());
-        unsafe { self.u.cell }
-    }
-    pub fn as_cell_ref(&self) -> &CellPointer {
-        assert!(self.is_cell());
-        unsafe { &self.u.cell }
     }
 
     pub fn is_any_int(&self) -> bool {
@@ -555,17 +535,12 @@ impl Value {
         } else if self.is_undefined_or_null() {
             false
         } else if self.is_cell() {
-            match self.as_cell().value {
-                CellValue::String(ref x) => x.len() != 0,
-                CellValue::Array(ref x) => x.len() != 0,
-                CellValue::ByteArray(ref x) => x.len() != 0,
-                _ => true,
-            }
+            true
         } else {
             false
         }
     }
-    pub fn to_string(&self, rt: &mut Runtime) -> Result<String, Self> {
+    pub fn to_string(&self) -> Result<String, Self> {
         if self.is_number() {
             Ok(self.to_number().to_string())
         } else if self.is_true() || self.is_false() {
@@ -582,29 +557,6 @@ impl Value {
             }
         } else {
             if self.is_cell() {
-                if let CellValue::String(ref s) = self.as_cell().value {
-                    return Ok((**s).clone());
-                }
-                if let CellValue::Function(ref f) = self.as_cell().value {
-                    match f {
-                        Function::Native { name, .. } => {
-                            let name = name.to_string(rt)?;
-                            return Ok(format!("function {}(...)", name));
-                        }
-                        Function::Regular(regular) => {
-                            let name = regular.name.to_string(rt)?;
-                            return Ok(format!("function {}(...)", name));
-                        }
-                        _ => unimplemented!(),
-                    }
-                }
-                let key = rt.allocate_string("toString");
-                let x = self.lookup(rt, Value::from(key))?;
-                if let Some(to_string) = x {
-                    if to_string.is_cell() {
-                        unimplemented!()
-                    }
-                }
                 unimplemented!()
             }
             unsafe {
@@ -614,41 +566,11 @@ impl Value {
         }
     }
 
-    pub fn lookup(&self, rt: &mut Runtime, key: Value) -> Result<Option<Value>, Value> {
-        let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
-        if self.is_cell() {
-            self.as_cell().get_mut().lookup(r, key)
-        } else if self.is_number() {
-            rt.number_prototype.get_mut().lookup(r, key)
-        } else if self.is_boolean() {
-            rt.boolean_prototype.get_mut().lookup(r, key)
-        } else {
-            Ok(None)
-        }
-    }
-    pub fn put(&self, rt: &mut Runtime, key: Value, val: Value) -> Result<(), Value> {
-        let r: &mut Runtime = unsafe { &mut *(rt as *mut Runtime) };
-        if self.is_cell() {
-            self.as_cell().get_mut().put(rt, key, val)
-        } else if self.is_number() {
-            rt.number_prototype.get_mut().put(r, key, val)
-        } else if self.is_boolean() {
-            rt.boolean_prototype.get_mut().put(r, key, val)
-        } else {
-            Ok(())
-        }
-    }
     pub fn number(x: f64) -> Self {
         if x as i32 as f64 == x {
             Self::new_int(x as i32)
         } else {
             Self::new_double(x)
-        }
-    }
-
-    pub fn each_pointer(&self, stack: &mut std::collections::VecDeque<*const CellPointer>) {
-        if self.is_cell() {
-            stack.push_back(self.as_cell_ref());
         }
     }
 }
@@ -692,15 +614,6 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
     as_int64
 }
 
-use crate::heap::api::*;
-
-impl From<CellPointer> for Value {
-    fn from(x: CellPointer) -> Self {
-        Self {
-            u: EncodedValueDescriptor { cell: x },
-        }
-    }
-}
 use smallvec::SmallVec;
 use std::hash::{Hash, Hasher};
 
@@ -710,25 +623,4 @@ impl Hash for Value {
             self.u.as_int64.hash(s);
         }
     }
-}
-#[no_mangle]
-pub extern "C" fn add_val(x: Value, y: Value) -> Value {
-    if x.is_int32() && y.is_int32() {
-        if let (val, false) = x.as_int32().overflowing_add(y.as_int32()) {
-            return Value::new_int(val);
-        }
-    }
-    Value::number(x.to_number() + y.to_number())
-}
-#[no_mangle]
-pub extern "C" fn new_boolean(x: bool) -> Value {
-    if x {
-        Value::true_()
-    } else {
-        Value::false_()
-    }
-}
-
-pub extern "C" fn mul_val(x: Value, y: Value) -> Value {
-    Value::new_int(x.as_int32() * y.as_int32())
 }

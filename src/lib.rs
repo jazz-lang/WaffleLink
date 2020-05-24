@@ -1,5 +1,9 @@
 #![allow(unused)]
 #![allow(non_camel_case_types)]
+#[macro_use]
+extern crate intrusive_collections;
+extern crate cgc_single_threaded as cgc;
+
 #[macro_export]
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {
@@ -33,11 +37,12 @@ macro_rules! call {
 
 pub mod common;
 pub mod frontend;
-pub mod heap;
 pub mod runtime;
 
+pub use runtime::get_rt;
+
 #[global_allocator]
-static GLOBAL: std::alloc::System = std::alloc::System;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 pub use common::rc::Rc;
 
 #[cfg(test)]

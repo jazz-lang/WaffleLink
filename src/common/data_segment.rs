@@ -1,7 +1,6 @@
 //! Data segment implementation.
 
 use crate::common::mem;
-use crate::runtime::value::Value as RuntimeValue;
 use std;
 /// DataSegment stores values that can be loaded in JIT'ed code from %rip register.
 pub struct DataSegment {
@@ -16,7 +15,6 @@ struct Entry {
 
 #[derive(PartialEq)]
 enum Value {
-    Value(RuntimeValue),
     Ptr(*const u8),
     Float(f32),
     Double(f64),
@@ -26,7 +24,6 @@ enum Value {
 impl Value {
     fn size(&self) -> i32 {
         match self {
-            &Value::Value(_) => std::mem::size_of::<u64>() as i32,
             &Value::Ptr(_) => mem::ptr_width(),
             &Value::Float(_) => std::mem::size_of::<f32>() as i32,
             &Value::Double(_) => std::mem::size_of::<f64>() as i32,
@@ -55,9 +52,6 @@ impl DataSegment {
                 let entry_ptr = ptr.offset(offset as isize);
 
                 match entry.value {
-                    Value::Value(v) => {
-                        *(entry_ptr as *mut RuntimeValue) = v;
-                    }
                     Value::Ptr(v) => {
                         *(entry_ptr as *mut *const u8) = v;
                     }
@@ -90,19 +84,6 @@ impl DataSegment {
 
     pub fn add_addr(&mut self, ptr: *const u8) -> i32 {
         self.add_value(Value::Ptr(ptr))
-    }
-    pub fn add_val_reuse(&mut self, ptr: RuntimeValue) -> i32 {
-        for entry in &self.entries {
-            if entry.value == Value::Value(ptr) {
-                return entry.disp;
-            }
-        }
-
-        self.add_val(ptr)
-    }
-
-    pub fn add_val(&mut self, ptr: RuntimeValue) -> i32 {
-        self.add_value(Value::Value(ptr))
     }
 
     pub fn add_i32(&mut self, value: i32) -> i32 {

@@ -141,8 +141,8 @@ impl Msg {
                 let args = args.join(", ");
                 format!("no ctor with definition `{}({})`.", name, args)
             }
-            MethodExists(ref cls, ref name, pos) => format!(
-                "method with name `{}` already exists in class `{}` at line {}.",
+            MethodExists(ref cls, ref name, ref pos) => format!(
+                "method with name `{}` already exists in class `{}` at {}.",
                 name, cls, pos
             ),
             IncompatibleWithNil(ref ty) => format!("cannot assign `nil` to type `{}`.", ty),

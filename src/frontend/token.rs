@@ -12,17 +12,24 @@
 *   limitations under the License.
 */
 
+use crate::common::rc::*;
 use std::fmt;
 use std::result::Result;
-
-#[derive(Clone, Debug, PartialEq, Eq, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Position {
     pub line: u32,
     pub column: u32,
+    pub file: Rc<String>,
+    pub source: Rc<String>,
 }
 impl Position {
-    pub fn new(x: u32, y: u32) -> Self {
-        Self { line: x, column: y }
+    pub fn new(x: u32, y: u32, src: Rc<String>, file: Rc<String>) -> Self {
+        Self {
+            line: x,
+            column: y,
+            source: src,
+            file,
+        }
     }
 }
 

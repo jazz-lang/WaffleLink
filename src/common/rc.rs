@@ -140,3 +140,14 @@ impl<T: PartialEq> PartialEq for Rc<T> {
 }
 
 impl<T: Eq> Eq for Rc<T> {}
+use std::fmt;
+impl<T: fmt::Debug> fmt::Debug for Rc<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", **self)
+    }
+}
+impl<T: fmt::Display> fmt::Display for Rc<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", **self)
+    }
+}

@@ -6,3 +6,7 @@ perf.data
 perf.data.old
 mimalloc-sys/target
 mimalloc-sys/Cargo.lock
+cgc/target 
+/cgc/target
+cgc/Cargo.lock
+/cgc/Cargo.lock

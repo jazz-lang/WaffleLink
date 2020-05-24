@@ -36,14 +36,17 @@ macro_rules! expr {
         })
     };
 }
-
+use crate::common::rc::*;
 type EResult = Result<Box<Expr>, MsgWithPos>;
 
 impl<'a> Parser<'a> {
     pub fn new(reader: Reader, ast: &'a mut Vec<Box<Expr>>) -> Parser<'a> {
         Self {
             lexer: Lexer::new(reader),
-            token: Token::new(TokenKind::End, Position::new(1, 1)),
+            token: Token::new(
+                TokenKind::End,
+                Position::new(1, 1, Rc::new("<>".to_string()), Rc::new("<>".to_string())),
+            ),
             ast,
         }
     }
@@ -69,7 +72,7 @@ impl<'a> Parser<'a> {
             Ok(token)
         } else {
             Err(MsgWithPos::new(
-                self.token.position,
+                self.token.position.clone(),
                 Msg::ExpectedToken(kind.name().into(), self.token.name()),
             ))
         }
@@ -109,7 +112,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_arg(&mut self) -> Result<Arg, MsgWithPos> {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         let tok = self.token.kind.name();
         match self.token.kind {
             TokenKind::Var => {
@@ -179,19 +182,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_throw(&mut self) -> EResult {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         self.advance_token()?;
         Ok(expr!(ExprKind::Throw(self.parse_expression()?), pos))
     }
 
     fn parse_try(&mut self) -> EResult {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         self.advance_token()?;
         let e = self.parse_expression()?;
         self.expect_token(TokenKind::Catch)?;
         let name = self.expect_identifier()?;
         let c = self.parse_expression()?;
-        return Ok(expr!(ExprKind::Try(e,name,c),pos));
+        return Ok(expr!(ExprKind::Try(e, name, c), pos));
     }
 
     fn parse_while(&mut self) -> EResult {
@@ -210,7 +213,7 @@ impl<'a> Parser<'a> {
 
             if self.token.is(TokenKind::If) {
                 let if_block = self.parse_if()?;
-                let block = expr!(ExprKind::Block(vec![if_block]), if_block.pos);
+                let block = expr!(ExprKind::Block(vec![if_block]), if_block.pos.clone());
 
                 Some(block)
             } else {
@@ -338,7 +341,7 @@ impl<'a> Parser<'a> {
                         let args =
                             self.parse_comma_list(TokenKind::RParen, |p| p.parse_expression())?;
 
-                        expr!(ExprKind::Call(expr, args), expr.pos)
+                        expr!(ExprKind::Call(expr.clone(), args), expr.pos.clone())
                     } else {
                         return Ok(left);
                     }
@@ -354,7 +357,7 @@ impl<'a> Parser<'a> {
             Ok(value.to_owned())
         } else {
             Err(MsgWithPos::new(
-                tok.position,
+                tok.position.clone(),
                 Msg::ExpectedIdentifier(tok.name()),
             ))
         }
@@ -374,7 +377,7 @@ impl<'a> Parser<'a> {
         while !self.token.is(stop.clone()) && !self.token.is_eof() {
             if !comma {
                 return Err(MsgWithPos::new(
-                    self.token.position,
+                    self.token.position.clone(),
                     Msg::ExpectedToken(TokenKind::Comma.name().into(), self.token.name()),
                 ));
             }
@@ -438,7 +441,7 @@ impl<'a> Parser<'a> {
         };
         self.expect_token(TokenKind::LBrace)?;
         let body = self.parse_list(TokenKind::RBrace, |p| {
-            let pos = p.token.position;
+            let pos = p.token.position.clone();
             let name = p.token.name().to_owned();
             let attr = match p.token.kind {
                 TokenKind::Fun => p.parse_function()?,
@@ -481,7 +484,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_pattern(&mut self) -> Result<Box<Pattern>, MsgWithPos> {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         match self.token.kind {
             TokenKind::Underscore => {
                 self.advance_token()?;
@@ -524,7 +527,7 @@ impl<'a> Parser<'a> {
             TokenKind::False => self.parse_bool_literal(),
             TokenKind::Nil => self.parse_nil(),
             TokenKind::New => {
-                let pos = self.token.position;
+                let pos = self.token.position.clone();
                 self.advance_token()?;
                 if self.token.is(TokenKind::LBrace) {
                     self.expect_token(TokenKind::LBrace)?;
@@ -546,14 +549,14 @@ impl<'a> Parser<'a> {
                         Ok(expr!(ExprKind::New(call), pos))
                     } else {
                         Err(MsgWithPos::new(
-                            self.token.position,
+                            self.token.position.clone(),
                             Msg::Custom("Function call expected".to_owned()),
                         ))
                     }
                 }
             }
             _ => Err(MsgWithPos::new(
-                self.token.position,
+                self.token.position.clone(),
                 Msg::ExpectedFactor(self.token.name().clone()),
             )),
         };
@@ -623,7 +626,7 @@ impl<'a> Parser<'a> {
     }
 
     fn ident(&mut self) -> EResult {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         let ident = self.expect_identifier()?;
 
         Ok(expr!(ExprKind::Ident(ident), pos))
@@ -669,7 +672,7 @@ impl<'a> Parser<'a> {
     }
 
     fn pident(&mut self) -> Result<Box<Pattern>, MsgWithPos> {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         let ident = self.expect_identifier()?;
 
         Ok(Pattern {
@@ -680,7 +683,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parray(&mut self) -> Result<Box<Pattern>, MsgWithPos> {
-        let pos = self.token.position;
+        let pos = self.token.position.clone();
         self.expect_token(TokenKind::LBracket)?;
         let list = self.parse_comma_list(TokenKind::RBracket, |parser| parser.parse_pattern())?;
 

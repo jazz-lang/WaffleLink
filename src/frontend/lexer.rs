@@ -159,7 +159,7 @@ impl Lexer {
         let pos = self.reader.pos();
 
         self.read_char();
-        let ch = self.read_escaped_char(pos, Msg::UnclosedChar)?;
+        let ch = self.read_escaped_char(pos.clone(), Msg::UnclosedChar)?;
 
         if is_char_quote(self.cur()) {
             self.read_char();
@@ -212,7 +212,7 @@ impl Lexer {
         self.read_char();
 
         while !self.cur().is_none() && !is_quote(self.cur()) {
-            let ch = self.read_escaped_char(pos, Msg::UnclosedString)?;
+            let ch = self.read_escaped_char(pos.clone(), Msg::UnclosedString)?;
             value.push(ch);
         }
 

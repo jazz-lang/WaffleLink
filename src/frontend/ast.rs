@@ -63,7 +63,7 @@ pub enum ExprKind {
     Return(Option<Box<Expr>>),
     Call(Box<Expr>, Vec<Box<Expr>>),
     Nil,
-    Try(Box<Expr>,String,Box<Expr>),
+    Try(Box<Expr>, String, Box<Expr>),
     Throw(Box<Expr>),
     ConstBool(bool),
     NewObject(Vec<(String, Option<Box<Expr>>)>),
