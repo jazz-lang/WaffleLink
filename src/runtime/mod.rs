@@ -13,13 +13,13 @@ pub fn get_rt() -> Rc<Runtime> {
 }
 
 pub struct Runtime {
-    pub heap: cgc::heap::Heap,
+    pub heap: crate::gc::Heap,
 }
 
 impl Runtime {
     pub fn new() -> Self {
         Self {
-            heap: cgc::heap::Heap::new(16 * 1024, 32 * 1024, true),
+            heap: unimplemented!(),
         }
     }
 }

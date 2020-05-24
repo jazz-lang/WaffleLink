@@ -2,7 +2,6 @@
 #![allow(non_camel_case_types)]
 #[macro_use]
 extern crate intrusive_collections;
-extern crate cgc_single_threaded as cgc;
 
 #[macro_export]
 macro_rules! offset_of {
@@ -38,7 +37,7 @@ macro_rules! call {
 pub mod common;
 pub mod frontend;
 pub mod runtime;
-
+pub mod gc;
 pub use runtime::get_rt;
 
 #[global_allocator]

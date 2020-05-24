@@ -20,12 +20,10 @@ mimalloc = { version = "*", default-features = false }
 hmap = "0.1"
 chrono = "*"
 bv = "0.11"
-cgc-single-threaded = {path="cgc"}
 lazy_static = "1.4"
 simple_logger = "1.6"
 intrusive-collections = "0.9"
 regalloc = "0.0"
-lasso = {version = "*",features= ["multi-threaded"]}
 capstone = "0.7"
 [features]
 value64 = []

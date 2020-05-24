@@ -1,5 +1,5 @@
 use crate::*;
-use cgc::api::*;
+use gc::{Handle,Collectable};
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Transition;
 #[derive(Copy, Clone)]
@@ -14,6 +14,22 @@ pub enum ClassKind {
     Fast,
 }
 
+impl Collectable for Class {
+    fn walk_references(&self,trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {
+        for (key,descriptor) in self.descriptors.iter() {
+            trace(key as *const Handle<String> as *const Handle<dyn Collectable>);
+            match descriptor {
+                Descriptor::Transition(transition) => trace(transition as *const Handle<Class> as *const Handle<dyn Collectable>),
+                _ => ()
+            }
+        }
+
+        for key in self.keys.iter() {
+            trace(key as *const Handle<String> as *const Handle<dyn Collectable>) ;
+        }
+    }
+}
+
 use indexmap::IndexMap;
 
 pub struct Class {
@@ -22,28 +38,10 @@ pub struct Class {
     keys: Vec<Handle<String>>,
 }
 
-impl Traceable for Class {
-    fn trace_with(&self, tracer: &mut Tracer) {
-        for (key, desc) in self.descriptors.iter() {
-            tracer.trace(key);
-            match desc {
-                Descriptor::Transition(ref c) => {
-                    tracer.trace(c);
-                }
-                _ => (),
-            }
-        }
-        for key in self.keys.iter() {
-            tracer.trace(key);
-        }
-    }
-}
-
-impl Finalizer for Class {}
 impl Class {
     pub fn add_property(&mut self, key: Handle<String>) -> Handle<Self> {
         let mut class = self.clone_class();
-        class.append(key);
+        class.get_mut().append(key);
         self.descriptors.insert(key, Descriptor::Transition(class));
         class
     }
@@ -64,6 +62,7 @@ impl Class {
             let key = self.keys[i];
             class.descriptors.insert(key, self.descriptors[&key]);
         }
-        get_rt().heap.allocate(class).to_heap()
+        unimplemented!()
+        //get_rt().heap.allocate(class).to_heap()
     }
 }
