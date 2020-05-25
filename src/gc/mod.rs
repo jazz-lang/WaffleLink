@@ -18,8 +18,6 @@
 //! - Do not use Rust global allocator
 //! - Maybe some moving algorithm like compacting
 //!
-use crate::runtime::value::Value;
-
 #[derive(Copy, Clone,Eq, PartialEq,Ord, PartialOrd,Debug,Hash)]
 pub enum Color {
     White,
@@ -33,15 +31,15 @@ pub struct HeapInner<T: Collectable + ?Sized> {
     pub(crate) mark: bool,
     pub value: T
 }
-
+use std::ptr::NonNull;
 pub struct Handle<T: Collectable + ?Sized> {
-    pub(super) inner: *mut HeapInner<T>
+    pub(super) inner: NonNull<HeapInner<T>>
 }
 
 impl<T: Collectable + ?Sized> Handle<T> {
     fn inner(&self) -> &mut HeapInner<T> {
         unsafe {
-            &mut *self.inner
+            &mut *self.inner.as_ptr()
         }
     }
 
@@ -146,6 +144,12 @@ simple_gc!(
     std::fs::File
 );
 
+impl std::borrow::Borrow<str> for Handle<String> {
+    fn borrow(&self) -> &str {
+        self.get()
+    }
+}
+
 impl<T: Collectable> Collectable for Handle<T> {
     fn walk_references(&self,trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {
         trace(self as *const Self as *const Handle<dyn Collectable>);
@@ -201,7 +205,7 @@ impl Heap {
         let raw = Box::into_raw(memory);
         self.allocated_bytes += std::mem::size_of::<HeapInner<T>>();
         self.allocated.push(raw);
-        Handle {inner: raw}
+        Handle {inner: NonNull::new(raw).unwrap()}
     }
     pub fn needs_gc(&self) -> bool {
         self.allocated_bytes >= self.threshold

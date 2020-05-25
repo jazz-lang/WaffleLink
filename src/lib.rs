@@ -33,7 +33,7 @@ macro_rules! call {
     (before ) => {};
     (after) => {};
 }
-
+pub mod bytecode;
 pub mod common;
 pub mod frontend;
 pub mod runtime;
