@@ -1,8 +1,8 @@
 extern crate waffle2;
 use parser::*;
 use reader::*;
+use waffle2::bytecode::def::*;
 use waffle2::frontend::*;
-
 fn main() {
     simple_logger::init().unwrap();
     let _heap = {
@@ -22,6 +22,7 @@ return 0
             eprintln!("{}", e);
             return;
         }
+        println!("{}", std::mem::size_of::<Ins>());
     };
 
     //heap.collect();

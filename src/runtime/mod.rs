@@ -1,7 +1,9 @@
 pub mod cell;
 pub mod pure_nan;
+pub mod scope;
 pub mod transition_map;
 pub mod value;
+pub mod vtable;
 use crate::common::rc::Rc;
 use std::cell::RefCell;
 thread_local! {

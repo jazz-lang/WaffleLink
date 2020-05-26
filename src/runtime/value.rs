@@ -1,4 +1,5 @@
 //! Value implementation is exactly the same as in JSC and uses NaN-boxing.
+use super::cell::*;
 use super::pure_nan::*;
 use super::*;
 
@@ -8,6 +9,7 @@ pub union EncodedValueDescriptor {
     pub as_int64: i64,
     #[cfg(feature = "value32-64")]
     pub as_double: f64,
+    pub as_cell: Handle<Cell>,
     pub as_bits: AsBits,
 }
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -621,6 +623,16 @@ impl Hash for Value {
     fn hash<H: Hasher>(&self, s: &mut H) {
         unsafe {
             self.u.as_int64.hash(s);
+        }
+    }
+}
+use crate::gc::*;
+impl Collectable for Value {
+    fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {
+        if self.is_cell() && !self.is_empty() {
+            unsafe {
+                trace(&self.u.as_cell as *const Handle<Cell> as *const Handle<dyn Collectable>);
+            }
         }
     }
 }
