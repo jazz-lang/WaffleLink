@@ -1,4 +1,5 @@
 pub mod cell;
+pub mod object;
 pub mod pure_nan;
 pub mod scope;
 pub mod transition_map;

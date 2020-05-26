@@ -263,24 +263,25 @@ impl<T> DerefPointer<T> {
     /// Atomically swaps the internal pointer with another one.
     ///
     /// This boolean returns true if the pointer was swapped, false otherwise.
-    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
     pub fn compare_and_swap(&self, current: *mut T, other: *mut T) -> bool {
         self.as_atomic()
-            .compare_and_swap(current, other, Ordering::AcqRel)
+            .compare_and_swap(current, other, std::sync::atomic::Ordering::AcqRel)
             == current
     }
 
     /// Atomically replaces the current pointer with the given one.
-    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
     pub fn atomic_store(&self, other: *mut T) {
-        self.as_atomic().store(other, Ordering::Release);
+        self.as_atomic()
+            .store(other, std::sync::atomic::Ordering::Release);
     }
 
     /// Atomically loads the pointer.
-    #[cfg_attr(feature = "cargo-clippy", allow(trivially_copy_pass_by_ref))]
+    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
     pub fn atomic_load(&self) -> Self {
         DerefPointer {
-            pointer: self.as_atomic().load(Ordering::Acquire),
+            pointer: self.as_atomic().load(std::sync::atomic::Ordering::Acquire),
         }
     }
 
