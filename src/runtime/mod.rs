@@ -1,4 +1,6 @@
+pub mod array;
 pub mod cell;
+pub mod fiber;
 pub mod object;
 pub mod pure_nan;
 pub mod scope;
@@ -22,7 +24,7 @@ pub struct Runtime {
 impl Runtime {
     pub fn new() -> Self {
         Self {
-            heap: unimplemented!(),
+            heap: crate::gc::Heap::new(),
         }
     }
 }

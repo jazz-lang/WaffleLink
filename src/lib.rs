@@ -36,8 +36,9 @@ macro_rules! call {
 pub mod bytecode;
 pub mod common;
 pub mod frontend;
-pub mod runtime;
 pub mod gc;
+pub mod interpreter;
+pub mod runtime;
 pub use runtime::get_rt;
 
 #[global_allocator]
