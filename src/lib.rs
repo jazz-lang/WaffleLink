@@ -1,49 +1,47 @@
-#![allow(unused)]
-#![allow(non_camel_case_types)]
-#[macro_use]
-extern crate intrusive_collections;
-
-#[macro_export]
-macro_rules! offset_of {
-    ($ty: ty, $field: ident) => {
-        unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
-    };
-}
-
-#[macro_export]
-macro_rules! trace_if {
-    ($cond: expr, $($t: tt)*) => {
-        if $cond {
-            log::trace!($($t)*);
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! unwrap {
-    ($e: expr) => {
-        match $e {
-            Ok(x) => x,
-            _ => unreachable!(),
-        }
-    };
-}
-#[cfg(target_arch = "x86_64")]
-macro_rules! call {
-    (before ) => {};
-    (after) => {};
-}
-pub mod bytecode;
-pub mod common;
-pub mod frontend;
+pub mod fiber;
 pub mod gc;
-pub mod interpreter;
-pub mod runtime;
-pub use runtime::get_rt;
+pub mod interp;
+pub mod lock;
+pub mod opcodes;
+pub mod pure_nan;
+pub mod state;
+pub mod value;
+cfg_if::cfg_if! {
+    if #[cfg(feature="multi-threaded")]
+    {
+        use dashmap::DashMap;
+        pub struct Globals {
+            map: DashMap<String,value::Value>
+        }
+        impl Globals {
+            pub fn get(&self,key: &str) -> Option<value::Value> {
+                self.map.get(key).map(|x| *x.value())
+            }
+            pub fn set(&mut self,key: &str,value: value::Value) -> bool {
+                self.map.insert(key.to_owned(), value).is_none()
+            }
+        }
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-pub use common::rc::Rc;
+    } else {
+        use std::collections::HashMap;
+        pub struct Globals {
+            map: HashMap<String,value::Value>
+        }
+        impl Globals {
+            pub fn get(&self,key: &str) -> Option<value::Value> {
+                self.map.get(key).copied()
+            }
+            pub fn set(&mut self,key: &str,value: value::Value) -> bool {
+                if let Some(prev) = self.map.get_mut(key) {
+                    *prev = value;
+                    false
+                } else {
+                    self.map.insert(key.to_owned(), value);
+                    true
+                }
+            }
+        }
+    }
+}
 
-#[cfg(test)]
-mod tests {}
+pub struct Machine {}
