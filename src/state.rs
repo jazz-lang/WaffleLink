@@ -1,18 +1,26 @@
 use super::*;
-use fiber::*;
 use gc::*;
 use value::*;
+
 /// Current thread state.
 pub struct State {
-    pub fiber: Option<Handle<Fiber>>,
+    pub stack: CallStack,
+    pub exceptions: Vec<Value>,
 }
-
+impl State {
+    pub fn new() -> Self {
+        Self {
+            stack: CallStack::new(),
+            exceptions: Vec::new(),
+        }
+    }
+}
 impl Collectable for State {
     fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {
-        match self.fiber {
+        /*match self.fiber {
             Some(ref f) => f.walk_references(trace),
             _ => (),
-        }
+        }*/
     }
 }
 
@@ -22,6 +30,12 @@ pub struct CallStack {
 }
 
 impl CallStack {
+    pub fn new() -> Self {
+        Self {
+            stack: vec![],
+            value_stack: vec![],
+        }
+    }
     pub fn pop(&mut self) -> Option<Frame> {
         self.stack.pop().map(|frame| {
             // Clear stack

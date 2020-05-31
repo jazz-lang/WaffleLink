@@ -1,5 +1,11 @@
 use parking_lot::Mutex;
-
+use std::sync::atomic::{AtomicBool, Ordering};
+static B: AtomicBool = AtomicBool::new(false);
 fn main() {
-    println!("{}", std::mem::size_of::<Mutex<i32>>());
+    let t = std::time::Instant::now();
+    B.store(true, Ordering::Relaxed);
+    let x = B.load(Ordering::Relaxed);
+
+    let e = t.elapsed();
+    println!("{} {}", x, e.as_nanos());
 }

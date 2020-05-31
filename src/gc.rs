@@ -1,87 +1,31 @@
-#[repr(C)]
-pub struct MiHeap {
-    _field: [u8; 0],
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+pub trait Collectable {
+    fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>));
 }
-
-#[link(name = "mimalloc")]
-extern "C" {
-    fn mi_heap_new() -> *mut MiHeap;
-    fn mi_heap_destroy(ptr: *mut MiHeap);
-    fn mi_heap_collect(ptr: *mut MiHeap, force: bool);
-    fn mi_heap_malloc(heap: *mut MiHeap, size: usize) -> *mut u8;
-    fn mi_heap_mallocn(heap: *mut MiHeap, count: usize, size: usize) -> *mut u8;
-    fn mi_free(ptr: *mut u8);
-}
-
-pub struct Heap {
-    heap: &'static mut MiHeap,
-}
-
-impl Heap {
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            heap: unsafe { &mut *mi_heap_new() },
-        }
-    }
-
-    #[inline]
-    pub fn alloc(&mut self, size: usize) -> *mut u8 {
-        unsafe { mi_heap_malloc(self.heap, size) }
-    }
-    #[inline]
-    pub fn allocn(&mut self, count: usize, size: usize) -> *mut u8 {
-        unsafe { mi_heap_mallocn(self.heap, count, size) }
-    }
-}
-
-impl Drop for Heap {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe {
-            mi_heap_collect(self.heap, true);
-        }
-        unsafe { mi_heap_destroy(self.heap) }
-    }
-}
-
-cfg_if::cfg_if!(
-    if #[cfg(feature="single-threaded")]
-    {
-
-        #[inline(always)]
-        pub fn gc_safepoint() {
-        }
-
-        pub fn stop_the_world(f: impl FnMut()) {
-        }
-    } else if #[cfg(feature="multi-threaded")] {
-        use std::sync::atomic::{AtomicBool,Ordering};
-        static GC_IS_RUNNING: AtomicBool = AtomicBool::new(false);
-        /// GC safepoint. Used to suspend thread if GC cycle is needed.
-        #[inline]
-        pub fn gc_safepoint() {
-            let mut attempt = 0;
-            while GC_IS_RUNNING.load(Ordering::Acquire) {
-                if attempt > 3 {
-                    std::thread::sleep(std::time::Duration::from_micros(2000));
-                } else {
-                    attempt += 1;
-                    std::thread::yield_now();
-                }
-            }
-        }
-    }
-);
 
 pub struct GcHeader<T: Collectable + ?Sized> {
-    pub(crate) mark_bit: u8,
-    pub(crate) lock: super::lock::MLock,
-    pub(crate) next: *mut GcHeader<dyn Collectable>,
+    pub(crate) mark_bit: AtomicBool,
     pub(crate) value: T,
 }
 pub struct Handle<T: Collectable + ?Sized> {
     inner: std::ptr::NonNull<GcHeader<T>>,
+}
+
+pub struct Root<T: Collectable + ?Sized> {
+    inner: *mut RootInner<T>,
+}
+
+impl<T: Collectable + ?Sized> Root<T> {
+    pub(crate) fn inner(&self) -> &mut RootInner<T> {
+        debug_assert!(!self.inner.is_null());
+        unsafe { &mut *self.inner }
+    }
+}
+
+pub struct RootInner<T: Collectable + ?Sized> {
+    pub(crate) handle: Handle<T>,
+    pub(crate) refcount: AtomicUsize,
 }
 
 impl<T: Collectable + ?Sized> Collectable for Handle<T> {
@@ -89,8 +33,12 @@ impl<T: Collectable + ?Sized> Collectable for Handle<T> {
         trace(self as *const Self as *const Handle<dyn Collectable>);
     }
 }
-pub trait Collectable {
-    fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>));
+
+impl<T: Collectable + ?Sized> Drop for Root<T> {
+    fn drop(&mut self) {
+        let inner = self.inner();
+        inner.refcount.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 macro_rules! simple_gc {
@@ -127,58 +75,115 @@ impl<T: Collectable> Collectable for Vec<T> {
 }
 
 pub struct WaffleHeap {
-    mi_heap: Heap,
-    list: *mut GcHeader<dyn Collectable>,
-    grey: *mut GcHeader<dyn Collectable>,
+    lock: parking_lot::Mutex<Vec<*mut GcHeader<dyn Collectable>>>,
+    allocated: AtomicUsize,
+    threshold: AtomicUsize,
 }
-
-const GRAY: u8 = 0;
-const WHITE_A: u8 = 1;
-const WHITE_B: u8 = 1 << 1;
-const BLACK: u8 = 1 << 2;
-const GC_WHITES: u8 = WHITE_A | WHITE_B;
-const COLOR_MASK: u8 = 7;
-
-const fn is_black(o: &GcHeader<dyn Collectable>) -> bool {
-    (o.mark_bit & BLACK) != 0
-}
-
-const fn is_white(o: &GcHeader<dyn Collectable>) -> bool {
-    (o.mark_bit & GC_WHITES) != 0
-}
-
-const fn is_gray(o: &GcHeader<dyn Collectable>) -> bool {
-    o.mark_bit == GRAY
-}
-
+use super::*;
 impl WaffleHeap {
-    unsafe fn sweep_all(&mut self) {
-        while !self.list.is_null() {
-            let val = &mut *self.list;
-            let next = val.next;
-            if is_black(val) {
-                // TODO
-            } else {
-                std::ptr::drop_in_place(self.list);
-                mi_free(self.list as *mut u8);
-            }
-            self.list = next;
+    pub fn new() -> Self {
+        Self {
+            lock: parking_lot::Mutex::new(vec![]),
+            allocated: AtomicUsize::new(0),
+            threshold: AtomicUsize::new(16 * 1024),
         }
+    }
+    pub fn collect(&self, vm: &Machine) {
+        vm.threads.stop_the_world(|threads| {
+            let mut lock = self.lock.lock();
+            let mut stack = std::collections::LinkedList::new();
+
+            for thread in threads.iter() {
+                thread.roots(|item| unsafe {
+                    let item = item as *mut Handle<dyn Collectable>;
+                    let r = &mut *item;
+                    let x = r.inner.as_mut();
+                    if !x.mark_bit.load(Ordering::Relaxed) {
+                        stack.push_back(item);
+                        x.mark_bit.store(true, Ordering::Relaxed);
+                    }
+                });
+            }
+
+            while let Some(item) = stack.pop_front() {
+                unsafe {
+                    let r = &mut *item;
+                    let x = r.inner.as_mut();
+
+                    x.value.walk_references(&mut |elem| {
+                        let elem = elem as *mut Handle<dyn Collectable>;
+                        let r = &mut *elem;
+                        let x = r.inner.as_mut();
+                        if x.mark_bit.load(Ordering::Relaxed) {
+                            return;
+                        }
+                        x.mark_bit.store(true, Ordering::Relaxed);
+                        stack.push_back(elem);
+                    })
+                }
+            }
+
+            unsafe {
+                lock.retain(|item| {
+                    let item_ref = &mut **item;
+                    if item_ref.mark_bit.load(Ordering::Relaxed) {
+                        item_ref.mark_bit.store(false, Ordering::Relaxed);
+                        true
+                    } else {
+                        std::ptr::drop_in_place(*item);
+                        mi_free((*item) as *mut u8);
+                        false
+                    }
+                })
+            }
+
+            let a = self.allocated.load(Ordering::Relaxed);
+
+            if a >= self.threshold.load(Ordering::Relaxed) {
+                self.threshold
+                    .store((a as f64 * 0.75) as usize, Ordering::Relaxed);
+            }
+        });
     }
 
-    unsafe fn mark(&mut self) {
-        while !self.grey.is_null() {
-            let hdr = &mut *self.grey;
-            let next = hdr.next;
-            hdr.value.walk_references(|handle_ptr| {
-                let handle = &mut *handle_ptr;
-                let inner_ptr = handle.inner;
-                let inner = &mut *inner_ptr;
-                if inner.mark_bit {
-                    return;
-                } else {
-                }
+    pub fn allocate<T: Collectable + Sized + 'static>(&self, vm: &Machine, val: T) -> Root<T> {
+        if self.allocated.load(Ordering::Acquire) >= self.threshold.load(Ordering::Relaxed) {
+            self.collect(vm);
+        }
+
+        let thread = threads::THREAD.with(|item| item.borrow().clone());
+        unsafe {
+            let mem = mi_malloc(std::mem::size_of::<GcHeader<T>>()) as *mut GcHeader<T>;
+            mem.write(GcHeader {
+                mark_bit: AtomicBool::new(false),
+                value: val,
             });
+            self.allocated
+                .fetch_add(std::mem::size_of::<GcHeader<T>>(), Ordering::AcqRel);
+            let mut lock = self.lock.lock();
+            lock.push(mem);
+            drop(lock);
+            let root: Root<T> = Root {
+                inner: Box::into_raw(Box::new(RootInner {
+                    handle: Handle {
+                        inner: std::ptr::NonNull::new_unchecked(mem),
+                    },
+                    refcount: AtomicUsize::new(1),
+                })),
+            };
+            thread.roots.borrow_mut().push(root.inner as *mut _);
+            root
         }
     }
+}
+unsafe impl Send for WaffleHeap {}
+#[repr(C)]
+pub struct MiHeap {
+    _field: [u8; 0],
+}
+
+#[link(name = "mimalloc")]
+extern "C" {
+    fn mi_malloc(size: usize) -> *mut u8;
+    fn mi_free(ptr: *mut u8);
 }

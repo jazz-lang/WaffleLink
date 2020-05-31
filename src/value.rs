@@ -1,3 +1,4 @@
+use std::num::{NonZeroI32, NonZeroI64};
 #[cfg(any(feature = "value64", feature = "value32"))]
 pub mod value_nanboxing {
     use crate::pure_nan::*;
@@ -581,4 +582,5 @@ pub mod value_nanboxing {
     }
 }
 
+use super::arc::*;
 pub use value_nanboxing::*;

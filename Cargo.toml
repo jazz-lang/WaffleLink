@@ -7,13 +7,13 @@ edition = "2018"
 [dependencies]
 smallvec = "1.4"
 lazy_static = "1.4"
-dashmap = {version = "3.11",optional = true}
+dashmap = {version = "3.11"}
 cfg-if = "0.1"
-parking_lot = {version = "0.10",optional = true}
+atomig = "0.1"
+parking_lot = {version = "0.10"}
+crossbeam = "0.7"
 [features]
 value64 = []
 value32-64 = []
-default = ["value64","multi-threaded"]
-single-threaded = []
-multi-threaded = ["parking_lot","dashmap"]
+default = ["value64"]
 
