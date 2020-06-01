@@ -1,5 +1,4 @@
-#![feature(naked_functions)]
-#![feature(llvm_asm)]
+
 #![allow(unused_assignments)]
 
 pub mod arc;

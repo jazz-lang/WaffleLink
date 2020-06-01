@@ -108,11 +108,25 @@ impl Ins {
         unsafe { self.enc.jump }
     }
 }
+
+use super::gc::Collectable;
+impl Collectable for Ins {
+    fn walk_references(&self, _trace: &mut dyn FnMut(*const crate::gc::Handle<dyn Collectable>)) {
+        ()
+    }
+}
+
+#[derive(Copy, Clone,Eq, PartialEq)]
 pub struct Pc {
     ins: *mut Ins,
 }
 
 impl Pc {
+    pub fn new(code: &[Ins]) -> Self {
+        Self {
+            ins: code.as_ptr() as *mut Ins,
+        }
+    }
     pub fn advance(&mut self) -> Ins {
         unsafe {
             let c = *self.ins;

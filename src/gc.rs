@@ -12,6 +12,13 @@ pub struct Handle<T: Collectable + ?Sized> {
     inner: std::ptr::NonNull<GcHeader<T>>,
 }
 
+impl<T: Collectable + ?Sized> Handle<T> {
+    pub fn get(&self) -> &mut T {
+        unsafe { 
+            &mut (&mut *self.inner.as_ptr()).value
+        }
+    }
+}
 pub struct Root<T: Collectable + ?Sized> {
     inner: *mut RootInner<T>,
 }
