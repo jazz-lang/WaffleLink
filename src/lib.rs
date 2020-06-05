@@ -1,4 +1,7 @@
-
+#![feature(optimize_attribute)]
+#![feature(llvm_asm)]
+#![feature(global_asm)]
+#![feature(naked_functions)]
 #![allow(unused_assignments)]
 
 pub mod arc;

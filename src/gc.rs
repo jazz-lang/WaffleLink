@@ -14,9 +14,22 @@ pub struct Handle<T: Collectable + ?Sized> {
 
 impl<T: Collectable + ?Sized> Handle<T> {
     pub fn get(&self) -> &mut T {
-        unsafe { 
-            &mut (&mut *self.inner.as_ptr()).value
-        }
+        unsafe { &mut (&mut *self.inner.as_ptr()).value }
+    }
+}
+
+use std::ops::{Deref, DerefMut};
+
+impl<T: Collectable + ?Sized> Deref for Handle<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.get()
+    }
+}
+
+impl<T: Collectable + ?Sized> DerefMut for Handle<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.get()
     }
 }
 pub struct Root<T: Collectable + ?Sized> {

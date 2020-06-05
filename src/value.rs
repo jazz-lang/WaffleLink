@@ -583,4 +583,9 @@ pub mod value_nanboxing {
 }
 
 use super::arc::*;
+use super::gc::*;
 pub use value_nanboxing::*;
+
+impl Collectable for Value {
+    fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {}
+}

@@ -23,23 +23,16 @@ impl Collectable for State {
 }
 
 pub struct CallStack {
-    pub stack: Vec<Frame>,
+    pub stack: Vec<Handle<Frame>>,
 }
 
 impl CallStack {
     pub fn new() -> Self {
-        Self {
-            stack: vec![],
-
-        }
+        Self { stack: vec![] }
     }
-    pub fn pop(&mut self) -> Option<Frame> {
-        self.stack.pop().map(|frame| {
-            frame
-        })
+    pub fn pop(&mut self) -> Option<Handle<Frame>> {
+        self.stack.pop().map(|frame| frame)
     }
-
-
 }
 
 pub struct Frame {
@@ -53,4 +46,15 @@ pub struct Frame {
     pub acc: Value,
     pub stack: Vec<Value>,
     used: usize,
+}
+
+impl Collectable for Frame {
+    fn walk_references(&self, trace: &mut dyn FnMut(*const Handle<dyn Collectable>)) {
+        self.code.walk_references(trace);
+        self.this.walk_references(trace);
+        self.env.walk_references(trace);
+        self.func.walk_references(trace);
+        self.acc.walk_references(trace);
+        self.stack.walk_references(trace);
+    }
 }
