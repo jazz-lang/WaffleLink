@@ -596,7 +596,7 @@ impl GraphColoring {
         for node in self.ig.nodes() {
             let temp = self.ig.get_temp_of(node);
 
-            if temp.to_local() < 256 {
+            if temp.to_local() < 65 {
                 continue;
             } else {
                 let alias = self.get_alias(node);
@@ -927,13 +927,13 @@ impl GraphColoring {
         self.ig.print();
 
         // precolor for all machine registers
-        for reg in 0..256 {
+        for reg in 0..65 {
             let reg_id = VirtualRegister::tmp(reg);
             self.precolored.insert(reg_id);
         }
 
         // put usable registers as available colors
-        for reg in 0..256 {
+        for reg in 0..65 {
             let reg_id = VirtualRegister::tmp(reg);
             let group = 0;
             self.colors.get_mut(&group).unwrap().insert(reg_id);

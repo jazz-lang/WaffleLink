@@ -2,7 +2,7 @@
 pub struct VirtualRegister(pub i32);
 use super::*;
 impl VirtualRegister {
-    pub const FIRST_AVAILABLE_LOCAL_REG: Self = Self::tmp(512);
+    pub const FIRST_AVAILABLE_LOCAL_REG: Self = Self::tmp(70);
     pub const INVALID_VIRTUAL_REGISTER: i32 = 0x3fffffff;
     pub const fn is_local(self) -> bool {
         self.0 < 0

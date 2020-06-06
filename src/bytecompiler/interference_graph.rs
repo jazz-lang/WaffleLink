@@ -55,7 +55,7 @@ impl fmt::Debug for Move {
 
 #[inline(always)]
 fn is_precolored(reg: VirtualRegister) -> bool {
-    if reg.is_local() && reg.to_local() < 256 {
+    if reg.is_local() && reg.to_local() < 65 {
         true
     } else {
         false
@@ -65,7 +65,7 @@ fn is_precolored(reg: VirtualRegister) -> bool {
 #[inline(always)]
 fn is_usable(reg: VirtualRegister) -> bool {
     if reg.is_local() {
-        return reg.to_local() < 256;
+        return reg.to_local() < 65;
     } else {
         false
     }
@@ -591,7 +591,7 @@ pub fn build_interference_graph_chaitin_briggs(
     let mut ig = InterferenceGraph::new();
 
     // precolor machine register nodes
-    for reg in 0..255 {
+    for reg in 0..64 {
         let reg_id = c(VirtualRegister::tmp(reg));
         let node = ig.new_node(reg_id, Machine, 0);
         let precolor = reg_id;

@@ -601,3 +601,43 @@ impl Ins {
         }
     }
 }
+use crate::interpreter::*;
+use crate::runtime::deref_ptr::DerefPointer;
+use crate::runtime::Runtime;
+/// Instruction type for direct threaded interpreter
+///
+/// This is always 8 byte size even on 32 bit architectures.
+#[derive(Copy, Clone)]
+pub union DirectIns {
+    /// register
+    pub reg: VirtualRegister,
+    /// function to execute
+    pub func: unsafe extern "C" fn(
+        &mut crate::interpreter::direct::DirectThreaded,
+        DerefPointer<callstack::CallFrame>,
+        Pc,
+    ),
+    /// 2 registers, we use this to not allocate 16 bytes for 2 registers when possible
+    pub reg2: [VirtualRegister; 2],
+    /// conditional jump or just 2 u32 values
+    pub cjump: [u32; 2],
+    /// just a u32 value, might be argument count or immediate.
+    pub u32: u32,
+}
+
+pub struct Pc {
+    ins: *mut DirectIns,
+}
+
+impl Pc {
+    pub fn new(insns: &[DirectIns]) -> Self {
+        Self {
+            ins: insns.as_ptr() as *mut _,
+        }
+    }
+    pub unsafe fn advance(&mut self) -> DirectIns {
+        let c = *self.ins;
+        self.ins = self.ins.offset(1);
+        c
+    }
+}

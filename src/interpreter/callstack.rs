@@ -7,7 +7,7 @@ use runtime::value::*;
 use virtual_reg::*;
 #[repr(C)]
 pub struct CallFrame {
-    pub registers: [Value; 255],
+    pub registers: [Value; 64],
     /// a.k.a arguments
     pub entries: Vec<Value>,
     pub this: Value,
@@ -25,7 +25,7 @@ impl CallFrame {
         Self {
             func,
             code: code.clone(),
-            registers: { [Value::undefined(); 255] },
+            registers: { [Value::undefined(); 64] },
             entries: vec![Value::undefined(); code.arg_regs_count as usize],
             this,
             ip: 0,
@@ -36,26 +36,30 @@ impl CallFrame {
         }
     }
     pub fn r(&self, r: VirtualRegister) -> Value {
-        if r.is_local() {
-            self.registers[r.to_local() as usize]
-        } else if r.is_argument() && !r.is_constant() {
-            self.entries[r.to_argument() as usize]
-        } else if r.is_constant() {
-            self.code.get_constant(r.to_constant())
-        } else {
-            unreachable!()
+        unsafe {
+            if r.is_local() {
+                *self.registers.get_unchecked(r.to_local() as usize)
+            } else if r.is_argument() && !r.is_constant() {
+                *self.entries.get_unchecked(r.to_argument() as usize)
+            } else if r.is_constant() {
+                self.code.get_constant(r.to_constant())
+            } else {
+                unreachable!()
+            }
         }
     }
 
     pub fn r_mut(&mut self, r: VirtualRegister) -> &mut Value {
-        if r.is_local() {
-            &mut self.registers[r.to_local() as usize]
-        } else if r.is_argument() {
-            &mut self.entries[r.to_argument() as usize]
-        } else if r.is_constant() {
-            self.code.get_constant_mut(r.to_constant())
-        } else {
-            unreachable!()
+        unsafe {
+            if r.is_local() {
+                self.registers.get_unchecked_mut(r.to_local() as usize)
+            } else if r.is_argument() {
+                self.entries.get_unchecked_mut(r.to_argument() as usize)
+            } else if r.is_constant() {
+                self.code.get_constant_mut(r.to_constant())
+            } else {
+                unreachable!()
+            }
         }
     }
 
@@ -76,7 +80,7 @@ pub struct CallStack {
 }
 
 pub enum StackEntry {
-    Frame(CallFrame),
+    Frame(Box<CallFrame>),
     Native { func: Value },
 }
 
@@ -103,7 +107,7 @@ impl CallStack {
                 rt.allocate_string("Maximum call stack size exceeded"),
             ));
         }
-        let entry = CallFrame::new(func, code, this);
+        let entry = Box::new(CallFrame::new(func, code, this));
         self.stack.push(StackEntry::Frame(entry));
         Ok(())
     }

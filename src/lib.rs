@@ -43,7 +43,7 @@ pub mod jit;
 pub mod runtime;
 
 #[global_allocator]
-static GLOBAL: std::alloc::System = std::alloc::System;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 pub use common::rc::Rc;
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 pub mod callstack;
+pub mod direct;
 use crate::bytecode::*;
 use crate::fullcodegen::FullCodegen;
 use crate::fullcodegen::*;
@@ -320,8 +321,8 @@ impl Runtime {
         return C::Err(Value::from(self.allocate_string("not a function")));
     }
     pub fn interpret(&mut self) -> Return {
+        let mut current = self.stack.current_frame();
         loop {
-            let mut current = self.stack.current_frame();
             let bp = current.bp;
             let ip = current.ip;
             let ins = current.code.code[bp].code[ip];
@@ -649,6 +650,7 @@ impl Runtime {
                     let this = current.r(this);
                     match self.call_interp(function, this, &[]) {
                         C::Ok(val) => {
+                            //current = self.stack.current_frame();
                             *current.r_mut(dst) = val;
                         }
                         C::Err(e) => return Return::Error(e),

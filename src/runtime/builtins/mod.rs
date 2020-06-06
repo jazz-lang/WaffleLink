@@ -6,6 +6,7 @@ pub fn log(rt: &mut Runtime, _this: Value, args: &[Value]) -> Return {
     use chrono::prelude::Local;
     print!("{}: ", Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
     for (i, arg) in args.iter().enumerate() {
+        assert!(!arg.is_empty());
         match arg.to_string(rt) {
             Ok(x) => print!("{}", x),
             Err(e) => return Return::Error(e),

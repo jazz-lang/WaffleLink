@@ -157,10 +157,10 @@ impl CodeBlock {
         virtual_reg::VirtualRegister::constant(vreg as _)
     }
     pub fn get_constant(&self, x: i32) -> Value {
-        self.module.constants[x as usize]
+        unsafe { *self.module.constants.get_unchecked(x as usize) }
     }
     pub fn get_constant_mut(&mut self, x: i32) -> &mut Value {
-        &mut self.module.constants[x as usize]
+        unsafe { self.module.constants.get_unchecked_mut(x as usize) }
     }
 
     pub fn successors_of(&self, bb: u32) -> &[u32] {

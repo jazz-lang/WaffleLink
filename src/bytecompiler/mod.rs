@@ -2,7 +2,6 @@ pub mod graph_coloring;
 pub mod interference_graph;
 pub mod linear_scan;
 pub mod loopanalysis;
-pub mod minira;
 pub mod strength_reduction;
 use crate::bytecode::*;
 use crate::heap::api::*;
@@ -53,7 +52,7 @@ impl ByteCompiler {
             constants: Default::default(),
             arg_regs_count: 0,
             module,
-            tmp_regs_count: 255,
+            tmp_regs_count: 64,
             hotness: 0,
             code: Vec::new(),
             cfg: None,
@@ -64,7 +63,7 @@ impl ByteCompiler {
         });
         Self {
             code: block,
-            vid: 256,
+            vid: 71,
             args: 0,
             free_args: Default::default(),
             current: 0,
