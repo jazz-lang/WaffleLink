@@ -392,7 +392,7 @@ pub mod value_nanboxing {
             assert!(self.is_double());
             unsafe { f64::from_bits((self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET) as u64) }
         }
-
+        #[inline]
         pub fn is_any_int(&self) -> bool {
             if self.is_int32() {
                 true
@@ -402,10 +402,12 @@ pub mod value_nanboxing {
                 try_convert_to_i52(self.as_double()) != NOT_INT52 as i64
             }
         }
+        #[inline(always)]
         pub fn as_int32(&self) -> i32 {
-            assert!(self.is_int32());
+            debug_assert!(self.is_int32());
             unsafe { self.u.as_int64 as i32 }
         }
+        #[inline]
         pub fn as_any_int(&self) -> i64 {
             assert!(self.is_any_int());
             if self.is_int32() {
@@ -413,7 +415,7 @@ pub mod value_nanboxing {
             }
             return self.as_double() as i64;
         }
-
+        #[inline]
         pub fn is_int32_as_any_int(&self) -> bool {
             if !self.is_any_int() {
                 return false;
@@ -421,7 +423,7 @@ pub mod value_nanboxing {
             let value = self.as_any_int();
             return value >= i32::min_value() as i64 && value <= i32::max_value() as i64;
         }
-
+        #[inline]
         pub fn as_int32_as_any_int(&self) -> i32 {
             assert!(self.is_int32_as_any_int());
             if self.is_int32() {
@@ -429,7 +431,7 @@ pub mod value_nanboxing {
             }
             self.as_double() as i32
         }
-
+        #[inline]
         pub fn is_uint32_as_any_int(&self) -> bool {
             if !self.is_any_int() {
                 return false;
@@ -437,7 +439,7 @@ pub mod value_nanboxing {
             let value = self.as_any_int();
             return value >= 0 as i64 && value <= u32::max_value() as i64;
         }
-
+        #[inline]
         pub fn as_uint32_as_any_int(&self) -> u32 {
             assert!(self.is_int32_as_any_int());
             if self.is_int32() {
@@ -458,10 +460,12 @@ pub mod value_nanboxing {
     }
 
     impl Value {
+        #[inline]
         pub fn is_uint32(&self) -> bool {
             self.is_int32() && self.as_int32() >= 0
         }
 
+        #[inline]
         pub fn to_int32(&self) -> i32 {
             let d = self.to_number();
             d as i32
@@ -502,6 +506,7 @@ pub mod value_nanboxing {
                 self.as_double()
             }
         }
+        #[inline]
         pub fn to_boolean(&self) -> bool {
             if self.is_number() {
                 if self.is_int32() {

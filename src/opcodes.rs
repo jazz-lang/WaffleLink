@@ -116,7 +116,7 @@ impl Collectable for Ins {
     }
 }
 
-#[derive(Copy, Clone,Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct Pc {
     ins: *mut Ins,
 }
@@ -127,6 +127,7 @@ impl Pc {
             ins: code.as_ptr() as *mut Ins,
         }
     }
+    #[optimize(speed)]
     pub fn advance(&mut self) -> Ins {
         unsafe {
             let c = *self.ins;

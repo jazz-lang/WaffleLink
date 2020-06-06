@@ -96,8 +96,8 @@ impl<T: Collectable> Collectable for Vec<T> {
 
 pub struct WaffleHeap {
     lock: parking_lot::Mutex<Vec<*mut GcHeader<dyn Collectable>>>,
-    allocated: AtomicUsize,
-    threshold: AtomicUsize,
+    allocated: usize,
+    threshold: usize,
 }
 use super::*;
 impl WaffleHeap {
@@ -108,7 +108,7 @@ impl WaffleHeap {
             threshold: AtomicUsize::new(16 * 1024),
         }
     }
-    pub fn collect(&self, vm: &Machine) {
+    pub fn collect(&mut self, vm: &Machine) {
         vm.threads.stop_the_world(|threads| {
             let mut lock = self.lock.lock();
             let mut stack = std::collections::LinkedList::new();

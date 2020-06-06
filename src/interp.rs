@@ -38,7 +38,6 @@ pub fn ret_interp(interp: &mut Interpreter, _: Pc) {
         match interp.state.vm_state().stack.pop() {
             Some(mut frame) => {
                 interp.frame = frame;
-                //std::mem::swap(&mut interp.frame, &mut frame);
                 pc = interp.frame.pc;
             }
             None => return,
@@ -46,6 +45,7 @@ pub fn ret_interp(interp: &mut Interpreter, _: Pc) {
     }
     return Interpreter::dispatch(interp, pc);
 }
+#[optimize(speed)]
 #[naked]
 pub fn jump_if(interp: &mut Interpreter, mut pc: Pc) {
     unsafe {
@@ -59,53 +59,37 @@ pub fn jump_if(interp: &mut Interpreter, mut pc: Pc) {
         Interpreter::dispatch(interp, interp.frame.pc);
     }
 }
-#[cfg(target = "x86_64")]
-global_asm!(
-    "
-        enterInterpTrampoline:
-            pushq %rbp
-            movq %rsp,%rbp
-            movq (%rax),%rcx
-            addq $8,%rax
-            movq %rax,32(%rdi)
-            jmpq *%rcx
-        
-        exitInterpTrampoline: 
-            movq %rbp,%rsp
-            popq %rbp
-            ret
-    "
-);
-#[cfg(target = "aarch64")]
-global_asm!(
-    "enterInterpTrampoline: 
-        str x30,[sp,#-16]!
-        mov x8,x0
-        mov x1,x0
-        add x0,x0,#8
-        br x1
-    exitInterpTrampoline: 
-        mov     w0, #42
-        ldr     x30, [sp], #16
-        ret
-    "
-);
+
 impl Interpreter {
+    #[optimize(size)]
     #[inline(always)]
-    pub fn dispatch(this: &mut Self, pc: Pc) {
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    pub extern "C" fn dispatch(this: &mut Self /* rdi */, mut pc: Pc /* rsi*/) {
+        #[cfg(debug_assertions)]
         {
             this.live = true;
         }
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        #[cfg(all(
+            any(
+                target_arch="powerpc64",
+                target_arch="mips64",
+                target_arch = "x86_64",
+                target_arch="arm",
+                target_arch = "aarch64",
+                not(target_arch = "x86"), // LLVM does not do TCO for these archs
+                not(target_arch = "mips"),
+                not(target_arch = "powerpc"),
+                not(target_arch="powerpc64")
+            ),
+            not(debug_assertions)
+        ))]
         {
-            let ins = this.pc.advance();
+            let ins = pc.advance();
             return (ins.func())(this, pc);
         }
     }
 
     pub fn __run_internal(&mut self, pc: Pc) {
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        #[cfg(debug_assertions)]
         {
             while self.live {
                 Self::dispatch(self, pc);
@@ -115,14 +99,21 @@ impl Interpreter {
             }
         }
 
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        #[cfg(all(
+            any(
+                target_arch="powerpc64",
+                target_arch="mips64",
+                target_arch = "x86_64",
+                target_arch="arm",
+                target_arch = "aarch64",
+                not(target_arch = "x86"), // LLVM does not do TCO for these archs
+                not(target_arch = "mips"),
+                not(target_arch = "powerpc"),
+                not(target_arch="powerpc64")
+            ),
+            not(debug_assertions)
+        ))]
         {
-            /*extern "C" {
-                fn enterInterpTrampoline(interp: &mut Interpreter, pc: Pc);
-            }
-            unsafe {
-                enterInterpTrampoline(self, pc);
-            }*/
             Self::dispatch(self, pc);
         }
     }
@@ -140,6 +131,6 @@ impl Interpreter {
 pub static FOO: [fn(state: &mut super::interp::Interpreter, pc: Pc); 2] = [acc_stack, ret_interp];
 
 #[used]
-pub static FN: fn(&mut Interpreter, Pc) = Interpreter::dispatch;
+pub static FN: extern "C" fn(&mut Interpreter, Pc) = Interpreter::dispatch;
 #[used]
 pub static FN2: fn(&mut Interpreter, Pc) = Interpreter::__run_internal;

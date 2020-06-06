@@ -14,7 +14,7 @@ impl Lock {
     /// Acquires this mutex, blocking the current thread until it is able to do so.
     pub fn lock(&self) {
         // Until mutex is locked or GC cycle is not finished we yield thread.
-        while !self.lock.try_lock() {
+        if !self.lock.try_lock() {
             THREAD.with(|x| {
                 x.borrow()
                     .state
@@ -22,6 +22,7 @@ impl Lock {
             });
             gc_safepoint();
         }
+        self.lock.lock();
         // Thread locked! Reset thread state.
         THREAD.with(|x| {
             x.borrow()

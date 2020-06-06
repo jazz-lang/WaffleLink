@@ -18,7 +18,7 @@ value32-64 = []
 default = ["value64"]
 
 [profile.release]
-opt-level=3
+opt-level=2
 lto = true
 codegen-units=1
 panic = 'abort'
