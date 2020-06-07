@@ -20,6 +20,36 @@ pub enum IResult {
     Ok(Value),
     Err(Value),
 }
+
+#[naked]
+pub fn acc_null(interp: &mut Interpreter,pc: Pc) {
+    interp.frame.acc = Value::null();
+    Interpreter::dispatch(interp, pc)
+}
+
+#[naked]
+pub fn acc_true(interp: &mut Interpreter,pc: Pc) {
+    interp.frame.acc = Value::true_();
+    Interpreter::dispatch(interp, pc);
+} 
+
+#[naked]
+pub fn acc_false(interp: &mut Interpreter,pc: Pc) {
+    interp.frame.acc = Value::false_();
+    Interpreter::dispatch(interp, pc);
+}
+
+#[naked]
+pub fn acc_this(interp: &mut Interpreter,pc: Pc) {
+    interp.frame.acc = interp.frame.this;
+    Interpreter::dispatch(interp, pc);
+}
+#[naked]
+pub fn acc_int(interp: &mut Interpreter,mut pc: Pc) {
+    interp.frame.acc = Value::new_int(pc.advance().i32());
+    Interpreter::dispatch(interp, pc);
+}
+
 #[naked]
 pub fn acc_stack(interp: &mut Interpreter, pc: Pc) {
     let ix = interp.pc.advance().i16();

@@ -10,8 +10,8 @@ lazy_static = "1.4"
 dashmap = {version = "3.11"}
 cfg-if = "0.1"
 atomig = "0.1"
+indexmap = "1.4"
 parking_lot = {version = "0.10"}
-crossbeam = "0.7"
 [features]
 value64 = []
 value32-64 = []

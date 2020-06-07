@@ -74,7 +74,7 @@ pub mod value_nanboxing {
         pub u: EncodedValueDescriptor,
     }
 
-    #[cfg(feature = "value32-64")]
+    #[cfg(all(feature = "value32-64", not(feature = "value64")))]
     impl Value {
         /*
          * On 32-bit platforms `value32-64` feature should be enabled, and we use a NaN-encoded
@@ -112,11 +112,9 @@ pub mod value_nanboxing {
         pub fn default() -> Self {
             Self::with_tag_payload(EMPTY_TAG, 0)
         }
-
         pub fn null() -> Self {
             Self::with_tag_payload(NULL_TAG, 0)
         }
-
         pub fn undefined() -> Self {
             Self::with_tag_payload(UNDEFINED_TAG, 0)
         }
@@ -193,16 +191,6 @@ pub mod value_nanboxing {
             assert!(self.is_boolean());
             self.payload() != 0
         }
-
-        const _XX: () = {
-            impl PartialEq for Value {
-                fn eq(&self, other: &Self) -> bool {
-                    unsafe { self.u.as_int64 == other.u.as_int64 }
-                }
-            }
-
-            impl Eq for Value {}
-        };
     }
 
     #[cfg(feature = "value64")]
@@ -447,18 +435,14 @@ pub mod value_nanboxing {
             }
             self.as_double() as u32
         }
-
-        const _XX: () = {
-            impl PartialEq for Value {
-                fn eq(&self, other: &Self) -> bool {
-                    unsafe { self.u.as_int64 == other.u.as_int64 }
-                }
-            }
-
-            impl Eq for Value {}
-        };
+    }
+    impl PartialEq for Value {
+        fn eq(&self, other: &Self) -> bool {
+            unsafe { self.u.as_int64 == other.u.as_int64 }
+        }
     }
 
+    impl Eq for Value {}
     impl Value {
         #[inline]
         pub fn is_uint32(&self) -> bool {

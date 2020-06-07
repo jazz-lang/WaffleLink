@@ -13,6 +13,7 @@ pub mod opcodes;
 pub mod pure_nan;
 pub mod state;
 pub mod threads;
+pub mod transition;
 pub mod value;
 use arc::ArcWithoutWeak as Arc;
 use parking_lot::Mutex;
@@ -64,26 +65,26 @@ lazy_static::lazy_static! {
     pub static ref MACHINE: Arc<Machine> = Arc::new(Machine::new());
     pub static ref MODULE_REGISTRY: Arc<ModuleRegistry> = Arc::new(ModuleRegistry::new());
 }
-
+use std::collections::HashMap;
 pub struct ModuleRegistry {
-    parsed: dashmap::DashMap<String, value::Value>,
+    parsed: Mutex<HashMap<String, value::Value>>,
 }
 impl ModuleRegistry {
     pub fn new() -> Self {
         Self {
-            parsed: dashmap::DashMap::new(),
+            parsed: Mutex::new(Default::default()),
         }
     }
 
     pub fn contains(&self, name: &str) -> bool {
-        self.parsed.contains_key(name)
+        self.parsed.lock().contains_key(name)
     }
 
     pub fn parsed(&self) -> Vec<value::Value> {
-        self.parsed.iter().map(|x| *x.value()).collect()
+        self.parsed.lock().iter().map(|x| *x.1).collect()
     }
     pub fn get(&self, name: &str) -> Option<value::Value> {
-        self.parsed.get(name).map(|r| r.value().clone())
+        self.parsed.lock().get(name).map(|r| *r)
     }
 
     fn find_path(&self, path: &str) -> Result<String, String> {
@@ -131,15 +132,14 @@ impl ModuleRegistry {
     }
 
     pub fn load(&mut self, name: &str, path: &str) -> Result<(value::Value, bool), String> {
-        if !self.parsed.contains_key(name) {
+        let p = self.parsed.lock();
+        if !p.contains_key(name) {
             let full_path = self.find_path(path)?;
+            drop(p);
             self.parse_module(name, &full_path)
                 .map(|module| (module, true))
         } else {
-            Ok((
-                self.parsed.get(name).map(|x| x.value().clone()).unwrap(),
-                false,
-            ))
+            Ok((p.get(name).map(|x| *x).unwrap(), false))
         }
     }
 }

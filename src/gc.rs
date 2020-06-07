@@ -16,6 +16,27 @@ impl<T: Collectable + ?Sized> Handle<T> {
     pub fn get(&self) -> &mut T {
         unsafe { &mut (&mut *self.inner.as_ptr()).value }
     }
+    pub fn get_mut(&self) -> &mut T {
+        unsafe { &mut (&mut *self.inner.as_ptr()).value }
+    }
+}
+
+impl<T: Collectable + ?Sized + Eq> Eq for Handle<T> {}
+impl<T: Collectable + ?Sized + PartialEq> PartialEq for Handle<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl<T: Collectable + ?Sized + std::hash::Hash> std::hash::Hash for Handle<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.get().hash(state);
+    }
+}
+impl std::borrow::Borrow<str> for Handle<String> {
+    fn borrow(&self) -> &str {
+        self.get()
+    }
 }
 
 use std::ops::{Deref, DerefMut};
@@ -27,6 +48,12 @@ impl<T: Collectable + ?Sized> Deref for Handle<T> {
     }
 }
 
+impl<T: Collectable + ?Sized> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T: Collectable + ?Sized> Copy for Handle<T> {}
 impl<T: Collectable + ?Sized> DerefMut for Handle<T> {
     fn deref_mut(&mut self) -> &mut T {
         self.get()
@@ -40,6 +67,10 @@ impl<T: Collectable + ?Sized> Root<T> {
     pub(crate) fn inner(&self) -> &mut RootInner<T> {
         debug_assert!(!self.inner.is_null());
         unsafe { &mut *self.inner }
+    }
+
+    pub fn to_heap(&self) -> Handle<T> {
+        self.inner().handle
     }
 }
 
@@ -96,8 +127,8 @@ impl<T: Collectable> Collectable for Vec<T> {
 
 pub struct WaffleHeap {
     lock: parking_lot::Mutex<Vec<*mut GcHeader<dyn Collectable>>>,
-    allocated: usize,
-    threshold: usize,
+    allocated: AtomicUsize,
+    threshold: AtomicUsize,
 }
 use super::*;
 impl WaffleHeap {
@@ -108,7 +139,7 @@ impl WaffleHeap {
             threshold: AtomicUsize::new(16 * 1024),
         }
     }
-    pub fn collect(&mut self, vm: &Machine) {
+    pub fn collect(&self, vm: &Machine) {
         vm.threads.stop_the_world(|threads| {
             let mut lock = self.lock.lock();
             let mut stack = std::collections::LinkedList::new();
