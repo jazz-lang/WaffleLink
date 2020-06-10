@@ -1,14 +1,5 @@
-pub mod bitmap;
-pub mod bitvec;
-pub mod data_segment;
-pub mod mem;
-pub mod multi_map;
-pub mod os;
-pub mod rc;
-pub mod tree;
-
-use std::cmp::Ordering;
-use std::fmt;
+use core::fmt;
+use core::mem;
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Address(usize);
 
@@ -42,12 +33,12 @@ impl Address {
 
     #[inline(always)]
     pub fn add_ptr(self, words: usize) -> Address {
-        Address(self.0 + words * mem::ptr_width_usize())
+        Address(self.0 + words * mem::size_of::<usize>())
     }
 
     #[inline(always)]
     pub fn sub_ptr(self, words: usize) -> Address {
-        Address(self.0 - words * mem::ptr_width_usize())
+        Address(self.0 - words * mem::size_of::<usize>())
     }
 
     #[inline(always)]
@@ -84,21 +75,6 @@ impl Address {
     pub fn is_non_null(self) -> bool {
         self.0 != 0
     }
-
-    #[inline(always)]
-    pub fn align_page(self) -> Address {
-        mem::page_align(self.to_usize()).into()
-    }
-
-    #[inline(always)]
-    pub fn align_page_down(self) -> Address {
-        Address(self.0 & !(os::page_size() - 1))
-    }
-
-    #[inline(always)]
-    pub fn is_page_aligned(self) -> bool {
-        mem::is_page_aligned(self.to_usize())
-    }
 }
 
 impl fmt::Display for Address {
@@ -112,7 +88,7 @@ impl fmt::Debug for Address {
         write!(f, "0x{:x}", self.to_usize())
     }
 }
-
+use core::cmp::Ordering;
 impl PartialOrd for Address {
     fn partial_cmp(&self, other: &Address) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -195,7 +171,7 @@ impl fmt::Display for Region {
     }
 }
 
-struct FormattedSize {
+pub struct FormattedSize {
     size: usize,
 }
 
@@ -223,6 +199,33 @@ impl fmt::Display for FormattedSize {
     }
 }
 
-fn formatted_size(size: usize) -> FormattedSize {
+pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
 }
+use super::value::*;
+pub struct Gc {}
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub struct CellPointer {
+    ptr: *mut u8, // regular pointer
+}
+
+impl CellPointer {
+    pub fn value<'a>(self) -> &'a mut CellValue {
+        unsafe { &mut *self.ptr.cast::<CellValue>() }
+    }
+}
+pub struct GcArray {
+    pub len: usize,
+    pub cap: usize,
+    pub values: *mut Value,
+}
+
+impl GcArray {}
+
+pub enum CellValue {
+    String(*mut String),
+    Array(*mut GcArray),
+}
+
+pub struct Object {}

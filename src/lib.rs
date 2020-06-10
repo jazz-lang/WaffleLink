@@ -1,61 +1,44 @@
-#![allow(unused)]
-#![allow(non_camel_case_types)]
-#[macro_export]
-macro_rules! offset_of {
-    ($ty: ty, $field: ident) => {
-        unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
-    };
+pub mod cell;
+pub mod gc;
+pub mod pure_nan;
+pub mod value;
+
+pub struct Runtime {}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Trap {
+    DIV0,
+    ASSERT,
+    IndexOutOfBounds,
+    NIL,
+    CAST,
+    OOM,
+    StackOverflow,
 }
 
-#[macro_export]
-macro_rules! trace_if {
-    ($cond: expr, $($t: tt)*) => {
-        if $cond {
-            log::trace!($($t)*);
+impl Trap {
+    pub fn int(self) -> u32 {
+        match self {
+            Trap::DIV0 => 1,
+            Trap::ASSERT => 2,
+            Trap::IndexOutOfBounds => 3,
+            Trap::NIL => 4,
+            Trap::CAST => 5,
+            Trap::OOM => 6,
+            Trap::StackOverflow => 7,
         }
-    };
-}
+    }
 
-#[macro_export]
-macro_rules! unwrap {
-    ($e: expr) => {
-        match $e {
-            Ok(x) => x,
-            _ => unreachable!(),
+    pub fn from(value: u32) -> Option<Trap> {
+        match value {
+            1 => Some(Trap::DIV0),
+            2 => Some(Trap::ASSERT),
+            3 => Some(Trap::IndexOutOfBounds),
+            4 => Some(Trap::NIL),
+            5 => Some(Trap::CAST),
+            6 => Some(Trap::OOM),
+            7 => Some(Trap::StackOverflow),
+            _ => None,
         }
-    };
-}
-#[cfg(target_arch = "x86_64")]
-macro_rules! call {
-    (before ) => {};
-    (after) => {};
-}
-
-pub mod assembler;
-pub mod bytecode;
-pub mod bytecompiler;
-pub mod common;
-pub mod frontend;
-pub mod fullcodegen;
-pub mod heap;
-pub mod interpreter;
-pub mod jit;
-pub mod runtime;
-
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-pub use common::rc::Rc;
-
-#[cfg(test)]
-mod tests {
-    use crate::bytecompiler::*;
-    use crate::frontend::*;
-    use crate::fullcodegen::FullCodegen;
-    use crate::heap::api::*;
-    use crate::interpreter::callstack::CallFrame;
-    use crate::jit::JITResult;
-    use crate::runtime::*;
-    use parser::*;
-    use reader::*;
-    use value::*;
+    }
 }
