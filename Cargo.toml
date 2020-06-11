@@ -12,6 +12,7 @@ lazy_static = "1.4"
 cranelift = "0.64"
 paste = "0.1"
 cranelift-simplejit = "0.64"
+atomig = {version = "0.1",features= ["derive"]}
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 
