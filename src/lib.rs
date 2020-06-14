@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 pub mod gc;
+pub mod module;
 pub mod object;
 pub mod pure_nan;
 pub mod value;

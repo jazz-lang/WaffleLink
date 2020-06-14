@@ -516,9 +516,6 @@ pub mod value_nanboxing {
                 false
             }
         }
-        pub fn to_string(&self) -> Result<&'static str, Self> {
-            unimplemented!()
-        }
 
         pub fn number(x: f64) -> Self {
             if x as i32 as f64 == x {
@@ -526,6 +523,16 @@ pub mod value_nanboxing {
             } else {
                 Self::new_double(x)
             }
+        }
+        pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
+            if self.is_cell() {
+                self.as_cell().lookup(key)
+            } else {
+                Ok(None)
+            }
+        }
+        pub fn as_cell(self) -> WaffleCellPointer {
+            unsafe { self.u.cell }
         }
     }
 
@@ -573,6 +580,17 @@ pub mod value_nanboxing {
     impl Hash for Value {
         fn hash<H: Hasher>(&self, s: &mut H) {
             unsafe {
+                if self.is_cell() {
+                    let cell = self.as_cell();
+                    match cell.type_of() {
+                        WaffleType::String => {
+                            let string = cell.as_string();
+                            string.value().string.hash(s);
+                            return;
+                        }
+                        _ => (),
+                    }
+                }
                 self.u.as_int64.hash(s);
             }
         }

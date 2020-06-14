@@ -5,11 +5,35 @@ pub enum Opcode {
     Constant,
     True,
     False,
-    AccStack,
-    Push,
     This,
-    SetStack,
     SetThis,
+    GetEnv,
+    Get,
+    Set,
+    GetById,
+    SetById,
+    /// mov r(A),r(B)
+    ///
+    /// --> Move r(B) to r(A)
+    Mov,
+    /// set_arg r(A),arg(ix:u8)
+    SetArg8,
+    /// get_arg r(A),arg(ix:u8)
+    GetArg8,
+    SetArg16,
+    GetArg16,
+
+    /// call r(A), r(B), r(C) argc: u8
+    ///
+    /// r(A) - return register
+    /// r(B) - function to call
+    /// r(C) - 'this' value
+    Call8,
+    /// call r(A), r(B), r(C) argc: u16
+    Call16,
+
+    MakeEnv,
+
     Add,
     Sub,
     Div,
@@ -17,25 +41,5 @@ pub enum Opcode {
     Rem,
     Shr,
     Shl,
-    UShr,
-    LoadU,
-    StoreU,
-    Load,
-    Store,
-    /// Load by index
-    LoadI,
-    /// Store by index
-    StoreI,
-    LoadC,
-    StoreC,
-    CloseClosure,
-    Call,
-    ObjCall,
-    TailCall,
-    ObjTailCall,
-    New,
-    NewObject,
-    NewArray,
-    Pop,
     Ret,
 }

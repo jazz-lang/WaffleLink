@@ -231,26 +231,36 @@ impl GlobalAllocator {
     }
     pub unsafe fn global_lock(&self, b: bool) {
         if b {
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_add(1, A::Relaxed));
+            //GC_THREAD.with(|x| x.borrow().blocking.fetch_add(1, A::Relaxed));
             self.global_lock.lock();
         } else {
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_sub(1, A::Relaxed));
+            //GC_THREAD.with(|x| x.borrow().blocking.fetch_sub(1, A::Relaxed));
             self.global_lock.unlock();
         }
     }
 
     pub unsafe fn gc_stop_world(&self, b: bool) {
         if !b {
-            self.stopping_world.store(false, A::Relaxed);
+            self.stopping_world.store(false, A::SeqCst);
             self.global_lock(false);
         } else {
             self.global_lock(true);
-            self.stopping_world.store(true, A::Relaxed);
+            self.stopping_world.store(true, A::SeqCst);
             for thread in &*self.threads.get() {
                 while thread.blocking.load(A::Acquire) == 0 {
                     spin_loop_hint();
                 }
             }
+        }
+    }
+
+    pub unsafe fn safepoint(&self) {
+        if self.stopping_world.load(A::Acquire) {
+            GC_THREAD.with(|x| x.borrow().blocking.fetch_add(1, A::Release));
+            while self.stopping_world.load(A::Acquire) {
+                spin_loop_hint();
+            }
+            GC_THREAD.with(|x| x.borrow().blocking.fetch_sub(1, A::Relaxed));
         }
     }
 }

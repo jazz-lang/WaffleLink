@@ -109,6 +109,58 @@ pub mod __vtable_impl {
 #[cfg(not(feature = "use-vtable"))]
 pub mod __rt_dispatch_impl {
     use super::*;
+
+    impl<T: WaffleCellTrait> WaffleCellPointer<T> {
+        pub fn set(&self, key: Value, field: Value) -> Result<bool, Value> {
+            match self.type_of() {
+                WaffleType::Object => {
+                    let object = self.try_as_object().unwrap();
+                    object.value_mut().map.insert(key, field);
+                    Ok(true)
+                }
+                WaffleType::Array => {
+                    if key.is_number() {
+                        let mut ix = key.to_number().floor() as isize;
+                        let array = self.try_as_array().unwrap();
+                        if ix < 0 {
+                            ix = array.value().len() as isize + ix;
+                        }
+                        if ix >= array.value().len() as isize {
+                            return Ok(false);
+                        }
+                        array.value_mut()[ix as usize] = field;
+                        return Ok(true);
+                    }
+                    Ok(false)
+                }
+                _ => Ok(false),
+            }
+        }
+
+        pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
+            match self.type_of() {
+                WaffleType::Object => {
+                    let object = self.try_as_object().unwrap();
+                    object.value().lookup(key)
+                }
+                WaffleType::Array => {
+                    if key.is_number() {
+                        let mut ix = key.to_number().floor() as isize;
+                        let array = self.try_as_array().unwrap();
+                        if ix < 0 {
+                            ix = array.value().len() as isize + ix;
+                        }
+                        if ix >= array.value().len() as isize {
+                            return Ok(None);
+                        }
+                        return Ok(Some(array.value()[ix as usize]));
+                    }
+                    Ok(None)
+                }
+                _ => unimplemented!(),
+            }
+        }
+    }
 }
 
 #[cfg(feature = "use-vtable")]
