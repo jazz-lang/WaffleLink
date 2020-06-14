@@ -321,7 +321,7 @@ impl GlobalAllocator {
 
     /// Conservatively mark thread stacks.
     unsafe fn mark_thread_stacks(&self,mark_stack: &mut Vec<WaffleCellPointer>) {
-        
+        todo!();
     }
 
     /// Waffle GC is conservative on stack and precise on heap, this function scans threads stack 
@@ -341,7 +341,7 @@ impl GlobalAllocator {
 
         while start < end {
             let scan = *(start as *mut *mut u8);
-            if scan.is_null() == false || std::mem::transmute::<_,super::value::Value>(scan).is_cell() == false {
+            if scan.is_null() == false || std::mem::transmute::<_,super::value::Value>(scan).is_cell() != false {
                 if self.ptr_in_heap(scan) {
                     mark_stack.push(std::mem::transmute(scan));
                 }
