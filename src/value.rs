@@ -2,14 +2,15 @@ pub use value_nanboxing::Value;
 
 #[cfg(any(feature = "value64", feature = "value32"))]
 pub mod value_nanboxing {
+    use crate::object::*;
     use crate::pure_nan::*;
-
     #[derive(Copy, Clone)]
     #[repr(C, align(8))]
     pub union EncodedValueDescriptor {
         pub as_int64: i64,
         #[cfg(feature = "value32-64")]
         pub as_double: f64,
+        pub cell: WaffleCellPointer,
         pub as_bits: AsBits,
     }
     #[derive(Copy, Clone, PartialEq, Eq)]
@@ -59,7 +60,13 @@ pub mod value_nanboxing {
     pub const DELETED_TAG: i32 = 0xfffffff9u32 as i32;
     #[cfg(feature = "value32-64")]
     pub const LOWEST_TAG: i32 = DELETED_TAG;
-
+    impl<T: WaffleCellTrait> From<WaffleCellPointer<T>> for Value {
+        fn from(x: WaffleCellPointer<T>) -> Self {
+            Self {
+                u: EncodedValueDescriptor { cell: x.to_cell() },
+            }
+        }
+    }
     #[derive(Copy, Clone, PartialEq, Eq)]
     pub enum JSTag {
         Null,

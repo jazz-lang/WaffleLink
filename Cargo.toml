@@ -20,4 +20,5 @@ features = ["56bits"] # Select your feature here
 [features]
 value32-64 = []
 value64 = []
-default = ["value64"]
+use-vtable = []
+default = ["value64","use-vtable"]
