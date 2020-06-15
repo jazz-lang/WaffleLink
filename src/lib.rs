@@ -12,3 +12,5 @@ pub struct VirtualMachine {
 }
 
 pub struct GlobalState {}
+#[cfg(target_pointer_width = "32")]
+compile_error!("Cannot build on OS/Architecture with 32 bit pointers");

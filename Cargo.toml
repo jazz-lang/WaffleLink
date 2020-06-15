@@ -10,6 +10,8 @@ libc = "0.2"
 lazy_static = "1.4"
 paste = "0.1"
 parking_lot = "0.10"
+log = "0.4"
+simple_logger = "1.6.0"
 atomig = {version = "0.1",features= ["derive"]}
 setjmp = "0.1"
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -23,3 +25,6 @@ value32-64 = []
 value64 = []
 use-vtable = []
 default = ["value64"]
+
+[profile.release]
+debug = true

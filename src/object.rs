@@ -3,7 +3,10 @@ use std::thread::JoinHandle;
 use value::*;
 #[cfg(feature = "use-vtable")]
 use vtable::VTable;
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
+const MARK_BITS: usize = 2;
+const MARK_MASK: usize = (2 << MARK_BITS) - 1;
+const FWD_MASK: usize = !0 & !MARK_MASK;
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum WaffleType {
     None,
     Object,
@@ -23,12 +26,24 @@ pub enum WaffleType {
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct WaffleTypeHeader {
-    #[cfg(feature = "use-vtable")]
-    #[cfg_attr(feature = "use-vtable", doc = "virtual method table")]
-    pub vtable: &'static VTable,
-    /// Mark byte for GC
-    pub(crate) mark: u8,
     pub(crate) ty: WaffleType,
+    /// Mark byte for GC
+    pub(crate) fwdptr: usize,
+}
+
+impl WaffleTypeHeader {
+    pub fn mark(&mut self) {
+        self.fwdptr |= 1;
+    }
+    pub fn fwdptr(&self) -> usize {
+        self.fwdptr & FWD_MASK
+    }
+    pub fn unmark(&mut self) {
+        self.fwdptr &= FWD_MASK;
+    }
+    pub fn is_marked(&self) -> bool {
+        (self.fwdptr & MARK_MASK) != 0
+    }
 }
 #[repr(C)]
 pub struct WaffleCell {
@@ -36,7 +51,7 @@ pub struct WaffleCell {
 }
 #[derive(Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct WaffleCellPointer<T: WaffleCellTrait = WaffleCell> {
-    value: std::ptr::NonNull<T>,
+    pub(crate) value: std::ptr::NonNull<T>,
 }
 
 impl<T: WaffleCellTrait> Copy for WaffleCellPointer<T> {}
@@ -51,6 +66,43 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
     pub fn from_ptr(ptr: *const T) -> Self {
         Self {
             value: std::ptr::NonNull::new(ptr as *mut T).unwrap(),
+        }
+    }
+    pub fn finalize(&self) {}
+    pub fn size(&self) -> usize {
+        use std::mem::size_of;
+        match self.type_of() {
+            WaffleType::Object => size_of::<WaffleObject>(),
+            WaffleType::String => size_of::<WaffleString>(),
+            WaffleType::Array => {
+                size_of::<WaffleArray>() - 8 * self.try_as_array().unwrap().value().len()
+            }
+            _ => self.value().header().fwdptr(),
+        }
+    }
+    pub fn visit(&self, trace: &mut dyn FnMut(WaffleCellPointer)) {
+        match self.type_of() {
+            WaffleType::Object => {
+                let obj = self.try_as_object().unwrap();
+                for (k, v) in obj.value().map.iter() {
+                    if k.is_cell() {
+                        trace(k.as_cell());
+                    }
+                    if v.is_cell() {
+                        trace(v.as_cell());
+                    }
+                }
+            }
+            WaffleType::Array => {
+                let arr = self.try_as_array().unwrap();
+                for i in 0..arr.value().len() {
+                    let item = arr.value().at(i);
+                    if item.is_cell() {
+                        trace(item.as_cell());
+                    }
+                }
+            }
+            _ => (),
         }
     }
     pub fn to_cell(&self) -> WaffleCellPointer {
@@ -200,8 +252,8 @@ impl WaffleCellTrait for WaffleString {
 #[repr(C)]
 pub struct WaffleArray {
     pub header: WaffleTypeHeader,
-    len: usize,
-    cap: usize,
+    pub(crate) len: usize,
+    pub(crate) cap: usize,
     value: Value,
 }
 impl WaffleArray {
