@@ -327,7 +327,6 @@ impl GlobalAllocator {
             return false;
         }
         let ptr = Address::from_ptr(ptr);
-        //log::trace!("Try {:p}", block);
         // Search for block in all heap blocks & check that pointer is in bounds of allocated
         // block.
         if (&*self.all_blocks.get())
@@ -387,13 +386,17 @@ impl GlobalAllocator {
                 if all_free {
                     b.cursor = b.start;
                     free_list.push(&mut **b);
+                    log::trace!("Block {:p} freelisted", b.memory.to_ptr::<u8>());
                 } else {
+                    log::trace!("Block {:p} recyclable", b.memory.to_ptr::<u8>());
                     recyc_list.push(&mut **b);
                 }
                 free_count += 1;
                 true
             }
         });
+        *(&mut *self.free_list.get()) = free_list;
+        *(&mut *self.recyc_list.get()) = recyc_list;
     }
     pub unsafe fn collect(&self, lock: bool) {
         self.gc_stop_world(true, lock);
@@ -439,7 +442,7 @@ impl GlobalAllocator {
 
         while start < end {
             let scan = *(start as *mut *mut u8);
-            log::trace!("Scan {:p} at {:p}", scan, start);
+            //log::trace!("Scan {:p} at {:p}", scan, start);
 
             if self.ptr_in_heap(scan) {
                 if scan.is_null() {
@@ -492,6 +495,7 @@ impl GlobalAllocator {
                 "Block found in freelist: {:p}",
                 (&*block).memory.to_mut_ptr::<u8>()
             );
+            self.global_lock(false);
             return block;
         }
         if let Some(block) = recyc_list.pop() {
@@ -499,6 +503,7 @@ impl GlobalAllocator {
                 "Block found in recyclable list: {:p}",
                 (&*block).memory.to_mut_ptr::<u8>()
             );
+            self.global_lock(false);
             return block;
         }
         if collect {
@@ -508,6 +513,7 @@ impl GlobalAllocator {
                     "Block found in freelist: {:p}",
                     (&*block).memory.to_mut_ptr::<u8>()
                 );
+                self.global_lock(false);
                 return block;
             }
             if let Some(block) = recyc_list.pop() {
@@ -515,6 +521,7 @@ impl GlobalAllocator {
                     "Block found in recyclable list: {:p}",
                     (&*block).memory.to_mut_ptr::<u8>()
                 );
+                self.global_lock(false);
                 return block;
             }
         }
@@ -578,6 +585,7 @@ impl LocalAllocator {
     }
     pub unsafe fn gc_collect(&mut self) {
         GLOBAL_ALLOC.collect(true);
+        self.request_block();
     }
     unsafe fn request_block(&mut self) {
         self.block = GLOBAL_ALLOC.next_block(true);

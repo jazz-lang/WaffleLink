@@ -118,23 +118,24 @@ impl Block {
         Some(&mut *((&*b).block))
     }
     pub unsafe fn allocate(&mut self, size: usize) -> Address {
-        let addr = self.freelist.alloc(size);
-        if addr.is_non_null() {
-            let ptr = addr.addr();
-            let hdr = (&mut *ptr.to_mut_ptr::<WaffleCell>()).header_mut();
-            hdr.fwdptr = addr.size();
-            hdr.unmark();
-
-            return ptr;
-        }
         if self.cursor.offset(size) < self.limit {
             let ptr = self.cursor;
             self.cursor = self.cursor.offset(size);
             let hdr = (&mut *self.cursor.to_mut_ptr::<WaffleCell>()).header_mut();
-            //println!("{}", self.limit.to_usize() - self.cursor.to_usize());
+            // create free object so when sweeping we can skip it.
             hdr.fwdptr = self.limit.to_usize() - self.cursor.to_usize();
             hdr.unmark();
             hdr.ty = WaffleType::None;
+            return ptr;
+        }
+        let addr = self.freelist.alloc(size);
+        if addr.is_non_null() {
+            let ptr = addr.addr();
+            let hdr = (&mut *ptr.to_mut_ptr::<WaffleCell>()).header_mut();
+            // create free object so when sweeping we can skip it.
+            hdr.fwdptr = addr.size();
+            hdr.unmark();
+
             return ptr;
         }
         return Address::null();

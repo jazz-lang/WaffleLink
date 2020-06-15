@@ -95,21 +95,14 @@ impl FreeList {
 
     pub fn add(&mut self, addr: Address, size: usize) {
         assert!(size >= std::mem::size_of::<WaffleCell>());
-        if size < SIZE_SMALLEST {
-            return;
-        }
-
         debug_assert!(size >= SIZE_SMALLEST);
         let szclass = SizeClass::next_down(size);
 
         let free_class = &mut self.classes[szclass.idx()];
-        /*unsafe {
-            *addr.to_mut_ptr::<usize>() = size;
-        }*/
         unsafe {
             (&mut *addr.to_mut_ptr::<WaffleCell>()).header.fwdptr = size;
+            *addr.add_ptr(1).to_mut_ptr::<FreeSpace>() = free_class.head;
         }
-        //fill_region_with_free(vm, addr, addr.offset(size), free_class.head.addr());
         free_class.head = FreeSpace(addr);
     }
 
