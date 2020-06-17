@@ -591,11 +591,43 @@ pub mod value_nanboxing {
                             string.value().string.hash(s);
                             return;
                         }
+                        WaffleType::Array => {
+                            let array = cell.as_array();
+                            for ix in 0..array.value().len() {
+                                array.value().at(ix).hash(s);
+                            }
+                            array.value().len().hash(s);
+                        }
                         _ => (),
                     }
                 }
                 self.u.as_int64.hash(s);
             }
+        }
+    }
+}
+
+impl Into<Option<std::ops::Range<i64>>> for Value {
+    /// Tries to convert value into a range. If value is not a number then this will return
+    /// None.
+    /// ```rust
+    /// use wafflelink::value::*;
+    ///
+    /// let val = Value::new_int(10);
+    /// let range = val.into();
+    /// assert!(range.is_some());
+    /// for item in range.unwrap().iter() {
+    ///     println!("{}",item);
+    /// }
+    /// ```
+    ///
+    ///
+    ///
+    fn into(self) -> Option<std::ops::Range<i64>> {
+        if self.is_number() {
+            Some(std::ops::Range {start: 0,end: self.to_number().floor() as i64})
+        } else {
+            return None;
         }
     }
 }
