@@ -4,13 +4,46 @@ pub mod gc;
 pub mod module;
 pub mod object;
 pub mod pure_nan;
+pub mod tagged;
+pub mod thread;
 pub mod value;
 pub mod vtable;
-use gc::GlobalAllocator;
 pub struct VirtualMachine {
     pub state: Arc<GlobalState>,
 }
 
-pub struct GlobalState {}
+impl VirtualMachine {
+    pub fn collect(&self) {
+        let x = false;
+        thread::stop_the_world(
+            |threads| {
+                self.state.heap.collect(threads);
+            },
+            &x,
+        );
+    }
+
+    pub fn register_thread(&self, top: *const bool) {
+        /*gc::immix_space::LOCAL_ALLOCATOR.with(|l| {
+            (&*l.get()).stack_top.store(top as usize);
+        });*/
+        self.state.threads.attach_current_thread(top as *const u8);
+    }
+}
+
+pub struct GlobalState {
+    pub threads: thread::Threads,
+    pub heap: gc::Heap,
+}
+
+lazy_static::lazy_static! {
+    pub static ref VM: VirtualMachine = VirtualMachine {
+        state: Arc::new(GlobalState {
+            threads: thread::Threads::new(),
+            heap: gc::Heap::new()
+        })
+    };
+}
+
 #[cfg(target_pointer_width = "32")]
 compile_error!("Cannot build on OS/Architecture with 32 bit pointers");

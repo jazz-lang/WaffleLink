@@ -534,6 +534,9 @@ pub mod value_nanboxing {
         pub fn as_cell(self) -> WaffleCellPointer {
             unsafe { self.u.cell }
         }
+        pub fn as_cell_ref<'a>(&'a self) -> &'a WaffleCellPointer {
+            unsafe { &self.u.cell }
+        }
     }
 
     macro_rules! signbit {

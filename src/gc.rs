@@ -1,11 +1,193 @@
 //! Mark & Sweep garbage collector.
-pub mod block;
-pub mod freelist;
+pub mod collector;
+pub mod constants;
+pub mod immix_space;
 use super::object::*;
 use std::alloc::Layout;
 use std::cmp::Ordering;
 use std::sync::atomic::{spin_loop_hint, AtomicBool, AtomicUsize, Ordering as A};
 use std::sync::Arc;
+
+/// The type of collection that will be performed.
+pub enum CollectionType {
+    /// A simple reference counting collection.
+    RCCollection,
+
+    /// A reference counting collection with proactive opportunistic
+    /// evacuation.
+    RCEvacCollection,
+
+    /// A reference counting collection followed by the immix tracing (cycle)
+    /// collection.
+    ImmixCollection,
+
+    /// A reference counting collection followed by the immix tracing (cycle)
+    /// collection. Both with opportunistict evacuation.
+    ImmixEvacCollection,
+}
+
+impl CollectionType {
+    /// Returns if this `CollectionType` is an evacuating collection.
+    pub fn is_evac(&self) -> bool {
+        use self::CollectionType::{ImmixEvacCollection, RCEvacCollection};
+        match *self {
+            RCEvacCollection | ImmixEvacCollection => true,
+            _ => false,
+        }
+    }
+
+    /// Returns if this `CollectionType` is a cycle collecting collection.
+    pub fn is_immix(&self) -> bool {
+        use self::CollectionType::{ImmixCollection, ImmixEvacCollection};
+        match *self {
+            ImmixCollection | ImmixEvacCollection => true,
+            _ => false,
+        }
+    }
+}
+use collector::*;
+use parking_lot::Mutex;
+pub struct Heap {
+    /// The default immix space.
+    immix_space: immix_space::ImmixSpace,
+    collector: Mutex<Collector>,
+    /// The current live mark.
+    ///
+    /// During allocation of objects this value is used as the `mark` state of
+    /// new objects. During allocation the value is negated and used to mark
+    /// objects during the tracing mark phase. This way the newly allocated
+    /// objects are always initialized with the last `mark` state with will be
+    /// flipped if they are reached is the mark phase.
+    current_live_mark: AtomicBool,
+}
+
+impl Heap {
+    pub fn new() -> Self {
+        Self {
+            current_live_mark: AtomicBool::new(false),
+            immix_space: immix_space::ImmixSpace::new(),
+            collector: Mutex::new(Collector::new()),
+        }
+    }
+
+    pub fn is_gc_object(&self, object: GCObjectRef) -> bool {
+        self.immix_space.is_gc_object(object)
+    }
+
+    pub fn allocate(&self, ty: WaffleType, size: usize) -> Option<WaffleCellPointer> {
+        if size >= constants::LARGE_OBJECT {
+            todo!("Large space");
+        } else {
+            self.immix_space.allocate(ty, size)
+        }
+    }
+
+    pub fn unregister_thread() {
+        use immix_space::*;
+        LOCAL_ALLOCATOR.with(|alloc| {
+            crate::VM
+                .state
+                .heap
+                .immix_space
+                .allocators
+                .lock()
+                .retain(|a| !Arc::ptr_eq(a, &*alloc))
+        });
+    }
+    fn collect_roots(&self, threads: &[Arc<crate::thread::Thread>]) -> Vec<GCObjectRef> {
+        let mut roots = vec![];
+        let immix_filter = self.immix_space.is_gc_object_filter();
+        for thread in threads.iter() {
+            let mut scan = thread.stack_top.load(A::Relaxed);
+            let mut end = thread.stack_cur.load(A::Relaxed);
+            if end < scan {
+                std::mem::swap(&mut end, &mut scan);
+            }
+            let mut scan = Address::from(scan);
+            let end = Address::from(end);
+            debug_assert!(scan.is_non_null());
+            debug_assert!(end.is_non_null());
+            while scan < end {
+                // Scan for GC object.
+                let frame = scan.to_ptr::<crate::value::Value>();
+                unsafe {
+                    // We're dereferencing `Value` and it takes 64 bits of space so this code will not work on 32 bit machines.
+                    let value = *frame;
+                    if value.is_empty() || !value.is_cell() {
+                        scan = scan.add_ptr(1);
+                        continue;
+                    } else {
+                        if immix_filter(value.as_cell()) {
+                            log::trace!("Root object {:p} at {:p}", value.as_cell().raw(), frame);
+                            roots.push(value.as_cell());
+                        }
+                    }
+                }
+                scan = scan.add_ptr(1);
+            }
+            let mut scan = thread.regs.as_ptr().cast::<u8>();
+            let mut end = (scan as usize
+                + (std::mem::size_of::<setjmp::jmp_buf>() / std::mem::size_of::<usize>())
+                - 1) as *const u8;
+            while scan < end {
+                let frame = scan.cast::<crate::value::Value>();
+                unsafe {
+                    // We're dereferencing `Value` and it takes 64 bits of space so this code will not work on 32 bit machines.
+                    let value = *frame;
+                    if value.is_empty() || !value.is_cell() {
+                        scan = scan.offset(8);
+                        continue;
+                    } else {
+                        if immix_filter(value.as_cell()) {
+                            log::trace!("Root object {:p} at {:p}", value.as_cell().raw(), frame);
+                            roots.push(value.as_cell());
+                        }
+                    }
+                    scan = scan.offset(8);
+                }
+            }
+        }
+
+        roots
+    }
+    pub fn collect(&self, threads: &[Arc<crate::thread::Thread>]) {
+        let roots = self.collect_roots(threads);
+        let mut collector = self.collector.lock();
+        collector.extend_all_blocks(self.immix_space.get_all_blocks());
+        // pin roots so GC will not move them.
+        roots.iter().for_each(|item| {
+            item.value_mut().header_mut().set_pinned();
+        });
+        let ty = collector.prepare_collection(
+            true,
+            false,
+            self.immix_space.available_blocks(),
+            self.immix_space.evac_headroom(),
+        );
+
+        collector.collect(
+            &ty,
+            &roots,
+            &self.immix_space,
+            !self.current_live_mark.load(A::Relaxed),
+        );
+        collector.complete_collection(&ty, &self.immix_space);
+        // GC cycle finished, we can unpin roots safely.
+        roots.iter().for_each(|item| {
+            item.value_mut().header_mut().unpin();
+        });
+
+        if ty.is_immix() {
+            self.current_live_mark.fetch_xor(true, A::Relaxed);
+            self.immix_space
+                .set_current_live_mark(self.current_live_mark.load(A::Relaxed));
+        }
+    }
+}
+unsafe impl Send for Heap {}
+unsafe impl Sync for Heap {}
+
+pub type GCObjectRef = WaffleCellPointer;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Address(usize);
@@ -210,423 +392,7 @@ fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
 }
 use parking_lot::{lock_api::RawMutex, RawMutex as Lock};
-use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
-pub struct GlobalAllocator {
-    global_lock: Lock,
-    stopping_world: AtomicBool,
-    all_blocks: UnsafeCell<Vec<Box<block::Block>>>,
-    recyc_list: UnsafeCell<Vec<*mut block::Block>>,
-    free_list: UnsafeCell<Vec<*mut block::Block>>,
-    threads: UnsafeCell<Vec<Arc<GcThread>>>,
-    allocated_bytes: AtomicUsize,
-    threshold: AtomicUsize,
-}
-
-static THREAD_ID: AtomicUsize = AtomicUsize::new(1);
-
-impl GlobalAllocator {
-    pub fn new() -> Self {
-        Self {
-            global_lock: Lock::INIT,
-            stopping_world: AtomicBool::new(false),
-            threads: UnsafeCell::new(Vec::new()),
-            all_blocks: UnsafeCell::new(vec![]),
-            free_list: UnsafeCell::new(vec![]),
-            recyc_list: UnsafeCell::new(vec![]),
-            allocated_bytes: AtomicUsize::new(0),
-            threshold: AtomicUsize::new(16 * 1024),
-        }
-    }
-    pub unsafe fn global_lock(&self, b: bool) {
-        if b {
-            Self::gc_save_ctx(Self::current_thread(), &b);
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_add(1, A::Relaxed));
-            self.global_lock.lock();
-        } else {
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_sub(1, A::Relaxed));
-            self.global_lock.unlock();
-        }
-    }
-    pub fn blocking(b: bool) {
-        let t = Self::current_thread();
-        if t.id == 0 {
-            return;
-        }
-        unsafe {
-            if b {
-                if t.blocking.fetch_add(1, A::AcqRel) == 0 {
-                    Self::gc_save_ctx(t.clone(), &b);
-                }
-            } else if t.blocking.load(A::Relaxed) == 0 {
-                panic!("Unblocked thread");
-            } else {
-                t.blocking.fetch_sub(1, A::AcqRel);
-                if t.blocking.fetch_sub(1, A::AcqRel) == 1
-                    && GLOBAL_ALLOC.stopping_world.load(A::Acquire)
-                {
-                    GLOBAL_ALLOC.global_lock(true);
-                    GLOBAL_ALLOC.global_lock(false);
-                }
-            }
-        }
-    }
-    pub unsafe fn unregister_thread(&self) {
-        self.global_lock(true);
-        GC_THREAD.with(|th| {
-            let th = th.borrow();
-            (&mut *self.threads.get()).retain(|thread| !Arc::ptr_eq(&*th, thread))
-        });
-        self.global_lock(false);
-    }
-
-    pub fn register_thread<STACK>(&self, stack_top: *const STACK) {
-        let stack_top = stack_top as *mut u8;
-        let thread = GcThread {
-            id: THREAD_ID.fetch_add(1, A::AcqRel),
-            stack_start: UnsafeCell::new(stack_top),
-            stack_cur: UnsafeCell::new(std::ptr::null_mut()),
-            extra_stack_size: UnsafeCell::new(0),
-            extra_stack_data: UnsafeCell::new(std::ptr::null_mut()),
-            regs: MaybeUninit::uninit(),
-            blocking: AtomicUsize::new(0),
-        };
-        GC_THREAD.with(|th| unsafe {
-            *th.borrow_mut() = Arc::new(thread);
-            self.global_lock(true);
-            (&mut *self.threads.get()).push(th.borrow().clone());
-            self.global_lock(false);
-        });
-    }
-    #[inline(never)]
-    pub unsafe fn gc_save_ctx<T>(t: Arc<GcThread>, prev_stack: *const T) {
-        let stack_cur = &t as *const _ as *mut u8;
-        setjmp::setjmp(t.regs.as_ptr() as *mut _);
-        *(&mut *t.stack_cur.get()) = stack_cur;
-        // TODO: LLVM might push/pop some callee registers in call to gc_save_ctx (or before)
-        // which might hold a GC value, let's capture them immediately in extra per thread data.
-        /*let size = (prev_stack as usize - stack_cur as usize) / std::mem::size_of::<usize>();
-        println!("Extra {} bytes", size);
-        *(&mut *t.extra_stack_size.get()) = size;
-        std::ptr::copy(
-            prev_stack as *const u8,
-            (t.extra_stack_data.get()) as *mut u8,
-            size * 8,
-        );*/
-    }
-    pub fn current_thread() -> Arc<GcThread> {
-        GC_THREAD.with(|th| th.borrow().clone())
-    }
-    /// Check is pointer in GC heap or no, if no this function returns false otherwise true is
-    /// returned.
-    unsafe fn ptr_in_heap(&self, ptr: *mut u8) -> bool {
-        use block::*;
-        let block = (ptr as usize & BLOCK_MASK) as *mut block::BlockHeader;
-        if block.is_null() {
-            // Null block pointer == ptr is not from heap.
-            return false;
-        }
-        let ptr = Address::from_ptr(ptr);
-        // Search for block in all heap blocks & check that pointer is in bounds of allocated
-        // block.
-        if (&*self.all_blocks.get())
-            .iter()
-            .find(|x| x.memory == Address::from_ptr(block))
-            .is_some()
-        {
-            let real_block = &*(&*block).block;
-            ptr <= real_block.start && ptr <= real_block.cursor
-        } else {
-            false
-        }
-    }
-
-    /// Conservatively mark thread stacks.
-    unsafe fn mark_threads(&self, mark_stack: &mut Vec<WaffleCellPointer>) {
-        for thread in &*self.threads.get() {
-            self.mark_thread(mark_stack, thread);
-        }
-    }
-
-    unsafe fn mark(&self) {
-        let mut stack = vec![];
-        self.mark_threads(&mut stack);
-        while let Some(item) = stack.pop() {
-            item.visit(&mut |item| {
-                if item.value.as_ptr() as usize == 0x0 {
-                    return;
-                } else {
-                    //println!("Wtf {:p}", item.value.as_ptr());
-                }
-                log::trace!("Mark {:p}", item.value.as_ptr());
-                if !item.value().header().is_marked() {
-                    item.value_mut().header_mut().mark();
-                    stack.push(item);
-                }
-            });
-            let block = block::Block::from_pointer(item.value.as_ptr()).unwrap();
-            if !block.is_marked() {
-                block.header().mark.store(true, A::Relaxed);
-            }
-        }
-    }
-    unsafe fn sweep(&self) {
-        let mut free_list: Vec<*mut block::Block> = Vec::new();
-        let mut recyc_list: Vec<*mut block::Block> = Vec::new();
-        let mut free_count = 0;
-        retain_mut(&mut *self.all_blocks.get(), |b| {
-            let all_free = b.sweep();
-            if free_count > 6 && (all_free || !b.is_marked()) {
-                use std::alloc::*;
-                let layout = Layout::from_size_align(block::BLOCK_SIZE, block::BLOCK_SIZE).unwrap();
-                log::debug!("Dealloc block {:p}", b.memory.to_ptr::<u8>());
-                dealloc(b.memory.to_mut_ptr(), layout);
-                false
-            } else {
-                if all_free {
-                    b.cursor = b.start;
-                    free_list.push(&mut **b);
-                    log::trace!("Block {:p} freelisted", b.memory.to_ptr::<u8>());
-                } else {
-                    log::trace!("Block {:p} recyclable", b.memory.to_ptr::<u8>());
-                    recyc_list.push(&mut **b);
-                }
-                free_count += 1;
-                true
-            }
-        });
-        *(&mut *self.free_list.get()) = free_list;
-        *(&mut *self.recyc_list.get()) = recyc_list;
-    }
-    pub unsafe fn collect(&self, lock: bool) {
-        self.gc_stop_world(true, lock);
-        log::trace!("GC cycle started");
-        self.mark();
-        self.sweep();
-        self.gc_stop_world(false, lock);
-    }
-
-    /// Waffle GC is conservative on stack and precise on heap, this function scans threads stack
-    /// for GC roots. Can it identify some random integer as pointer? Sure it can but on x64 this
-    /// is very rare and basically impossible.
-    ///
-    /// ## Safety
-    /// This is function is unsafe because we use UnsafeCell internally to modify contents behind
-    /// Arc pointer and do two transmutes for fast convertation pointer<->value, but in other parts
-    /// it is fully safe.
-    unsafe fn mark_thread(&self, mark_stack: &mut Vec<WaffleCellPointer>, th: &Arc<GcThread>) {
-        let start = *th.stack_start.get();
-        let end = *th.stack_cur.get();
-        self.mark_conservative(mark_stack, start, end);
-        self.mark_conservative(
-            mark_stack,
-            th.regs.as_ptr() as *mut u8,
-            th.regs.as_ptr().cast::<u8>().offset(
-                std::mem::size_of::<setjmp::jmp_buf>() as isize
-                    / std::mem::size_of::<usize>() as isize
-                    - 1,
-            ) as *mut u8,
-        );
-    }
-
-    unsafe fn mark_conservative(
-        &self,
-        mark_stack: &mut Vec<WaffleCellPointer>,
-        mut start: *mut u8,
-        mut end: *mut u8,
-    ) {
-        log::trace!("Conservative mark {:p}->{:p}", start, end);
-        if start > end {
-            std::mem::swap(&mut start, &mut end);
-        }
-
-        while start < end {
-            let scan = *(start as *mut *mut u8);
-            //log::trace!("Scan {:p} at {:p}", scan, start);
-
-            if self.ptr_in_heap(scan) {
-                if scan.is_null() {
-                    start = start.offset(std::mem::size_of::<usize>() as _);
-                }
-                let cell: WaffleCellPointer = std::mem::transmute(scan);
-                if !cell.value().header().is_marked() {
-                    cell.value_mut().header_mut().mark();
-                    log::trace!(
-                        "Conservative GC root {:p} found at {:p}, it is {:?}",
-                        scan,
-                        start,
-                        cell.type_of()
-                    );
-                    mark_stack.push(std::mem::transmute(scan));
-                } else {
-                    log::trace!("Already marked {:p}", scan);
-                }
-            }
-            start = start.offset(std::mem::size_of::<usize>() as _);
-        }
-    }
-    pub unsafe fn gc_stop_world(&self, b: bool, lock: bool) {
-        if !b {
-            self.stopping_world.store(false, A::SeqCst);
-            if lock {
-                self.global_lock(false);
-            }
-        } else {
-            if lock {
-                self.global_lock(true);
-            }
-            self.stopping_world.store(true, A::SeqCst);
-            for thread in &*self.threads.get() {
-                while thread.blocking.load(A::Acquire) == 0 {
-                    spin_loop_hint();
-                }
-            }
-        }
-        if b {
-            Self::gc_save_ctx(Self::current_thread(), &b);
-        }
-    }
-    pub unsafe fn next_block(&self, collect: bool) -> *mut block::Block {
-        self.global_lock(true);
-        let free_list = &mut *self.free_list.get();
-        let recyc_list = &mut *self.recyc_list.get();
-        if let Some(block) = free_list.pop() {
-            log::trace!(
-                "Block found in freelist: {:p}",
-                (&*block).memory.to_mut_ptr::<u8>()
-            );
-            self.global_lock(false);
-            return block;
-        }
-        if let Some(block) = recyc_list.pop() {
-            log::trace!(
-                "Block found in recyclable list: {:p}",
-                (&*block).memory.to_mut_ptr::<u8>()
-            );
-            self.global_lock(false);
-            return block;
-        }
-        if collect {
-            self.collect(false);
-            if let Some(block) = free_list.pop() {
-                log::trace!(
-                    "Block found in freelist: {:p}",
-                    (&*block).memory.to_mut_ptr::<u8>()
-                );
-                self.global_lock(false);
-                return block;
-            }
-            if let Some(block) = recyc_list.pop() {
-                log::trace!(
-                    "Block found in recyclable list: {:p}",
-                    (&*block).memory.to_mut_ptr::<u8>()
-                );
-                self.global_lock(false);
-                return block;
-            }
-        }
-        let mut block = block::Block::boxed();
-        log::trace!("Allocated block {:p}", block.memory.to_mut_ptr::<u8>());
-        let mem = (&mut *block) as *mut block::Block;
-        (&mut *self.all_blocks.get()).push(block);
-        self.global_lock(false);
-
-        mem
-    }
-    pub unsafe fn safepoint(&self) {
-        if self.stopping_world.load(A::Acquire) {
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_add(1, A::Release));
-            while self.stopping_world.load(A::Acquire) {
-                spin_loop_hint();
-            }
-            GC_THREAD.with(|x| x.borrow().blocking.fetch_sub(1, A::Relaxed));
-        }
-    }
-}
-unsafe impl Send for GlobalAllocator {}
-unsafe impl Sync for GlobalAllocator {}
-lazy_static::lazy_static! {
-    static ref GLOBAL_ALLOC: GlobalAllocator = GlobalAllocator::new();
-}
-
-pub struct LocalAllocator {
-    block: *mut block::Block,
-}
-
-impl LocalAllocator {
-    pub fn new(root: *const dyn std::any::Any) -> Self {
-        let ptr = root as *const u8;
-        GLOBAL_ALLOC.register_thread(ptr);
-        unsafe {
-            Self {
-                block: GLOBAL_ALLOC.next_block(false),
-            }
-        }
-    }
-    pub fn allocate_array(&mut self, count: usize) -> WaffleCellPointer<WaffleArray> {
-        unsafe {
-            let block = &mut *self.block;
-
-            let addr = block.allocate(std::mem::size_of::<WaffleArray>() - 8 * count);
-            if addr.is_non_null() {
-                let arr = WaffleCellPointer::from_ptr(addr.to_mut_ptr::<WaffleArray>());
-                arr.value_mut().header_mut().ty = WaffleType::Array;
-                arr.value_mut().len = count;
-                arr.value_mut().cap = count;
-                for x in 0..count {
-                    *arr.value_mut().at_ref_mut(x) = super::value::Value::undefined();
-                }
-                return arr;
-            } else {
-                self.request_block();
-                self.allocate_array(count)
-            }
-        }
-    }
-    pub unsafe fn gc_collect(&mut self) {
-        GLOBAL_ALLOC.collect(true);
-        self.request_block();
-    }
-    unsafe fn request_block(&mut self) {
-        self.block = GLOBAL_ALLOC.next_block(true);
-    }
-}
-
-impl Drop for LocalAllocator {
-    fn drop(&mut self) {
-        unsafe {
-            GLOBAL_ALLOC.unregister_thread();
-        }
-    }
-}
-
-pub struct GcThread {
-    id: usize,
-    regs: MaybeUninit<setjmp::jmp_buf>,
-    stack_cur: UnsafeCell<*mut u8>,
-    stack_start: UnsafeCell<*mut u8>,
-    extra_stack_size: UnsafeCell<usize>,
-    extra_stack_data: UnsafeCell<*mut u8>,
-    blocking: AtomicUsize,
-}
-
-impl Drop for GcThread {
-    fn drop(&mut self) {}
-}
-
-use std::cell::RefCell;
-
-thread_local! {
-    pub static GC_THREAD: RefCell<Arc<GcThread>> = RefCell::new(Arc::new(GcThread {
-        id: 0,
-        stack_start: UnsafeCell::new(std::ptr::null_mut()),
-        stack_cur: UnsafeCell::new(std::ptr::null_mut()),
-        extra_stack_size: UnsafeCell::new(0),
-        extra_stack_data: UnsafeCell::new(std::ptr::null_mut()),
-        regs: MaybeUninit::uninit(),
-        blocking: AtomicUsize::new(0),
-    }))
-}
 
 pub fn retain_mut<T>(v: &mut Vec<T>, mut f: impl FnMut(&mut T) -> bool) {
     for i in (0..v.len()).rev() {
@@ -647,5 +413,132 @@ pub fn retain_mut<T>(v: &mut Vec<T>, mut f: impl FnMut(&mut T) -> bool) {
             // because we're about to go to a smaller index.
             v.swap_remove(i);
         }
+    }
+}
+#[repr(transparent)]
+pub struct UnsafeCell<T: ?Sized> {
+    value: T,
+}
+
+impl<T> UnsafeCell<T> {
+    /// Constructs a new instance of `UnsafeCell` which will wrap the specified
+    /// value.
+    ///
+    /// All access to the inner value through methods is `unsafe`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::cell::UnsafeCell;
+    ///
+    /// let uc = UnsafeCell::new(5);
+    /// ```
+    #[inline]
+    pub const fn new(value: T) -> UnsafeCell<T> {
+        UnsafeCell { value }
+    }
+
+    /// Unwraps the value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::cell::UnsafeCell;
+    ///
+    /// let uc = UnsafeCell::new(5);
+    ///
+    /// let five = uc.into_inner();
+    /// ```
+    #[inline]
+    pub fn into_inner(self) -> T {
+        self.value
+    }
+}
+
+impl<T: ?Sized> UnsafeCell<T> {
+    /// Gets a mutable pointer to the wrapped value.
+    ///
+    /// This can be cast to a pointer of any kind.
+    /// Ensure that the access is unique (no active references, mutable or not)
+    /// when casting to `&mut T`, and ensure that there are no mutations
+    /// or mutable aliases going on when casting to `&T`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::cell::UnsafeCell;
+    ///
+    /// let uc = UnsafeCell::new(5);
+    ///
+    /// let five = uc.get();
+    /// ```
+    #[inline]
+
+    pub const fn get(&self) -> *mut T {
+        // We can just cast the pointer from `UnsafeCell<T>` to `T` because of
+        // #[repr(transparent)]. This exploits libstd's special status, there is
+        // no guarantee for user code that this will work in future versions of the compiler!
+        self as *const UnsafeCell<T> as *const T as *mut T
+    }
+
+    /// Gets a mutable pointer to the wrapped value.
+    /// The difference to [`get`] is that this function accepts a raw pointer,
+    /// which is useful to avoid the creation of temporary references.
+    ///
+    /// The result can be cast to a pointer of any kind.
+    /// Ensure that the access is unique (no active references, mutable or not)
+    /// when casting to `&mut T`, and ensure that there are no mutations
+    /// or mutable aliases going on when casting to `&T`.
+    ///
+    /// [`get`]: #method.get
+    ///
+    /// # Examples
+    ///
+    /// Gradual initialization of an `UnsafeCell` requires `raw_get`, as
+    /// calling `get` would require creating a reference to uninitialized data:
+    ///
+    /// ```
+    /// #![feature(unsafe_cell_raw_get)]
+    /// use std::cell::UnsafeCell;
+    /// use std::mem::MaybeUninit;
+    ///
+    /// let m = MaybeUninit::<UnsafeCell<i32>>::uninit();
+    /// unsafe { UnsafeCell::raw_get(m.as_ptr()).write(5); }
+    /// let uc = unsafe { m.assume_init() };
+    ///
+    /// assert_eq!(uc.into_inner(), 5);
+    /// ```
+    #[inline]
+
+    pub const fn raw_get(this: *const Self) -> *mut T {
+        // We can just cast the pointer from `UnsafeCell<T>` to `T` because of
+        // #[repr(transparent)]. This exploits libstd's special status, there is
+        // no guarantee for user code that this will work in future versions of the compiler!
+        this as *const T as *mut T
+    }
+}
+
+impl<T: Default> Default for UnsafeCell<T> {
+    /// Creates an `UnsafeCell`, with the `Default` value for T.
+    fn default() -> UnsafeCell<T> {
+        UnsafeCell::new(Default::default())
+    }
+}
+
+impl<T> From<T> for UnsafeCell<T> {
+    fn from(t: T) -> UnsafeCell<T> {
+        UnsafeCell::new(t)
+    }
+}
+
+unsafe fn object_init(ty: WaffleType, addr: Address) {
+    use crate::value::*;
+    match ty {
+        WaffleType::Object => {
+            let off = addr.offset(std::mem::size_of::<WaffleTypeHeader>() + 8);
+            off.to_mut_ptr::<std::collections::HashMap<Value, Value>>()
+                .write(Default::default());
+        }
+        _ => (),
     }
 }

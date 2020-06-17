@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::atomic::AtomicU32;
 use std::thread::JoinHandle;
 use value::*;
 #[cfg(feature = "use-vtable")]
@@ -9,6 +10,7 @@ const FWD_MASK: usize = !0 & !MARK_MASK;
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum WaffleType {
     None,
+    FreeObject,
     Object,
     Array,
     String,
@@ -21,35 +23,107 @@ pub enum WaffleType {
     /// Type for "external" objects.
     Abstract,
 }
-
+use crate::tagged::TaggedPointer;
 /// Waffle type header. This type stores all information used by GC, runtime and API.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[repr(C)]
 pub struct WaffleTypeHeader {
     pub(crate) ty: WaffleType,
-    /// Mark byte for GC
-    pub(crate) fwdptr: usize,
+    pub(crate) rc: u32,
+    pub(crate) fwdptr: TaggedPointer<WaffleCell>,
 }
 
 impl WaffleTypeHeader {
-    pub fn mark(&mut self) {
-        self.fwdptr |= 1;
+    pub fn increment(&mut self) -> bool {
+        self.rc += 1;
+        if self.is_new() {
+            self.unset_new();
+            true
+        } else {
+            false
+        }
     }
-    pub fn fwdptr(&self) -> usize {
-        self.fwdptr & FWD_MASK
+    pub fn decrement(&mut self) -> bool {
+        if self.rc == 0 {
+            return false;
+        }
+        self.rc -= 1;
+        self.rc == 0
+    }
+    pub fn set_logged(&mut self) -> bool {
+        let x = self.fwdptr.bit_is_set(5);
+        self.fwdptr.set_bit(5);
+        x
+    }
+
+    pub fn unset_logged(&mut self) -> bool {
+        let x = self.fwdptr.bit_is_set(5);
+        self.fwdptr.unset_bit(5);
+        x
+    }
+    pub fn mark(&mut self, x: bool) -> bool {
+        let y = self.fwdptr.bit_is_set(0);
+        if x {
+            self.fwdptr.set_bit(0);
+        } else {
+            self.fwdptr.unset_bit(0);
+        }
+        y
     }
     pub fn unmark(&mut self) {
-        self.fwdptr &= FWD_MASK;
+        self.fwdptr.unset_bit(0);
     }
-    pub fn is_marked(&self) -> bool {
-        (self.fwdptr & MARK_MASK) != 0
+
+    pub fn is_marked(&self, b: bool) -> bool {
+        if b {
+            self.fwdptr.bit_is_set(0)
+        } else {
+            !self.fwdptr.bit_is_set(0)
+        }
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        self.fwdptr.bit_is_set(1)
+    }
+
+    pub fn set_pinned(&mut self) {
+        self.fwdptr.set_bit(1);
+    }
+
+    pub fn unpin(&mut self) {
+        self.fwdptr.unset_bit(1);
+    }
+
+    pub fn is_forwarded(&self) -> Option<WaffleCellPointer> {
+        if self.fwdptr.bit_is_set(2) {
+            Some(WaffleCellPointer::from_ptr(self.fwdptr.untagged()))
+        } else {
+            None
+        }
+    }
+    pub fn set_forwarded(&mut self, ptr: WaffleCellPointer) {
+        let tagged = TaggedPointer::new(ptr.raw());
+        self.fwdptr = tagged;
+        self.fwdptr.set_bit(2);
+    }
+    pub fn set_new(&mut self) {
+        self.fwdptr.set_bit(4);
+    }
+    pub fn unset_new(&mut self) {
+        self.fwdptr.unset_bit(4);
+    }
+    pub fn is_new(&self) -> bool {
+        self.fwdptr.bit_is_set(4)
+    }
+    pub fn fwdptr(&self) -> usize {
+        self.fwdptr.untagged() as usize
     }
 }
 #[repr(C)]
 pub struct WaffleCell {
     pub header: WaffleTypeHeader,
 }
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(Ord, PartialOrd)]
 pub struct WaffleCellPointer<T: WaffleCellTrait = WaffleCell> {
     pub(crate) value: std::ptr::NonNull<T>,
 }
@@ -75,30 +149,31 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
             WaffleType::Object => size_of::<WaffleObject>(),
             WaffleType::String => size_of::<WaffleString>(),
             WaffleType::Array => {
-                size_of::<WaffleArray>() - 8 * self.try_as_array().unwrap().value().len()
+                (size_of::<WaffleArray>() - 8) * self.try_as_array().unwrap().value().len()
             }
-            _ => self.value().header().fwdptr(),
+            WaffleType::FreeObject => self.value().header().fwdptr(),
+            _ => todo!(),
         }
     }
-    pub fn visit(&self, trace: &mut dyn FnMut(WaffleCellPointer)) {
+    pub fn visit(&self, trace: &mut dyn FnMut(*const WaffleCellPointer)) {
         match self.type_of() {
             WaffleType::Object => {
                 let obj = self.try_as_object().unwrap();
                 for (k, v) in obj.value().map.iter() {
                     if k.is_cell() {
-                        trace(k.as_cell());
+                        trace(k.as_cell_ref());
                     }
                     if v.is_cell() {
-                        trace(v.as_cell());
+                        trace(v.as_cell_ref());
                     }
                 }
             }
             WaffleType::Array => {
                 let arr = self.try_as_array().unwrap();
                 for i in 0..arr.value().len() {
-                    let item = arr.value().at(i);
+                    let item = arr.value().at_ref(i);
                     if item.is_cell() {
-                        trace(item.as_cell());
+                        trace(item.as_cell_ref());
                     }
                 }
             }
@@ -170,7 +245,24 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
             _ => T::TYPE,
         }
     }
+    pub fn raw(&self) -> *mut T {
+        self.value.as_ptr()
+    }
 }
+use std::hash;
+
+impl<T: WaffleCellTrait> hash::Hash for WaffleCellPointer<T> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.raw().hash(state);
+    }
+}
+
+impl<T: WaffleCellTrait> PartialEq for WaffleCellPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.raw() == other.raw()
+    }
+}
+impl<T: WaffleCellTrait> Eq for WaffleCellPointer<T> {}
 
 pub trait WaffleCellTrait {
     const TYPE: WaffleType;
