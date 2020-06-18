@@ -37,6 +37,47 @@ pub struct WaffleTypeHeader {
     pub(crate) fwdptr: TaggedPointer<WaffleCell>,
 }
 
+#[cfg(feature="small-heap")]
+pub mod small_header {
+    use bitfield::bitfield;
+    bitfield! {
+        pub struct WaffleHeader(u32);
+        pub forwarded,set_forwarded_: 1,0;
+        pub marked,set_marked_: 2,1;
+        pub logged,set_logged_: 3,2;
+        pub pinned,set_pinned: 4,3;
+        pub new,set_new: 5,4;
+        pub ty,set_ty: 13,5;
+        pub forwarding,set_forwarding_: 31,1;
+        pub rc,set_rc: 31,5;
+    }
+}
+
+#[cfg(not(feature="small-heap"))]
+pub mod default_header {
+    ///  # Waffle object header. 
+    /// This type contains information used by runtime and GC.
+    /// 
+    ///
+    bitfield::bitfield! {
+    pub struct WaffleHeader(u64);
+    pub forwarded,set_forwarded_: 1,0;
+    pub marked,set_marked_: 2,1;
+    pub logged,set_logged_: 3,2;
+    pub pinned,set_pinned: 4,3;
+    pub new,set_new: 5,4;
+    pub ty,set_ty: 13,5;
+    pub forwarding,set_forwarding_: 63,1;
+    pub rc,set_rc: 63,31;
+
+    }
+}
+
+#[cfg(not(feature="small-heap"))]
+pub use default_header::*;
+#[cfg(feature="small-heap")]
+pub use small_header::*;
+
 impl WaffleTypeHeader {
     pub fn increment(&mut self) -> bool {
         self.rc += 1;

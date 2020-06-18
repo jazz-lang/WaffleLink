@@ -2,6 +2,65 @@ use super::block_info::BlockInfo;
 use crate::gc::{constants::*, GCObjectRef};
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 use std::collections::HashSet;
+
+#[cfg(not(feature="small-heap"))]
+pub mod normal_heap {
+    use memmap::MmapMut;
+    use super::*;
+    pub struct MemoryMap {
+        mem: *mut u8,
+        size: u32,
+    }
+    impl MemoryMap {
+        pub fn new(size: usize) -> Self {
+            let mmap = MmapMut::make_anon(size).unwrap().as_mut_ptr();
+            Self {
+                mem: mmap.cast()
+            }
+        }
+
+        pub fn aligned(&self) -> *mut u8 {
+            let offset = BLOCK_SIZE - (self.mem as usize) % BLOCK_SIZE;
+            unsafe {
+                self.mem.offset(offset as isize)
+            }
+        }
+        pub fn start(&self) -> *mut u8 {
+            self.mem
+        }
+        pub fn bound(&self) -> *mut u8 {
+            unsafe {
+                self.mem.offset(self.size)
+            }
+        }
+        
+    }
+
+    impl Drop for MemoryMap {
+        fn drop(&mut self) {
+            unsafe {
+                libc::free(self.mem as *mut _);
+            }
+        }
+    }
+    use std::sync::atomic::{AtomicUsize,Ordering};
+    use parking_lot::Mutex;
+    pub struct BlockAllocator {
+        mmap: MemoryMap,
+        data: AtomicUsize,
+        data_bound: AtomicUsize,
+        free_blocks: Vec<*mut BlockInfo>
+    }
+
+
+}
+
+#[cfg(feature="small-heap")]
+pub use small_heap_allocator::*;
+
+#[cfg(feature="small-heap")]
+pub mod small_heap_allocator {
+    use super::*;
 /// The `BlockAllocator` is the global resource for blocks for the immix
 /// space.
 ///
@@ -17,10 +76,10 @@ use std::collections::HashSet;
 /// returned blocks first.
 pub struct BlockAllocator {
     /// A list of returned (free) blocks.
-    pub(super) free_blocks: Vec<*mut BlockInfo>,
+    pub(crate) free_blocks: Vec<*mut BlockInfo>,
     allocated: HashSet<*mut BlockInfo>,
-    pub(super) unavailable_blocks: Vec<*mut BlockInfo>,
-    pub(super) recyclable_blocks: Vec<*mut BlockInfo>,
+    pub(crate) unavailable_blocks: Vec<*mut BlockInfo>,
+    pub(crate) recyclable_blocks: Vec<*mut BlockInfo>,
 }
 const BLOCK_LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE) };
 impl BlockAllocator {
@@ -66,4 +125,5 @@ impl BlockAllocator {
             block
         }
     }
+}
 }

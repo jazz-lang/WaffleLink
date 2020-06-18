@@ -12,7 +12,9 @@ paste = "0.1"
 ahash = "0.3.8"
 murmur3 = "0.5"
 parking_lot = "0.10"
+memmap = "0.7"
 log = "0.4"
+bitfield = "*"
 simple_logger = "1.6.0"
 atomig = {version = "0.1",features= ["derive"]}
 setjmp = "0.1"
@@ -30,7 +32,10 @@ cc = "1.0"
 value32-64 = []
 value64 = []
 use-vtable = []
-default = ["value64"]
+# Enable small heap when only 4GB of memory can be allocated.
+small-heap = []
+
+default = ["value64","small-heap"]
 
 [profile.release]
 debug = true
