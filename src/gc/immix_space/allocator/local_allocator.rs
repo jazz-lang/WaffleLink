@@ -24,6 +24,7 @@ impl LocalAllocator {
             overflow_allocator: OverflowAllocator::new(block_allocator),
         }
     }
+    pub fn init(&mut self, collect: bool) {}
 }
 
 impl Allocator for LocalAllocator {

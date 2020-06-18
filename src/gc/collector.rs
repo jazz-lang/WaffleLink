@@ -23,6 +23,7 @@ pub struct Collector {
     /// The mark histogram used during collection to calculate the required
     /// space for evacuation.
     mark_histogram: VecMap<usize>,
+    to_finalize: Vec<WaffleCellPointer>,
 }
 
 impl Collector {
@@ -30,6 +31,7 @@ impl Collector {
         Collector {
             rc_collector: rc_immix::RCCollector::new(),
             mark_histogram: VecMap::new(),
+            to_finalize: Vec::new(),
             object_map_backup: HashSet::new(),
             all_blocks: vec![],
         }
@@ -192,12 +194,12 @@ impl Collector {
         roots: &[GCObjectRef],
         immix_space: &ImmixSpace,
     ) {
-        if cfg!(feature = "valgrind") {
-            for block in &mut self.all_blocks {
-                let block_new_objects = unsafe { (**block).get_new_objects() };
-                self.object_map_backup.extend(block_new_objects);
-            }
+        //if cfg!(feature = "valgrind") {
+        for block in &mut self.all_blocks {
+            let block_new_objects = unsafe { (**block).get_new_objects() };
+            self.object_map_backup.extend(block_new_objects);
         }
+        //}
 
         for block in &mut self.all_blocks {
             unsafe {
@@ -210,17 +212,17 @@ impl Collector {
 
         //large_object_space.proccess_free_buffer();
 
-        if cfg!(feature = "valgrind") {
-            let mut object_map = HashSet::new();
-            for block in &mut self.all_blocks {
-                let block_object_map = unsafe { (**block).get_object_map() };
-                object_map.extend(block_object_map);
-            }
-            for &object in self.object_map_backup.difference(&object_map) {
-                //valgrind_freelike!(object);
-            }
-            self.object_map_backup.clear();
+        let mut object_map = HashSet::new();
+        for block in &mut self.all_blocks {
+            let block_object_map = unsafe { (**block).get_object_map() };
+            object_map.extend(block_object_map);
         }
+        if constants::FINALIZATION {
+            for &object in self.object_map_backup.difference(&object_map) {
+                log::debug!("Sweep {:p}", object.raw());
+            }
+        }
+        self.object_map_backup.clear();
     }
 
     /// Perform the immix tracing collection.
@@ -231,11 +233,10 @@ impl Collector {
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
-        if cfg!(feature = "valgrind") {
-            for block in &mut self.all_blocks {
-                let block_object_map = unsafe { (**block).get_object_map() };
-                self.object_map_backup.extend(block_object_map);
-            }
+        //if cfg!(feature = "valgrind") {
+        for block in &mut self.all_blocks {
+            let block_object_map = unsafe { (**block).get_object_map() };
+            self.object_map_backup.extend(block_object_map);
         }
 
         for block in &mut self.all_blocks {
@@ -249,17 +250,19 @@ impl Collector {
 
         immix::ImmixCollector::collect(collection_type, roots, immix_space, next_live_mark);
 
-        if cfg!(feature = "valgrind") {
+        //if cfg!(feature = "valgrind") {
+        if constants::FINALIZATION {
             let mut object_map = HashSet::new();
             for block in &mut self.all_blocks {
                 let block_object_map = unsafe { (**block).get_object_map() };
                 object_map.extend(block_object_map);
             }
+
             for &object in self.object_map_backup.difference(&object_map) {
-                //valgrind_freelike!(object);
+                log::debug!("Sweep {:p}", object.raw());
             }
-            self.object_map_backup.clear();
         }
+        self.object_map_backup.clear();
     }
 
     /// Complete the collection.
@@ -282,7 +285,10 @@ impl Collector {
         immix_space
             .extend_evac_headroom(free_blocks.iter().take(evac_headroom).map(|&b| b).collect());
         immix_space.return_blocks(free_blocks.iter().skip(evac_headroom).map(|&b| b).collect());
-
+        self.to_finalize.retain(|item| {
+            let hdr = item.value().header();
+            true
+        });
         if collection_type.is_immix() {
             //large_object_space.sweep()
         }

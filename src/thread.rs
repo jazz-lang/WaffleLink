@@ -303,20 +303,28 @@ impl Default for ThreadState {
         ThreadState::Running
     }
 }
-pub fn stop_the_world<F, R>(f: F, prev: *const bool) -> R
-where
-    F: FnOnce(&[Arc<Thread>]) -> R,
-{
+
+#[inline(never)]
+fn save_ctx<T>(prev: *const T) {
     THREAD.with(|thread| {
-        thread.borrow().park();
         let thread = thread.borrow();
-        thread
-            .stack_cur
-            .store((&prev as *const *const bool) as usize, Ordering::Relaxed);
         unsafe {
             // Save registers
             setjmp(thread.regs.as_ptr() as *mut jmp_buf);
         }
+        thread
+            .stack_cur
+            .store((&prev as *const *const T) as usize, Ordering::Relaxed);
+    });
+}
+pub fn stop_the_world<F, R>(f: F, prev: *const bool) -> R
+where
+    F: FnOnce(&[Arc<Thread>]) -> R,
+{
+    save_ctx(&prev);
+    THREAD.with(|thread| {
+        let thread = thread.borrow();
+        thread.park();
     });
 
     let threads = super::VM.state.threads.threads.lock();
@@ -391,13 +399,14 @@ pub extern "C" fn guard_check() {
 #[inline(never)]
 pub fn block(thread: &Thread, prev: *const bool) {
     // Save stack pointer
-    thread
+    /*thread
         .stack_cur
         .store((&prev as *const *const bool) as usize, Ordering::Relaxed);
     unsafe {
         // Save registers
         setjmp(thread.regs.as_ptr() as *mut jmp_buf);
-    }
+    }*/
+    save_ctx(&prev);
     let safepoint_id = super::VM.state.threads.safepoint_id();
     assert_ne!(safepoint_id, 0);
     let state = thread.state();

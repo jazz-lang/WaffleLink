@@ -55,27 +55,6 @@ impl ImmixCollector {
                         }
                     }
                 });
-                /*let children = unsafe { (*object).children() };
-                for (num, mut child) in children.enumerate() {
-                    if let Some(new_child) = unsafe { (*child).is_forwarded() } {
-                        log::debug!("Child {:p} is forwarded to {:p}", child, new_child);
-                        unsafe {
-                            (*object).set_member(num, new_child);
-                        }
-                    } else if !unsafe { (*child).is_marked(next_live_mark) } {
-                        if collection_type.is_evac() && immix_space.is_gc_object(child) {
-                            if let Some(new_child) = immix_space.maybe_evacuate(child) {
-                                log::debug!("Evacuated child {:p} to {:p}", child, new_child);
-                                unsafe {
-                                    (*object).set_member(num, new_child);
-                                }
-                                child = new_child;
-                            }
-                        }
-                        log::debug!("Push child {:p} into object queue", child);
-                        object_queue.push_back(child);
-                    }
-                }*/
             }
         }
         log::debug!("Complete collection");

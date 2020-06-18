@@ -1,4 +1,6 @@
 use super::*;
+use crate::gc::*;
+use std::mem::size_of;
 use std::sync::atomic::AtomicU32;
 use std::thread::JoinHandle;
 use value::*;
@@ -19,6 +21,8 @@ pub enum WaffleType {
     Function,
     Thread,
     File,
+    Map,
+    MapNode,
     Module,
     /// Type for "external" objects.
     Abstract,
@@ -142,48 +146,83 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
             value: std::ptr::NonNull::new(ptr as *mut T).unwrap(),
         }
     }
+    pub fn try_as<U: WaffleCellTrait>(&self) -> Option<WaffleCellPointer<U>> {
+        if self.type_of() == T::TYPE {
+            Some(WaffleCellPointer {
+                value: self.value.cast(),
+            })
+        } else {
+            None
+        }
+    }
+    pub fn cast<U: WaffleCellTrait>(&self) -> WaffleCellPointer<U> {
+        WaffleCellPointer {
+            value: self.value.cast(),
+        }
+    }
     pub fn finalize(&self) {}
     pub fn size(&self) -> usize {
-        use std::mem::size_of;
         match self.type_of() {
             WaffleType::Object => size_of::<WaffleObject>(),
             WaffleType::String => size_of::<WaffleString>(),
             WaffleType::Array => {
-                (size_of::<WaffleArray>() - 8) * self.try_as_array().unwrap().value().len()
+                (size_of::<WaffleArray>() - crate::WORD)
+                    + crate::WORD * self.try_as_array().unwrap().value().len()
             }
+            WaffleType::Map => size_of::<WaffleMap>(),
             WaffleType::FreeObject => self.value().header().fwdptr(),
+            WaffleType::MapNode => size_of::<MapNode>(),
             _ => todo!(),
         }
     }
     pub fn visit(&self, trace: &mut dyn FnMut(*const WaffleCellPointer)) {
-        match self.type_of() {
-            WaffleType::Object => {
-                let obj = self.try_as_object().unwrap();
-                for (k, v) in obj.value().map.iter() {
-                    if k.is_cell() {
-                        trace(k.as_cell_ref());
-                    }
-                    if v.is_cell() {
-                        trace(v.as_cell_ref());
+        unsafe {
+            match self.type_of() {
+                WaffleType::Object => {
+                    let obj = self.try_as_object().unwrap();
+                    trace(std::mem::transmute(&obj.value().map));
+                    /*for (k, v) in obj.value().map.iter() {
+                        if k.is_cell() {
+                            trace(k.as_cell_ref());
+                        }
+                        if v.is_cell() {
+                            trace(v.as_cell_ref());
+                        }
+                    }*/
+                }
+                WaffleType::Array => {
+                    let arr = self.try_as_array().unwrap();
+                    for i in 0..arr.value().len() {
+                        let item = arr.value().at_ref(i);
+                        if item.is_cell() {
+                            trace(item.as_cell_ref());
+                        }
                     }
                 }
-            }
-            WaffleType::Array => {
-                let arr = self.try_as_array().unwrap();
-                for i in 0..arr.value().len() {
-                    let item = arr.value().at_ref(i);
-                    if item.is_cell() {
-                        trace(item.as_cell_ref());
-                    }
+                WaffleType::Map => {
+                    let map = self.as_map();
+                    map.value().visit(trace);
                 }
+                _ => (),
             }
-            _ => (),
         }
     }
     pub fn to_cell(&self) -> WaffleCellPointer {
         WaffleCellPointer {
             value: self.value.cast(),
         }
+    }
+    pub fn try_as_map(&self) -> Option<WaffleCellPointer<HMap>> {
+        if self.type_of() == WaffleType::Map {
+            Some(WaffleCellPointer {
+                value: self.value.cast(),
+            })
+        } else {
+            None
+        }
+    }
+    pub fn as_map(&self) -> WaffleCellPointer<HMap> {
+        self.try_as_map().unwrap()
     }
     /// Try to cast this cell to `WaffleObject` type, otherwise return None.
     pub fn try_as_object(&self) -> Option<WaffleCellPointer<WaffleObject>> {
@@ -280,15 +319,13 @@ use std::collections::HashMap;
 pub struct WaffleObject {
     pub header: WaffleTypeHeader,
     pub prototype: Value,
-    pub map: HashMap<Value, Value>,
+    pub mask: u32,
+    pub map: WaffleCellPointer<HMap>,
 }
 
 impl WaffleObject {
     pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
-        match self.map.get(&key) {
-            Some(val) => Ok(Some(*val)),
-            None => self.prototype.lookup(key),
-        }
+        unimplemented!()
     }
 }
 
@@ -345,16 +382,11 @@ impl WaffleCellTrait for WaffleString {
 pub struct WaffleArray {
     pub header: WaffleTypeHeader,
     pub(crate) len: usize,
-    pub(crate) cap: usize,
     value: Value,
 }
 impl WaffleArray {
     pub fn len(&self) -> usize {
         self.len
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.cap
     }
 
     pub fn at(&self, ix: usize) -> Value {
@@ -386,6 +418,229 @@ impl IndexMut<usize> for WaffleArray {
 
 impl WaffleCellTrait for WaffleArray {
     const TYPE: WaffleType = WaffleType::Array;
+    fn ty(&self) -> Option<WaffleType> {
+        Some(Self::TYPE)
+    }
+
+    fn header(&self) -> &WaffleTypeHeader {
+        &self.header
+    }
+
+    fn header_mut(&mut self) -> &mut WaffleTypeHeader {
+        &mut self.header
+    }
+}
+
+pub struct WaffleMap {
+    pub header: WaffleTypeHeader,
+    pub(crate) size: usize,
+}
+
+impl WaffleCellTrait for WaffleMap {
+    const TYPE: WaffleType = WaffleType::Map;
+    fn ty(&self) -> Option<WaffleType> {
+        Some(Self::TYPE)
+    }
+
+    fn header(&self) -> &WaffleTypeHeader {
+        &self.header
+    }
+
+    fn header_mut(&mut self) -> &mut WaffleTypeHeader {
+        &mut self.header
+    }
+}
+
+impl WaffleObject {
+    pub fn new_empty(size: usize) -> WaffleCellPointer<Self> {
+        unsafe {
+            let obj = super::VM
+                .state
+                .heap
+                .allocate(WaffleType::Object, std::mem::size_of::<Self>())
+                .unwrap()
+                .as_object();
+            obj.value_mut().init(size);
+            obj
+        }
+    }
+    pub fn init(&mut self, size: usize) {
+        self.map = HMap::new_empty(size);
+        self.mask = (size as u32 - 1) * 8 as u32;
+    }
+}
+
+#[repr(C)]
+pub struct HMap {
+    pub header: WaffleTypeHeader,
+    pub nnodes: u32,
+    pub size: u32,
+    pub nodes: Option<WaffleCellPointer<MapNode>>,
+    pub lastfree: Option<WaffleCellPointer<MapNode>>,
+}
+
+impl HMap {
+    pub fn new_empty(cap: usize) -> WaffleCellPointer<Self> {
+        let map: WaffleCellPointer<Self> = super::VM
+            .state
+            .heap
+            .allocate(WaffleType::Map, std::mem::size_of::<Self>())
+            .unwrap()
+            .cast();
+        map.value_mut().alloc_nodes(cap);
+        map.value_mut().nnodes = cap as _;
+        map
+    }
+    pub fn find(&self, key: Value) -> Option<WaffleCellPointer<MapNode>> {
+        let hash = crate::runtime::hash::waffle_get_hash_of(key);
+        let mut current = &self.nodes;
+        while let Some(c) = current {
+            if c.value().hash == hash {
+                return Some(*c);
+            }
+            current = &c.value().next;
+        }
+        return None;
+    }
+
+    pub fn getp(&self, key: Value) -> Option<&mut Value> {
+        let hash = crate::runtime::hash::waffle_get_hash_of(key);
+        let mut current = &self.nodes;
+        while let Some(c) = current {
+            if c.value().hash == hash {
+                return Some(&mut c.value_mut().val);
+            }
+            current = &c.value().next;
+        }
+        return None;
+    }
+
+    fn take_free(&mut self) -> Option<WaffleCellPointer<MapNode>> {
+        match self.lastfree.take() {
+            Some(node) => {
+                self.lastfree = node.value().next;
+                Some(node)
+            }
+            None => None,
+        }
+    }
+
+    fn alloc_nodes(&mut self, count: usize) {
+        for _ in 0..count {
+            let node = MapNode::new_empty();
+            node.value_mut().next = self.lastfree;
+            self.lastfree = Some(node);
+        }
+    }
+    /// Insert a *new* key into a hash table, growing table if necessary.
+    /// * Do not use this function if key is already in the table
+    pub fn add(&mut self, key: Value, val: Value) {
+        if let Some(node) = self.take_free() {
+            node.value_mut().key = key;
+            node.value_mut().val = val;
+            node.value_mut().hash = crate::runtime::hash::waffle_get_hash_of(key);
+            node.value_mut().next = self.nodes;
+            self.nodes = Some(node);
+            self.size += 1;
+            return;
+        }
+        self.resize((self.nnodes as f64 / 0.7).floor() as usize);
+        self.add(key, val)
+    }
+    pub fn set(&mut self, key: Value, val: Value) -> bool {
+        if let Some(node) = self.find(key) {
+            node.value_mut().val = val;
+            return false;
+        }
+
+        self.add(key, val);
+        true
+    }
+    fn resize(&mut self, mut new_size: usize) {
+        if new_size == 0 {
+            new_size = 4;
+        }
+        self.nnodes = new_size as _;
+        self.alloc_nodes(new_size);
+    }
+    pub fn delete(&mut self, key: Value) -> Option<Value> {
+        if let Some(node) = self.find(key) {
+            let val = node.value_mut();
+            let v = val.val;
+            val.val = Value::default();
+            val.key = Value::default();
+            val.hash = 0;
+            val.next = self.lastfree;
+            self.lastfree = Some(node);
+            return Some(v);
+        }
+        None
+    }
+    pub fn visit(&self, trace: &mut dyn FnMut(*const WaffleCellPointer)) {
+        let mut c = self.nodes;
+        unsafe {
+            while let Some(x) = c {
+                trace(std::mem::transmute(&x));
+                c = x.value().next;
+            }
+            let mut c = self.lastfree;
+            while let Some(x) = c {
+                trace(std::mem::transmute(&x));
+                c = x.value().next;
+            }
+        }
+    }
+}
+
+#[repr(C)]
+pub struct MapNode {
+    pub header: WaffleTypeHeader,
+    pub val: Value,
+    pub key: Value,
+    pub hash: u32,
+    pub next: Option<WaffleCellPointer<Self>>,
+}
+impl MapNode {
+    pub fn new_empty() -> WaffleCellPointer<Self> {
+        let node = crate::VM
+            .state
+            .heap
+            .allocate(WaffleType::MapNode, std::mem::size_of::<Self>())
+            .unwrap()
+            .cast::<MapNode>();
+        node.value_mut().next = None;
+        node.value_mut().key = Value::default();
+        node.value_mut().hash = 0;
+
+        node
+    }
+
+    pub fn visit(&self, trace: &mut dyn FnMut(*const WaffleCellPointer)) {
+        if self.val.is_cell() {
+            trace(self.val.as_cell_ref());
+        }
+
+        if self.key.is_cell() {
+            trace(self.val.as_cell_ref());
+        }
+    }
+}
+impl WaffleCellTrait for MapNode {
+    const TYPE: WaffleType = WaffleType::MapNode;
+    fn ty(&self) -> Option<WaffleType> {
+        Some(Self::TYPE)
+    }
+    fn header(&self) -> &WaffleTypeHeader {
+        &self.header
+    }
+
+    fn header_mut(&mut self) -> &mut WaffleTypeHeader {
+        &mut self.header
+    }
+}
+
+impl WaffleCellTrait for HMap {
+    const TYPE: WaffleType = WaffleType::Map;
     fn ty(&self) -> Option<WaffleType> {
         Some(Self::TYPE)
     }

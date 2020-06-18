@@ -6,36 +6,40 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 const UNTAG_MASK: usize = (!0x7) as usize;
 
 /// Returns true if the pointer has the given bit set to 1.
-pub fn bit_is_set<T>(pointer: *mut T, bit: usize) -> bool {
+pub fn bit_is_set(pointer: u64, bit: usize) -> bool {
     let shifted = 1 << bit;
 
     (pointer as usize & shifted) == shifted
 }
 
 /// Returns the pointer with the given bit set.
-pub fn with_bit<T>(pointer: *mut T, bit: usize) -> *mut T {
-    (pointer as usize | 1 << bit) as _
+pub fn with_bit(pointer: u64, bit: usize) -> u64 {
+    (pointer | 1 << bit) as _
 }
 
-pub fn without_bit<T>(pointer: *mut T, bit: usize) -> *mut T {
-    (pointer as usize & !(1 << bit)) as _
+pub fn without_bit(pointer: u64, bit: usize) -> u64 {
+    (pointer & !(1 << bit)) as _
 }
 
 /// Returns the given pointer without any tags set.
-pub fn untagged<T>(pointer: *mut T) -> *mut T {
+pub fn untagged(pointer: u64) -> u64 {
     (pointer as usize & UNTAG_MASK) as _
 }
 
 /// Structure wrapping a raw, tagged pointer.
 #[derive(Debug)]
 pub struct TaggedPointer<T> {
-    pub raw: *mut T,
+    pub raw: u64,
+    _marker: std::marker::PhantomData<T>,
 }
 
 impl<T> TaggedPointer<T> {
     /// Returns a new TaggedPointer without setting any bits.
     pub fn new(raw: *mut T) -> TaggedPointer<T> {
-        TaggedPointer { raw }
+        TaggedPointer {
+            raw: raw as u64,
+            _marker: std::marker::PhantomData,
+        }
     }
 
     /// Returns a new TaggedPointer with the given bit set.
@@ -50,13 +54,14 @@ impl<T> TaggedPointer<T> {
     /// Returns a null pointer.
     pub fn null() -> TaggedPointer<T> {
         TaggedPointer {
-            raw: ptr::null::<T>() as *mut T,
+            raw: 0,
+            _marker: std::marker::PhantomData,
         }
     }
 
     /// Returns the wrapped pointer without any tags.
     pub fn untagged(self) -> *mut T {
-        self::untagged(self.raw)
+        self::untagged(self.raw) as *mut T
     }
 
     /// Returns a new TaggedPointer using the current pointer but without any
@@ -143,7 +148,7 @@ impl<T> Eq for TaggedPointer<T> {}
 // "T" argument very well.
 impl<T> Clone for TaggedPointer<T> {
     fn clone(&self) -> TaggedPointer<T> {
-        TaggedPointer::new(self.raw)
+        TaggedPointer::new(self.raw as *mut T)
     }
 }
 
@@ -280,9 +285,9 @@ mod tests {
         let current = pointer.raw;
         let target = &mut bob as *mut String;
 
-        pointer.compare_and_swap(current, target);
+        pointer.compare_and_swap(current as *mut T, target);
 
-        assert!(pointer.raw == target);
+        assert!(pointer.raw == target as u64);
     }
 
     #[test]
@@ -295,7 +300,7 @@ mod tests {
 
         pointer.atomic_store(target);
 
-        assert!(pointer.raw == target);
+        assert!(pointer.raw == target as u64);
     }
 
     #[test]

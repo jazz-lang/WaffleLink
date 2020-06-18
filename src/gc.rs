@@ -109,24 +109,25 @@ impl Heap {
             debug_assert!(end.is_non_null());
             while scan < end {
                 // Scan for GC object.
-                let frame = scan.to_ptr::<crate::value::Value>();
+                let frame = scan.to_ptr::<*mut u8>();
                 unsafe {
-                    // We're dereferencing `Value` and it takes 64 bits of space so this code will not work on 32 bit machines.
                     let value = *frame;
-                    if value.is_empty() || !value.is_cell() {
+                    if value.is_null() {
                         scan = scan.add_ptr(1);
                         continue;
                     } else {
-                        if immix_filter(value.as_cell()) {
-                            log::trace!("Root object {:p} at {:p}", value.as_cell().raw(), frame);
-                            roots.push(value.as_cell());
+                        let cell = WaffleCellPointer::from_ptr(value.cast());
+                        //log::debug!("Try {:p} at {:p}", cell.raw(), frame);
+                        if immix_filter(cell) {
+                            log::trace!("Root object {:p} at {:p}", cell.raw(), frame);
+                            roots.push(cell);
                         }
                     }
                 }
                 scan = scan.add_ptr(1);
             }
             let mut scan = thread.regs.as_ptr().cast::<u8>();
-            let mut end = (scan as usize
+            let end = (scan as usize
                 + (std::mem::size_of::<setjmp::jmp_buf>() / std::mem::size_of::<usize>())
                 - 1) as *const u8;
             while scan < end {
@@ -135,15 +136,19 @@ impl Heap {
                     // We're dereferencing `Value` and it takes 64 bits of space so this code will not work on 32 bit machines.
                     let value = *frame;
                     if value.is_empty() || !value.is_cell() {
-                        scan = scan.offset(8);
+                        scan = scan.offset(crate::WORD as _);
                         continue;
                     } else {
                         if immix_filter(value.as_cell()) {
-                            log::trace!("Root object {:p} at {:p}", value.as_cell().raw(), frame);
+                            log::trace!(
+                                "Root object(in reg) {:p} at {:p}",
+                                value.as_cell().raw(),
+                                frame
+                            );
                             roots.push(value.as_cell());
                         }
                     }
-                    scan = scan.offset(8);
+                    scan = scan.offset(crate::WORD as _);
                 }
             }
         }
@@ -534,11 +539,6 @@ impl<T> From<T> for UnsafeCell<T> {
 unsafe fn object_init(ty: WaffleType, addr: Address) {
     use crate::value::*;
     match ty {
-        WaffleType::Object => {
-            let off = addr.offset(std::mem::size_of::<WaffleTypeHeader>() + 8);
-            off.to_mut_ptr::<std::collections::HashMap<Value, Value>>()
-                .write(Default::default());
-        }
         _ => (),
     }
 }

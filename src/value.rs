@@ -549,7 +549,7 @@ pub mod value_nanboxing {
         }};
     }
 
-    pub const NOT_INT52: usize = 1 << 52;
+    pub const NOT_INT52: u64 = 1 << 52;
 
     #[inline]
     pub fn try_convert_to_i52(number: f64) -> i64 {
@@ -625,7 +625,10 @@ impl Into<Option<std::ops::Range<i64>>> for Value {
     ///
     fn into(self) -> Option<std::ops::Range<i64>> {
         if self.is_number() {
-            Some(std::ops::Range {start: 0,end: self.to_number().floor() as i64})
+            Some(std::ops::Range {
+                start: 0,
+                end: self.to_number().floor() as i64,
+            })
         } else {
             return None;
         }
