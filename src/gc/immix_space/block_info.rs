@@ -339,11 +339,29 @@ impl BlockInfo {
         // self.allocated will be false if this block is not initialized and
         // this method gets only called for objects within the ImmixSpace.
         // After the first initialization the field is properly managed.
+        let self_ptr = self as *const BlockInfo as *const u8;
+        let self_bound = unsafe { self_ptr.offset(BLOCK_SIZE as isize) };
+        log::trace!("allocated = {}", self.allocated);
         if self.allocated {
             let self_ptr = self as *const BlockInfo as *const u8;
             let self_bound = unsafe { self_ptr.offset(BLOCK_SIZE as isize) };
+            log::trace!(
+                "Check for {:p}, block start {:p} end {:p}",
+                object.raw(),
+                self_ptr,
+                self_bound
+            );
             self_ptr < (object.raw() as *const u8) && (object.raw() as *const u8) < self_bound
         } else {
+            assert!(!self.allocated);
+            log::trace!(
+                "Ptr {:p} is not in bounds of {:p}<>{:p}? {}",
+                object.raw(),
+                self_ptr,
+                self_bound,
+                !(self_ptr < (object.raw() as *const u8)
+                    && (object.raw() as *const u8) < self_bound)
+            );
             false
         }
     }

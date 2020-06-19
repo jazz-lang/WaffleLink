@@ -6,6 +6,7 @@ pub mod pure_nan;
 pub mod runtime;
 pub mod tagged;
 pub mod thread;
+pub mod util;
 pub mod value;
 pub mod vtable;
 pub const WORD: usize = std::mem::size_of::<usize>();

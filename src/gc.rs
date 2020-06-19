@@ -8,6 +8,9 @@ use std::cmp::Ordering;
 use std::sync::atomic::{spin_loop_hint, AtomicBool, AtomicUsize, Ordering as A};
 use std::sync::Arc;
 
+pub const K: usize = 1024;
+pub const M: usize = K * K;
+pub const G: usize = M * K;
 /// The type of collection that will be performed.
 pub enum CollectionType {
     /// A simple reference counting collection.

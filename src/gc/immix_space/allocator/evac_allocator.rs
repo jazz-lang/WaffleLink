@@ -1,5 +1,5 @@
 use super::*;
-use crate::gc::immix_space::block_allocator::BlockAllocator;
+use crate::gc::immix_space::block_allocator::*;
 use crate::gc::immix_space::block_info::BlockInfo;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -41,6 +41,47 @@ impl EvacAllocator {
     pub fn evac_headroom(&self) -> usize {
         self.evac_headroom.len()
     }
+
+    pub fn try_evacuate_pointer(&mut self, ptr: GCObjectRef, size: usize) -> Option<GCObjectRef> {
+        let chunk = self
+            .take_current_block()
+            .filter(|tp| {
+                if Chunk::from_pointer(tp.0 as usize) == Chunk::from_pointer(ptr.raw() as usize) {
+                    true
+                } else {
+                    if self.scan_for_hole(size, *tp).is_some() {
+                        self.evac_headroom.push(tp.0);
+                    }
+                    false
+                }
+            })
+            .and_then(|tp| self.scan_for_hole(size, tp))
+            .or_else(|| self.try_get_block_from_chunk(Chunk::from_pointer(ptr.raw() as usize)))
+            .map(|tp| self.allocate_from_block(size, tp))
+            .map(|(tp, object)| {
+                self.put_current_block(tp);
+                object
+            });
+        chunk
+    }
+    pub fn try_get_block_from_chunk(&mut self, ch: *mut Chunk) -> Option<BlockTuple> {
+        let mut block = None;
+        let mut found = false;
+        self.evac_headroom.retain(|item| {
+            if Chunk::from_pointer(*item as usize) == ch && !found {
+                block = Some(*item);
+                found = true;
+                false
+            } else {
+                true
+            }
+        });
+        if let Some(block) = block {
+            Some((block, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))
+        } else {
+            None
+        }
+    }
 }
 
 impl Allocator for EvacAllocator {
@@ -64,6 +105,7 @@ impl Allocator for EvacAllocator {
         self.evac_headroom
             .pop()
             .map(|b| unsafe {
+                log::debug!("Set allocated {:p}", b);
                 (*b).set_allocated();
                 b
             })

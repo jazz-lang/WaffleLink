@@ -37,7 +37,7 @@ pub struct WaffleTypeHeader {
     pub(crate) fwdptr: TaggedPointer<WaffleCell>,
 }
 
-#[cfg(feature="small-heap")]
+#[cfg(feature = "small-heap")]
 pub mod small_header {
     use bitfield::bitfield;
     bitfield! {
@@ -53,11 +53,11 @@ pub mod small_header {
     }
 }
 
-#[cfg(not(feature="small-heap"))]
+#[cfg(not(feature = "small-heap"))]
 pub mod default_header {
-    ///  # Waffle object header. 
+    ///  # Waffle object header.
     /// This type contains information used by runtime and GC.
-    /// 
+    ///
     ///
     bitfield::bitfield! {
     pub struct WaffleHeader(u64);
@@ -73,9 +73,9 @@ pub mod default_header {
     }
 }
 
-#[cfg(not(feature="small-heap"))]
+#[cfg(not(feature = "small-heap"))]
 pub use default_header::*;
-#[cfg(feature="small-heap")]
+#[cfg(feature = "small-heap")]
 pub use small_header::*;
 
 impl WaffleTypeHeader {

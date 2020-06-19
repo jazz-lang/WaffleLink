@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// limit fragmentation in the `NormalAllocator`.
 pub struct OverflowAllocator {
     /// The global `BlockAllocator` to get new blocks from.
-    block_allocator: Arc<RwLock<BlockAllocator>>,
+    block_allocator: Arc<BlockAllocator>,
 
     /// The exhausted blocks.
     unavailable_blocks: Vec<*mut BlockInfo>,
@@ -19,7 +19,7 @@ pub struct OverflowAllocator {
 }
 impl OverflowAllocator {
     /// Create a new `OverflowAllocator` backed by the given `BlockAllocator`.
-    pub fn new(block_allocator: Arc<RwLock<BlockAllocator>>) -> OverflowAllocator {
+    pub fn new(block_allocator: Arc<BlockAllocator>) -> OverflowAllocator {
         OverflowAllocator {
             block_allocator: block_allocator,
             unavailable_blocks: Vec::new(),
@@ -46,7 +46,7 @@ impl Allocator for OverflowAllocator {
 
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         log::debug!("Request new block");
-        let b = self.block_allocator.write().get_block();
+        let b = self.block_allocator.get_block();
         /*.map(|b| unsafe {
             (*b).set_allocated();
             b

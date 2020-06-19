@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 pub struct ImmixSpace {
     id: AtomicUsize,
-    pub(super) block_allocator: Arc<RwLock<BlockAllocator>>,
+    pub(super) block_allocator: Arc<BlockAllocator>,
     pub(super) allocators: Arc<Mutex<Vec<Arc<UnsafeCell<LocalAllocator>>>>>,
     /// The current live mark for new objects. See `Heap.current_live_mark`.
     current_live_mark: AtomicBool,
@@ -27,7 +27,7 @@ impl ImmixSpace {
     pub fn new() -> Self {
         Self {
             id: AtomicUsize::new(0),
-            block_allocator: Arc::new(RwLock::new(BlockAllocator::new())),
+            block_allocator: Arc::new(BlockAllocator::new()),
             allocators: Arc::new(Mutex::new(vec![])),
             current_live_mark: AtomicBool::new(false),
             evac_allocator: Arc::new(Mutex::new(evac_allocator::EvacAllocator::new())),
@@ -77,7 +77,7 @@ impl ImmixSpace {
     pub fn set_gc_object(&self, object: GCObjectRef) {
         log::debug!("set_gc_object() on object {:p}", object.raw());
         debug_assert!(
-            self.block_allocator.read().is_in_space(object),
+            self.block_allocator.is_in_space(object),
             "set_gc_object() on invalid object {:p}",
             object.raw()
         );
@@ -90,7 +90,7 @@ impl ImmixSpace {
     pub fn unset_gc_object(&self, object: GCObjectRef) {
         log::debug!("unset_gc_object() on object {:p}", object.raw());
         debug_assert!(
-            self.block_allocator.read().is_in_space(object),
+            self.block_allocator.is_in_space(object),
             "unset_gc_object() on invalid object {:p}",
             object.raw()
         );
@@ -102,7 +102,7 @@ impl ImmixSpace {
     /// Return if the object an the address is a valid object within the immix
     /// space.
     pub fn is_gc_object(&self, object: GCObjectRef) -> bool {
-        if self.block_allocator.read().is_in_space(object) {
+        if self.block_allocator.is_in_space(object) {
             unsafe { (*ImmixSpace::get_block_ptr(object)).is_gc_object(object) }
         } else {
             false
@@ -111,7 +111,7 @@ impl ImmixSpace {
 
     /// Return a closure that behaves like `ImmixSpace::is_gc_object()`.
     pub fn is_gc_object_filter<'a>(&'a self) -> Box<dyn Fn(GCObjectRef) -> bool + 'a> {
-        let block_allocator = self.block_allocator.read();
+        let block_allocator = &self.block_allocator;
         Box::new(move |object: GCObjectRef| {
             block_allocator.is_in_space(object)
                 && unsafe { (*ImmixSpace::get_block_ptr(object)).is_gc_object(object) }
@@ -120,17 +120,17 @@ impl ImmixSpace {
 
     /// Return if the object an the address is within the immix space.
     pub fn is_in_space(&self, object: GCObjectRef) -> bool {
-        self.block_allocator.read().is_in_space(object)
+        self.block_allocator.is_in_space(object)
     }
 
     /// Return the number of unallocated blocks.
     pub fn available_blocks(&self) -> usize {
-        self.block_allocator.read().available_blocks()
+        self.block_allocator.available_blocks()
     }
 
     /// Return a collection of blocks to the global block allocator.
     pub fn return_blocks(&self, blocks: Vec<*mut BlockInfo>) {
-        self.block_allocator.write().return_blocks(blocks);
+        self.block_allocator.return_blocks(blocks);
     }
 
     /// Set the current live mark to `current_live_mark`.
@@ -141,10 +141,8 @@ impl ImmixSpace {
 
     /// Set the recyclable blocks for the `NormalAllocator`.
     pub fn set_recyclable_blocks(&self, blocks: Vec<*mut BlockInfo>) {
-        self.block_allocator
-            .write()
-            .recyclable_blocks
-            .extend(blocks);
+        self.block_allocator.return_recyclable_blocks(blocks);
+        //self.block_allocator.recyclable_blocks.extend(blocks);
     }
 
     /// Get all block managed by all allocators, draining any local
@@ -156,15 +154,13 @@ impl ImmixSpace {
                 blocks.extend((&mut *allocator.get()).get_all_blocks());
             }
         }
-        let mut ba = self.block_allocator.write();
-        let mut recyc = ba.recyclable_blocks.clone();
-        ba.recyclable_blocks.clear();
+        let mut ba = &self.block_allocator;
+        let mut blocks_ba = ba.get_all_blocks();
         let mut evac_blocks = self.evac_allocator.lock().get_all_blocks();
         blocks
             .drain(..)
-            .chain(ba.unavailable_blocks.drain(..))
             .chain(evac_blocks.drain(..))
-            .chain(recyc.drain(..))
+            .chain(blocks_ba.drain(..))
             .collect()
     }
 
@@ -182,6 +178,7 @@ impl ImmixSpace {
                 .header_mut()
                 .mark(self.current_live_mark.load(Ordering::Relaxed));
             unsafe {
+                (*ImmixSpace::get_block_ptr(object)).set_allocated();
                 (*ImmixSpace::get_block_ptr(object)).set_new_object(object);
             }
             object.value_mut().header_mut().set_new();

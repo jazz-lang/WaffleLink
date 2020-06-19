@@ -285,7 +285,7 @@ mod tests {
         let current = pointer.raw;
         let target = &mut bob as *mut String;
 
-        pointer.compare_and_swap(current as *mut T, target);
+        pointer.compare_and_swap(current as *mut String, target);
 
         assert!(pointer.raw == target as u64);
     }

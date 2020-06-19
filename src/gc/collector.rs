@@ -23,7 +23,6 @@ pub struct Collector {
     /// The mark histogram used during collection to calculate the required
     /// space for evacuation.
     mark_histogram: VecMap<usize>,
-    to_finalize: Vec<WaffleCellPointer>,
 }
 
 impl Collector {
@@ -31,7 +30,6 @@ impl Collector {
         Collector {
             rc_collector: rc_immix::RCCollector::new(),
             mark_histogram: VecMap::new(),
-            to_finalize: Vec::new(),
             object_map_backup: HashSet::new(),
             all_blocks: vec![],
         }
@@ -285,10 +283,6 @@ impl Collector {
         immix_space
             .extend_evac_headroom(free_blocks.iter().take(evac_headroom).map(|&b| b).collect());
         immix_space.return_blocks(free_blocks.iter().skip(evac_headroom).map(|&b| b).collect());
-        self.to_finalize.retain(|item| {
-            let hdr = item.value().header();
-            true
-        });
         if collection_type.is_immix() {
             //large_object_space.sweep()
         }
