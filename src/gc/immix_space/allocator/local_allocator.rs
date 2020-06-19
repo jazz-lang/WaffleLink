@@ -16,7 +16,7 @@ pub struct LocalAllocator {
 }
 
 impl LocalAllocator {
-    pub fn new(id: usize, block_allocator: Arc<RwLock<BlockAllocator>>) -> Self {
+    pub fn new(id: usize, block_allocator: Arc<BlockAllocator>) -> Self {
         Self {
             id,
             current_block: None,
@@ -50,7 +50,7 @@ impl Allocator for LocalAllocator {
 
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         log::debug!("Request new block");
-        let b = self.normal_allocator.block_allocator.write().get_block();
+        let b = self.normal_allocator.block_allocator.get_block();
         unsafe {
             (*b).set_allocated();
         }
@@ -60,20 +60,13 @@ impl Allocator for LocalAllocator {
     fn handle_full_block(&mut self, block: *mut BlockInfo) {
         self.normal_allocator
             .block_allocator
-            .write()
-            .unavailable_blocks
-            .push(block);
+            .return_unavailable(block)
     }
     fn handle_no_hole(&mut self, size: usize) -> Option<BlockTuple> {
         if size >= LINE_SIZE {
             None
         } else {
-            let r = self
-                .normal_allocator
-                .block_allocator
-                .write()
-                .recyclable_blocks
-                .pop();
+            let r = self.normal_allocator.block_allocator.recyclable_pop();
             match r {
                 None => None,
                 Some(block) => match unsafe { (*block).scan_block((LINE_SIZE - 1) as u16) } {

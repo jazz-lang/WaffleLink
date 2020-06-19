@@ -16,8 +16,10 @@ memmap = "0.7"
 log = "0.4"
 bitfield = "*"
 simple_logger = "1.6.0"
+dashmap = "3.11"
 atomig = {version = "0.1",features= ["derive"]}
 setjmp = "0.1"
+crossbeam-epoch = "0.8"
 vec_map = "0.8.2"
 bit-set = "0.5.2"
 thread_local = "1.0.1"
@@ -32,10 +34,8 @@ cc = "1.0"
 value32-64 = []
 value64 = []
 use-vtable = []
-# Enable small heap when only 4GB of memory can be allocated.
-small-heap = []
 
-default = ["value64","small-heap"]
+default = ["value64"]
 
 [profile.release]
 debug = true

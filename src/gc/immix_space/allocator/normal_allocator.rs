@@ -1,7 +1,7 @@
 use super::*;
 use crate::gc::immix_space::block_allocator::BlockAllocator;
 use crate::gc::immix_space::block_info::BlockInfo;
-use parking_lot::RwLock;
+
 use std::sync::Arc;
 /// The `NormalAllocator` is the standard allocator to allocate objects within
 /// the immix space.
@@ -9,7 +9,7 @@ use std::sync::Arc;
 /// Objects smaller than `MEDIUM_OBJECT` bytes are
 pub struct NormalAllocator {
     /// The global `BlockAllocator` to get new blocks from.
-    pub(super) block_allocator: Arc<RwLock<BlockAllocator>>,
+    pub(super) block_allocator: Arc<BlockAllocator>,
 
     /// The current block to allocate from.
     current_block: Option<BlockTuple>,
@@ -17,7 +17,7 @@ pub struct NormalAllocator {
 
 impl NormalAllocator {
     /// Create a new `NormalAllocator` backed by the given `BlockAllocator`.
-    pub fn new(block_allocator: Arc<RwLock<BlockAllocator>>) -> NormalAllocator {
+    pub fn new(block_allocator: Arc<BlockAllocator>) -> NormalAllocator {
         NormalAllocator {
             block_allocator: block_allocator,
 
@@ -44,7 +44,7 @@ impl Allocator for NormalAllocator {
 
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         log::debug!("Request new block");
-        let b = self.block_allocator.write().get_block();
+        let b = self.block_allocator.get_block();
         /*.map(|b| unsafe {
             (*b).set_allocated();
             b
@@ -60,7 +60,7 @@ impl Allocator for NormalAllocator {
         if size >= LINE_SIZE {
             None
         } else {
-            let r = self.block_allocator.write().recyclable_blocks.pop();
+            let r = self.block_allocator.recyclable_pop();
             match r {
                 None => None,
                 Some(block) => match unsafe { (*block).scan_block((LINE_SIZE - 1) as u16) } {
@@ -78,6 +78,6 @@ impl Allocator for NormalAllocator {
 
     fn handle_full_block(&mut self, block: *mut BlockInfo) {
         log::debug!("Push block {:p} into unavailable_blocks", block);
-        self.block_allocator.write().unavailable_blocks.push(block);
+        self.block_allocator.return_unavailable(block);
     }
 }

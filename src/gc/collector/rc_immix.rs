@@ -114,7 +114,7 @@ impl RCCollector {
     ) -> Option<GCObjectRef> {
         log::debug!("Increment object {:p}", object.raw());
         if object.value_mut().header_mut().increment() {
-            if try_evacuate && self.perform_evac && immix_space.is_gc_object(object) {
+            if try_evacuate && true && immix_space.is_gc_object(object) {
                 if let Some(new_object) = immix_space.maybe_evacuate(object) {
                     log::debug!(
                         "Evacuated object {:p} to {:p}",
@@ -130,7 +130,6 @@ impl RCCollector {
         }
         None
     }
-
     /// The old roots are enqueued for a decrement.
     fn process_old_roots(&mut self) {
         log::debug!("Process old roots (size {})", self.old_root_buffer.len());

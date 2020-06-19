@@ -2,10 +2,10 @@
 pub mod collector;
 pub mod constants;
 pub mod immix_space;
+pub mod lflist;
 use super::object::*;
-use std::alloc::Layout;
 use std::cmp::Ordering;
-use std::sync::atomic::{spin_loop_hint, AtomicBool, AtomicUsize, Ordering as A};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as A};
 use std::sync::Arc;
 
 /// The type of collection that will be performed.
@@ -38,7 +38,7 @@ impl CollectionType {
 
     /// Returns if this `CollectionType` is a cycle collecting collection.
     pub fn is_immix(&self) -> bool {
-        use self::CollectionType::{ImmixCollection, ImmixEvacCollection};
+        use self::CollectionType::*;
         match *self {
             ImmixCollection | ImmixEvacCollection => true,
             _ => false,
@@ -48,6 +48,8 @@ impl CollectionType {
 use collector::*;
 use parking_lot::Mutex;
 pub struct Heap {
+    allocated: AtomicUsize,
+    threshold: AtomicUsize,
     /// The default immix space.
     immix_space: immix_space::ImmixSpace,
     collector: Mutex<Collector>,
@@ -67,6 +69,8 @@ impl Heap {
             current_live_mark: AtomicBool::new(false),
             immix_space: immix_space::ImmixSpace::new(),
             collector: Mutex::new(Collector::new()),
+            allocated: AtomicUsize::new(0),
+            threshold: AtomicUsize::new(8 * 1024),
         }
     }
 
@@ -75,6 +79,10 @@ impl Heap {
     }
 
     pub fn allocate(&self, ty: WaffleType, size: usize) -> Option<WaffleCellPointer> {
+        if self.allocated.load(A::Relaxed) >= self.threshold.load(A::Relaxed) {
+            crate::VM.collect();
+        }
+        self.allocated.fetch_add(size, A::AcqRel);
         if size >= constants::LARGE_OBJECT {
             todo!("Large space");
         } else {
@@ -156,6 +164,11 @@ impl Heap {
         roots
     }
     pub fn collect(&self, threads: &[Arc<crate::thread::Thread>]) {
+        log::debug!(
+            "Perform GC cycle (allocated bytes={} threshold={})",
+            self.allocated.load(A::Relaxed),
+            self.threshold.load(A::Relaxed)
+        );
         let roots = self.collect_roots(threads);
         let mut collector = self.collector.lock();
         collector.extend_all_blocks(self.immix_space.get_all_blocks());
@@ -181,7 +194,12 @@ impl Heap {
         roots.iter().for_each(|item| {
             item.value_mut().header_mut().unpin();
         });
-
+        if self.allocated.load(A::Relaxed) >= self.threshold.load(A::Relaxed) {
+            self.threshold.store(
+                (self.allocated.load(A::Relaxed) as f64 * 0.7) as usize,
+                A::Relaxed,
+            );
+        }
         if ty.is_immix() {
             self.current_live_mark.fetch_xor(true, A::Relaxed);
             self.immix_space

@@ -217,11 +217,19 @@ impl Collector {
             let block_object_map = unsafe { (**block).get_object_map() };
             object_map.extend(block_object_map);
         }
-        if constants::FINALIZATION {
-            for &object in self.object_map_backup.difference(&object_map) {
-                log::debug!("Sweep {:p}", object.raw());
-            }
+        //if constants::FINALIZATION {
+        for &object in self.object_map_backup.difference(&object_map) {
+            crate::VM
+                .state
+                .heap
+                .allocated
+                .fetch_sub(object.size(), A::Relaxed);
         }
+        //}
+        log::debug!(
+            "Keep {} bytes",
+            crate::VM.state.heap.allocated.load(A::Relaxed)
+        );
         self.object_map_backup.clear();
     }
 
@@ -251,17 +259,25 @@ impl Collector {
         immix::ImmixCollector::collect(collection_type, roots, immix_space, next_live_mark);
 
         //if cfg!(feature = "valgrind") {
-        if constants::FINALIZATION {
-            let mut object_map = HashSet::new();
-            for block in &mut self.all_blocks {
-                let block_object_map = unsafe { (**block).get_object_map() };
-                object_map.extend(block_object_map);
-            }
 
-            for &object in self.object_map_backup.difference(&object_map) {
-                log::debug!("Sweep {:p}", object.raw());
-            }
+        let mut object_map = HashSet::new();
+        for block in &mut self.all_blocks {
+            let block_object_map = unsafe { (**block).get_object_map() };
+            object_map.extend(block_object_map);
         }
+
+        for &object in self.object_map_backup.difference(&object_map) {
+            crate::VM
+                .state
+                .heap
+                .allocated
+                .fetch_sub(object.size(), A::Relaxed);
+            //log::debug!("Sweep {:p}", object.raw());
+        }
+        log::debug!(
+            "Keep {} bytes",
+            crate::VM.state.heap.allocated.load(A::Relaxed)
+        );
         self.object_map_backup.clear();
     }
 

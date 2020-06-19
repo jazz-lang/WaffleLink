@@ -3,7 +3,7 @@ pub const BLOCK_MASK: usize = !(BLOCK_SIZE - 1);
 /// The size of a line in bytes.
 pub const LINE_SIZE: usize = 256;
 
-pub const USE_RC_COLLECTOR: bool = true;
+pub const USE_RC_COLLECTOR: bool = false;
 pub const FINALIZATION: bool = false;
 /// The number of lines per block.
 pub const NUM_LINES_PER_BLOCK: usize = BLOCK_SIZE / LINE_SIZE;
