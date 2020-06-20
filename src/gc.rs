@@ -5,7 +5,7 @@ pub mod immix_space;
 pub mod lflist;
 use super::object::*;
 use std::cmp::Ordering;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering as A};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering as A};
 use std::sync::Arc;
 
 /// The type of collection that will be performed.
@@ -110,7 +110,7 @@ impl Heap {
                 .retain(|a| !Arc::ptr_eq(a, &*alloc))
         });
     }
-    fn collect_roots(&self, threads: &[Arc<crate::thread::Thread>]) -> Vec<*const GCObjectRef> {
+    fn collect_roots(&self, _threads: &[Arc<crate::thread::Thread>]) -> Vec<*const GCObjectRef> {
         let mut roots: Vec<*const GCObjectRef> = vec![];
         /*let immix_filter = self.immix_space.is_gc_object_filter();
         for thread in threads.iter() {
@@ -382,7 +382,7 @@ impl fmt::Display for Region {
     }
 }
 
-struct FormattedSize {
+pub struct FormattedSize {
     size: usize,
 }
 use std::fmt;
@@ -410,11 +410,9 @@ impl fmt::Display for FormattedSize {
     }
 }
 
-fn formatted_size(size: usize) -> FormattedSize {
+pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
 }
-use parking_lot::{lock_api::RawMutex, RawMutex as Lock};
-use std::mem::MaybeUninit;
 
 pub fn retain_mut<T>(v: &mut Vec<T>, mut f: impl FnMut(&mut T) -> bool) {
     for i in (0..v.len()).rev() {
@@ -553,8 +551,7 @@ impl<T> From<T> for UnsafeCell<T> {
     }
 }
 
-unsafe fn object_init(ty: WaffleType, addr: Address) {
-    use crate::value::*;
+unsafe fn object_init(ty: WaffleType, _addr: Address) {
     match ty {
         _ => (),
     }

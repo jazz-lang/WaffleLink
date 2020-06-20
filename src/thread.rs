@@ -2,7 +2,6 @@ use parking_lot::Condvar;
 use parking_lot::Mutex;
 use setjmp::{jmp_buf, setjmp};
 use std::cell::RefCell;
-use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 thread_local! {
@@ -318,7 +317,7 @@ fn save_ctx<T>(prev: *const T) {
             .store((&prev as *const *const T) as usize, Ordering::Relaxed);
     });
 }
-pub fn stop_the_world<F, R>(f: F, prev: *const bool) -> R
+pub fn stop_the_world<F, R>(f: F, _prev: *const bool) -> R
 where
     F: FnOnce(&[Arc<Thread>]) -> R,
 {
@@ -376,7 +375,7 @@ fn all_threads_blocked(
     all_blocked
 }
 
-fn resume_threads(threads: &[Arc<Thread>], safepoint_id: usize) {
+fn resume_threads(_threads: &[Arc<Thread>], safepoint_id: usize) {
     super::VM.state.threads.barrier.resume(safepoint_id);
     super::VM.state.threads.clear_safepoint_request();
 }
@@ -394,7 +393,7 @@ pub extern "C" fn guard_check() {
 }
 
 #[inline(never)]
-pub fn block(thread: &Thread, prev: *const bool) {
+pub fn block(thread: &Thread, _prev: *const bool) {
     // Save stack pointer
     /*thread
         .stack_cur

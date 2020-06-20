@@ -1,7 +1,7 @@
 pub mod hash;
 use crate::object::*;
 use crate::value::*;
-use crate::*;
+
 pub fn rt_lookup_property(obj: Value, key: Value, insert: bool) -> isize {
     if !obj.is_cell() {
         return -1;

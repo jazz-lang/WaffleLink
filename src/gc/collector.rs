@@ -7,7 +7,6 @@ use std::collections::HashSet;
 use vec_map::VecMap;
 pub mod immix;
 pub mod rc_immix;
-use dashmap::DashSet;
 
 pub struct Collector {
     rc_collector: rc_immix::RCCollector,

@@ -4,7 +4,6 @@ use crate::gc::immix_space::block_info::BlockInfo;
 
 use normal_allocator::*;
 use overflow_allocator::*;
-use parking_lot::RwLock;
 use std::sync::Arc;
 pub struct LocalAllocator {
     #[allow(dead_code)]
@@ -24,7 +23,7 @@ impl LocalAllocator {
             overflow_allocator: OverflowAllocator::new(block_allocator),
         }
     }
-    pub fn init(&mut self, collect: bool) {}
+    pub fn init(&mut self, _collect: bool) {}
 }
 
 impl Allocator for LocalAllocator {

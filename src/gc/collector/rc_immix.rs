@@ -149,6 +149,7 @@ impl RCCollector {
     }
 
     /// Objects (roots) in the large object space are temporarily incremented.
+    #[allow(dead_code)]
     fn process_los_new_objects(&mut self, immix_space: &ImmixSpace, new_objects: Vec<GCObjectRef>) {
         log::debug!("Process los new_objects (size {})", new_objects.len());
         for object in new_objects {

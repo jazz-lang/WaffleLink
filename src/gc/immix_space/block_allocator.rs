@@ -3,7 +3,7 @@ use crate::gc::lflist::LockFreeList;
 use crate::gc::{constants::*, GCObjectRef};
 use dashmap::DashSet;
 use parking_lot::Mutex;
-use std::alloc::{alloc_zeroed, dealloc, Layout};
+use std::alloc::{alloc_zeroed, Layout};
 pub const BLOCK_LAYOUT: Layout =
     unsafe { Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE) };
 pub mod blocking_allocator {

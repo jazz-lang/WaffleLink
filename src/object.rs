@@ -1,14 +1,9 @@
 use super::*;
 use crate::gc::*;
 use std::mem::size_of;
-use std::sync::atomic::AtomicU32;
-use std::thread::JoinHandle;
 use value::*;
 #[cfg(feature = "use-vtable")]
 use vtable::VTable;
-const MARK_BITS: usize = 2;
-const MARK_MASK: usize = (2 << MARK_BITS) - 1;
-const FWD_MASK: usize = !0 & !MARK_MASK;
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Debug)]
 pub enum WaffleType {
     None,
@@ -457,8 +452,6 @@ pub trait WaffleCellTrait {
     fn header_mut(&mut self) -> &mut WaffleTypeHeader;
 }
 
-use std::collections::HashMap;
-
 #[repr(C)]
 pub struct WaffleObject {
     pub header: WaffleTypeHeader,
@@ -468,7 +461,7 @@ pub struct WaffleObject {
 }
 
 impl WaffleObject {
-    pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
+    pub fn lookup(&self, _key: Value) -> Result<Option<Value>, Value> {
         unimplemented!()
     }
 }
@@ -657,7 +650,7 @@ impl HMap {
         }
     }
 
-    fn alloc_nodes(&mut self, mut count: usize) {
+    fn alloc_nodes(&mut self, count: usize) {
         if count == 0 {
             return;
         }

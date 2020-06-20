@@ -10,7 +10,6 @@ fn foo() {
 }
 fn main() {
     let t = std::time::Instant::now();
-    let x = false;
     //VM.register_thread(&x);
     //simple_logger::init().unwrap();
 

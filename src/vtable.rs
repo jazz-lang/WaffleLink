@@ -114,7 +114,7 @@ pub mod __rt_dispatch_impl {
         pub fn set(&self, key: Value, field: Value) -> Result<bool, Value> {
             match self.type_of() {
                 WaffleType::Object => {
-                    let object = self.try_as_object().unwrap();
+                    let _object = self.try_as_object().unwrap();
                     //object.value_mut().map.insert(key, field);
                     Ok(true)
                 }

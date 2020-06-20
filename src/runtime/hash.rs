@@ -1,5 +1,4 @@
 use crate::value::Value;
-use ahash::AHasher;
 use murmur3::murmur3_32;
 use std::hash::{Hash, Hasher};
 pub extern "C" fn waffle_get_hash_of(value: Value) -> u32 {

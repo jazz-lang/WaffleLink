@@ -1,7 +1,6 @@
 use super::*;
 use crate::gc::immix_space::block_allocator::BlockAllocator;
 use crate::gc::immix_space::block_info::BlockInfo;
-use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// The `OverflowAllocator` is used to allocate *medium* sized objects

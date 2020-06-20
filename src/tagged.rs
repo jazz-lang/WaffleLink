@@ -1,5 +1,4 @@
 use std::hash::{Hash, Hasher};
-use std::ptr;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 /// The mask to use for untagging a pointer.
