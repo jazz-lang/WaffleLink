@@ -627,6 +627,7 @@ dependencies = [
  "cranelift-simplejit",
  "crossbeam-epoch",
  "dashmap",
+ "errno",
  "lazy_static",
  "libc",
  "log",

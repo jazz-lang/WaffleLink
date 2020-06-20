@@ -4,6 +4,60 @@ use crate::gc::{constants::*, GCObjectRef};
 use dashmap::DashSet;
 use parking_lot::Mutex;
 use std::alloc::{alloc_zeroed, Layout};
+
+pub struct Chunk {
+    start: usize,
+    cursor: AtomicUsize,
+    size: usize,
+}
+impl Chunk {
+    pub fn advise_free(&self, block: *mut BlockInfo) {
+        #[cfg(target_family = "unix")]
+        {
+            use libc::*;
+            unsafe {
+                while madvise(block as *mut _, BLOCK_SIZE, MADV_DONTNEED) == -1
+                    && std::mem::transmute::<_, i32>(errno::errno()) == EAGAIN
+                {}
+            }
+        }
+        #[cfg(target_family = "windows")]
+        {
+            unsafe {
+                use winapi::um::memoryapi::*;
+                let result = VirtualFree(block as *mut _, BLOCK_SIZE as _, MEM_DECOMMIT);
+                if !result {
+                    panic!("VirtualFree failed");
+                }
+            }
+        }
+    }
+
+    pub fn advise_use(&self, block: *mut BlockInfo) {
+        #[cfg(target_family = "unix")]
+        {
+            use libc::*;
+            unsafe {
+                while madvise(block as *mut _, BLOCK_SIZE, MADV_WILLNEED) == -1
+                    && std::mem::transmute::<_, i32>(errno::errno()) == EAGAIN
+                {}
+            }
+        }
+
+        #[cfg(target_family = "windows")]
+        {
+            unsafe {
+                use winapi::um::memoryapi::*;
+                let result =
+                    VirtualAlloc(block as *mut _, BLOCK_SIZE as _, MEM_COMMIT, PAGE_READWRITE);
+                if !result {
+                    panic!("VirtualAlloc failed");
+                }
+            }
+        }
+    }
+}
+
 pub const BLOCK_LAYOUT: Layout =
     unsafe { Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE) };
 pub mod blocking_allocator {
