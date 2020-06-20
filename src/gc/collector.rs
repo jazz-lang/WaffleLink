@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use vec_map::VecMap;
 pub mod immix;
 pub mod rc_immix;
+use dashmap::DashSet;
 
 pub struct Collector {
     rc_collector: rc_immix::RCCollector,
@@ -23,7 +24,6 @@ pub struct Collector {
     /// The mark histogram used during collection to calculate the required
     /// space for evacuation.
     mark_histogram: VecMap<usize>,
-    to_finalize: Vec<WaffleCellPointer>,
 }
 
 impl Collector {
@@ -31,7 +31,6 @@ impl Collector {
         Collector {
             rc_collector: rc_immix::RCCollector::new(),
             mark_histogram: VecMap::new(),
-            to_finalize: Vec::new(),
             object_map_backup: HashSet::new(),
             all_blocks: vec![],
         }
@@ -169,7 +168,7 @@ impl Collector {
     pub fn collect(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[GCObjectRef],
+        roots: &[*const GCObjectRef],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
@@ -191,14 +190,14 @@ impl Collector {
     fn perform_rc_collection(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[GCObjectRef],
+        roots: &[*const GCObjectRef],
         immix_space: &ImmixSpace,
     ) {
         //if cfg!(feature = "valgrind") {
-        for block in &mut self.all_blocks {
+        /*for block in &mut self.all_blocks {
             let block_new_objects = unsafe { (**block).get_new_objects() };
             self.object_map_backup.extend(block_new_objects);
-        }
+        }*/
         //}
 
         for block in &mut self.all_blocks {
@@ -212,7 +211,7 @@ impl Collector {
 
         //large_object_space.proccess_free_buffer();
 
-        let mut object_map = HashSet::new();
+        /*let mut object_map = HashSet::new();
         for block in &mut self.all_blocks {
             let block_object_map = unsafe { (**block).get_object_map() };
             object_map.extend(block_object_map);
@@ -225,19 +224,19 @@ impl Collector {
                 .allocated
                 .fetch_sub(object.size(), A::Relaxed);
         }
-        //}
+        }
         log::debug!(
             "Keep {} bytes",
             crate::VM.state.heap.allocated.load(A::Relaxed)
-        );
-        self.object_map_backup.clear();
+        );*/
+        //self.object_map_backup.clear();
     }
 
     /// Perform the immix tracing collection.
     pub fn perform_immix_collection(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[GCObjectRef],
+        roots: &[*const GCObjectRef],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
@@ -266,7 +265,7 @@ impl Collector {
             object_map.extend(block_object_map);
         }
 
-        for &object in self.object_map_backup.difference(&object_map) {
+        /*for &object in self.object_map_backup.difference(&object_map) {
             crate::VM
                 .state
                 .heap
@@ -277,8 +276,8 @@ impl Collector {
         log::debug!(
             "Keep {} bytes",
             crate::VM.state.heap.allocated.load(A::Relaxed)
-        );
-        self.object_map_backup.clear();
+        );*/
+        //self.object_map_backup.clear();
     }
 
     /// Complete the collection.
@@ -294,17 +293,31 @@ impl Collector {
         // XXX We should not use a constant here, but something that
         // XXX changes dynamically (see rcimmix: MAX heuristic).
         let evac_headroom = if USE_EVACUATION {
-            EVAC_HEADROOM - immix_space.evac_headroom()
+            MIN_EVAC_HEADROOM - immix_space.evac_headroom()
         } else {
             0
         };
+        let free_to_os = (free_blocks.len() as f64 * 0.5).floor() as usize;
         immix_space
             .extend_evac_headroom(free_blocks.iter().take(evac_headroom).map(|&b| b).collect());
+        free_blocks
+            .iter()
+            .skip(evac_headroom)
+            .take(free_to_os)
+            .for_each(|b| unsafe {
+                use std::alloc::*;
+                immix_space.block_allocator.allocated.remove(b);
+                dealloc(*b as *mut u8, block_allocator::BLOCK_LAYOUT);
+            });
         immix_space.return_blocks(free_blocks.iter().skip(evac_headroom).map(|&b| b).collect());
-        self.to_finalize.retain(|item| {
-            let hdr = item.value().header();
-            true
-        });
+        if immix_space.block_allocator.allocated.len()
+            >= immix_space.block_allocator.threshold.load(A::Relaxed)
+        {
+            immix_space.block_allocator.threshold.store(
+                (immix_space.block_allocator.allocated.len() as f64 * 0.7).ceil() as usize,
+                A::Relaxed,
+            );
+        }
         if collection_type.is_immix() {
             //large_object_space.sweep()
         }

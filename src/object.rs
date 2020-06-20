@@ -313,7 +313,7 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
                 (size_of::<WaffleArray>() - crate::WORD)
                     + crate::WORD * self.try_as_array().unwrap().value().len()
             }
-            WaffleType::Map => size_of::<WaffleMap>(),
+            WaffleType::Map => size_of::<HMap>(),
             WaffleType::FreeObject => self.value().header().forwarding() as usize,
             WaffleType::MapNode => size_of::<MapNode>(),
             _ => todo!(),
@@ -575,41 +575,18 @@ impl WaffleCellTrait for WaffleArray {
     }
 }
 
-pub struct WaffleMap {
-    pub header: WaffleTypeHeader,
-    pub(crate) size: usize,
-}
-
-impl WaffleCellTrait for WaffleMap {
-    const TYPE: WaffleType = WaffleType::Map;
-    fn ty(&self) -> Option<WaffleType> {
-        Some(Self::TYPE)
-    }
-
-    fn header(&self) -> &WaffleTypeHeader {
-        &self.header
-    }
-
-    fn header_mut(&mut self) -> &mut WaffleTypeHeader {
-        &mut self.header
-    }
-}
-
 impl WaffleObject {
-    pub fn new_empty(size: usize) -> WaffleCellPointer<Self> {
-        unsafe {
-            let obj = super::VM
-                .state
-                .heap
-                .allocate(WaffleType::Object, std::mem::size_of::<Self>())
-                .unwrap()
-                .as_object();
-            obj.value_mut().init(size);
-            obj
-        }
+    pub fn new_empty(size: usize) -> RootedCell<Self> {
+        let obj: RootedCell<Self> = super::VM
+            .state
+            .heap
+            .allocate(WaffleType::Object, std::mem::size_of::<Self>())
+            .unwrap();
+        obj.cell_ref().value_mut().init(size);
+        obj
     }
     pub fn init(&mut self, size: usize) {
-        self.map = HMap::new_empty(size);
+        self.map = HMap::new_empty(size).to_heap();
         self.mask = (size as u32 - 1) * 8 as u32;
     }
 }
@@ -624,13 +601,12 @@ pub struct HMap {
 }
 
 impl HMap {
-    pub fn new_empty(cap: usize) -> WaffleCellPointer<Self> {
-        let map: WaffleCellPointer<Self> = super::VM
+    pub fn new_empty(cap: usize) -> RootedCell<Self> {
+        let map: RootedCell<Self> = super::VM
             .state
             .heap
             .allocate(WaffleType::Map, std::mem::size_of::<Self>())
-            .unwrap()
-            .cast();
+            .unwrap();
         map.value_mut().nodes = WaffleCellPointer::null();
         map.value_mut().lastfree = WaffleCellPointer::null();
         map.value_mut().alloc_nodes(cap);
@@ -686,7 +662,7 @@ impl HMap {
             return;
         }
         for _ in 0..count {
-            let node = MapNode::new_empty();
+            let node = MapNode::new_empty().to_heap();
             node.value_mut().next = self.lastfree;
             assert!(self.lastfree.raw() as u64 != 0x7fff0000000000b8);
             assert!(node.raw() as u64 != 0x7fff0000000000b8);
@@ -774,13 +750,12 @@ pub struct MapNode {
     pub next: WaffleCellPointer<Self>,
 }
 impl MapNode {
-    pub fn new_empty() -> WaffleCellPointer<Self> {
-        let node = crate::VM
+    pub fn new_empty() -> RootedCell<Self> {
+        let node: RootedCell<MapNode> = crate::VM
             .state
             .heap
             .allocate(WaffleType::MapNode, std::mem::size_of::<Self>())
-            .unwrap()
-            .cast::<MapNode>();
+            .unwrap();
         node.value_mut().next = WaffleCellPointer::null();
         node.value_mut().key = Value::default();
         node.value_mut().val = Value::default();

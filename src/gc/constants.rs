@@ -3,7 +3,7 @@ pub const BLOCK_MASK: usize = !(BLOCK_SIZE - 1);
 /// The size of a line in bytes.
 pub const LINE_SIZE: usize = 256;
 
-pub const USE_RC_COLLECTOR: bool = false;
+pub const USE_RC_COLLECTOR: bool = true;
 pub const FINALIZATION: bool = false;
 /// The number of lines per block.
 pub const NUM_LINES_PER_BLOCK: usize = BLOCK_SIZE / LINE_SIZE;
@@ -26,8 +26,8 @@ pub const CICLE_TRIGGER_THRESHHOLD: f32 = 0.01;
 pub const USE_EVACUATION: bool = true;
 
 /// The number of blocks stored into the `EvacAllocator` for evacuation.
-pub const EVAC_HEADROOM: usize = 5;
-
+pub const MIN_EVAC_HEADROOM: usize = 5;
+pub const FREE_BLOCKS: f64 = 1.4;
 /// Ratio when to trigger evacuation collection.
 pub const EVAC_TRIGGER_THRESHHOLD: f32 = 0.01;
 

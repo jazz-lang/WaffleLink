@@ -15,7 +15,7 @@ impl ImmixCollector {
     /// Perform the immix tracing collection.
     pub fn collect(
         collection_type: &CollectionType,
-        roots: &[GCObjectRef],
+        roots: &[*const GCObjectRef],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
@@ -24,7 +24,34 @@ impl ImmixCollector {
             roots.len(),
             next_live_mark
         );
-        let mut object_queue: VecDeque<GCObjectRef> = roots.iter().map(|o| *o).collect();
+        let mut object_queue: VecDeque<GCObjectRef> = Default::default();
+        roots.iter().for_each(|object| unsafe {
+            /*/*if !(**object).value_mut().header_mut().mark(next_live_mark) {
+            if immix_space.is_in_space(**object) {
+                immix_space.set_gc_object(**object);
+                immix_space.increment_lines(**object);
+            }*/
+            if collection_type.is_evac() && immix_space.is_gc_object(**object) {
+                if let Some(new_child) = immix_space.maybe_evacuate(**object) {
+                    log::debug!(
+                        "Evacuated child {:p} to {:p}",
+                        (**object).raw(),
+                        new_child.raw()
+                    );
+
+                    *((*object) as *mut WaffleCellPointer) = new_child;
+                    log::debug!("Push root {:p} into object queue", (**object).raw());
+                    object_queue.push_back(**object);
+                } else {
+                    log::debug!("Push root {:p} into object queue", (**object).raw());
+                    object_queue.push_back(**object);
+                }
+            } else {
+                log::debug!("Push root {:p} into object queue", (**object).raw());
+                object_queue.push_back(**object);
+            }*/
+            object_queue.push_back(**object);
+        });
 
         while let Some(object) = object_queue.pop_front() {
             log::debug!("Process object {:p} in Immix closure", object.raw());

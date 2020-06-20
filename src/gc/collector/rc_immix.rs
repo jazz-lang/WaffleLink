@@ -55,7 +55,7 @@ impl RCCollector {
     pub fn collect(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[GCObjectRef],
+        roots: &[*const GCObjectRef],
         immix_space: &ImmixSpace,
     ) {
         log::debug!("Start RC collection");
@@ -137,12 +137,14 @@ impl RCCollector {
     }
     /// The current roots are incremented (but never evacuated) and stored as
     /// old roots.
-    fn process_current_roots(&mut self, immix_space: &ImmixSpace, roots: &[GCObjectRef]) {
+    fn process_current_roots(&mut self, immix_space: &ImmixSpace, roots: &[*const GCObjectRef]) {
         log::debug!("Process current roots (size {})", roots.len());
-        for root in roots.iter().map(|o| *o) {
-            log::debug!("Process root object: {:p}", root.raw());
-            self.increment(immix_space, root, false);
-            self.old_root_buffer.push(root);
+        unsafe {
+            for root in roots.iter().map(|o| *o) {
+                log::debug!("Process root object {:p}", (*root).raw());
+                self.increment(immix_space, *root, false);
+                self.old_root_buffer.push(*root);
+            }
         }
     }
 

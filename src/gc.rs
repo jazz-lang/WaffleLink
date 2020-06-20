@@ -5,7 +5,7 @@ pub mod immix_space;
 pub mod lflist;
 use super::object::*;
 use std::cmp::Ordering;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as A};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering as A};
 use std::sync::Arc;
 
 /// The type of collection that will be performed.
@@ -48,8 +48,6 @@ impl CollectionType {
 use collector::*;
 use parking_lot::Mutex;
 pub struct Heap {
-    allocated: AtomicUsize,
-    threshold: AtomicUsize,
     /// The default immix space.
     immix_space: immix_space::ImmixSpace,
     collector: Mutex<Collector>,
@@ -61,6 +59,7 @@ pub struct Heap {
     /// objects are always initialized with the last `mark` state with will be
     /// flipped if they are reached is the mark phase.
     current_live_mark: AtomicBool,
+    pub(crate) roots: dashmap::DashSet<*mut InnerRoot>,
 }
 
 impl Heap {
@@ -69,8 +68,7 @@ impl Heap {
             current_live_mark: AtomicBool::new(false),
             immix_space: immix_space::ImmixSpace::new(),
             collector: Mutex::new(Collector::new()),
-            allocated: AtomicUsize::new(0),
-            threshold: AtomicUsize::new(8 * 1024),
+            roots: dashmap::DashSet::new(),
         }
     }
 
@@ -78,15 +76,25 @@ impl Heap {
         self.immix_space.is_gc_object(object)
     }
 
-    pub fn allocate(&self, ty: WaffleType, size: usize) -> Option<WaffleCellPointer> {
-        if self.allocated.load(A::Relaxed) >= self.threshold.load(A::Relaxed) {
-            crate::VM.collect();
-        }
-        self.allocated.fetch_add(size, A::AcqRel);
+    pub fn allocate<T: WaffleCellTrait>(
+        &self,
+        ty: WaffleType,
+        size: usize,
+    ) -> Option<RootedCell<T>> {
         if size >= constants::LARGE_OBJECT {
             todo!("Large space");
         } else {
-            self.immix_space.allocate(ty, size)
+            self.immix_space.allocate(ty, size).map(|cell| {
+                let root = Box::into_raw(Box::new(InnerRoot {
+                    val: cell,
+                    rc: AtomicU32::new(1),
+                }));
+                self.roots.insert(root);
+                RootedCell {
+                    inner: std::ptr::NonNull::new(root).unwrap(),
+                    _marker: Default::default(),
+                }
+            })
         }
     }
 
@@ -102,9 +110,9 @@ impl Heap {
                 .retain(|a| !Arc::ptr_eq(a, &*alloc))
         });
     }
-    fn collect_roots(&self, threads: &[Arc<crate::thread::Thread>]) -> Vec<GCObjectRef> {
-        let mut roots = vec![];
-        let immix_filter = self.immix_space.is_gc_object_filter();
+    fn collect_roots(&self, threads: &[Arc<crate::thread::Thread>]) -> Vec<*const GCObjectRef> {
+        let mut roots: Vec<*const GCObjectRef> = vec![];
+        /*let immix_filter = self.immix_space.is_gc_object_filter();
         for thread in threads.iter() {
             let mut scan = thread.stack_top.load(A::Relaxed);
             let mut end = thread.stack_cur.load(A::Relaxed);
@@ -159,23 +167,21 @@ impl Heap {
                     scan = scan.offset(crate::WORD as _);
                 }
             }
-        }
+        }*/
+        self.roots
+            .iter()
+            .for_each(|root| roots.push(unsafe { &(&**root).val }));
 
         roots
     }
     pub fn collect(&self, threads: &[Arc<crate::thread::Thread>]) {
-        log::debug!(
-            "Perform GC cycle (allocated bytes={} threshold={})",
-            self.allocated.load(A::Relaxed),
-            self.threshold.load(A::Relaxed)
-        );
+        log::debug!("GC Cycle started");
         let roots = self.collect_roots(threads);
+        roots.iter().for_each(|obj| unsafe {
+            (**obj).value_mut().header_mut().set_pinned();
+        });
         let mut collector = self.collector.lock();
         collector.extend_all_blocks(self.immix_space.get_all_blocks());
-        // pin roots so GC will not move them.
-        roots.iter().for_each(|item| {
-            item.value_mut().header_mut().set_pinned();
-        });
         let ty = collector.prepare_collection(
             true,
             false,
@@ -190,16 +196,9 @@ impl Heap {
             !self.current_live_mark.load(A::Relaxed),
         );
         collector.complete_collection(&ty, &self.immix_space);
-        // GC cycle finished, we can unpin roots safely.
-        roots.iter().for_each(|item| {
-            item.value_mut().header_mut().unpin();
+        roots.iter().for_each(|obj| unsafe {
+            (**obj).value_mut().header_mut().unpin();
         });
-        if self.allocated.load(A::Relaxed) >= self.threshold.load(A::Relaxed) {
-            self.threshold.store(
-                (self.allocated.load(A::Relaxed) as f64 * 0.7) as usize,
-                A::Relaxed,
-            );
-        }
         if ty.is_immix() {
             self.current_live_mark.fetch_xor(true, A::Relaxed);
             self.immix_space
@@ -559,4 +558,54 @@ unsafe fn object_init(ty: WaffleType, addr: Address) {
     match ty {
         _ => (),
     }
+}
+
+pub struct RootedCell<T: WaffleCellTrait> {
+    pub(crate) inner: std::ptr::NonNull<InnerRoot>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: WaffleCellTrait> RootedCell<T> {
+    pub(crate) fn inner(&self) -> &mut InnerRoot {
+        unsafe { &mut *self.inner.as_ptr() }
+    }
+    pub fn to_heap(self) -> WaffleCellPointer<T> {
+        self.inner().val.cast()
+    }
+    pub fn cell_ref(&self) -> &WaffleCellPointer<T> {
+        unsafe { std::mem::transmute(&self.inner().val) }
+    }
+    pub fn value(&self) -> &T {
+        self.cell_ref().value()
+    }
+
+    pub fn value_mut(&self) -> &mut T {
+        self.cell_ref().value_mut()
+    }
+}
+
+impl<T: WaffleCellTrait> Clone for RootedCell<T> {
+    fn clone(&self) -> Self {
+        self.inner().rc.fetch_add(1, A::AcqRel);
+        Self {
+            inner: self.inner,
+            _marker: Default::default(),
+        }
+    }
+}
+
+impl<T: WaffleCellTrait> Drop for RootedCell<T> {
+    fn drop(&mut self) {
+        if self.inner().rc.fetch_sub(1, A::AcqRel) == 1 {
+            unsafe {
+                crate::VM.state.heap.roots.remove(&self.inner.as_ptr());
+                let _ = Box::from_raw(self.inner.as_ptr());
+            }
+        }
+    }
+}
+
+pub(crate) struct InnerRoot {
+    val: WaffleCellPointer,
+    rc: AtomicU32,
 }

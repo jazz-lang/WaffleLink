@@ -152,7 +152,7 @@ impl ImmixSpace {
                 blocks.extend((&mut *allocator.get()).get_all_blocks());
             }
         }
-        let mut ba = &self.block_allocator;
+        let ba = &self.block_allocator;
         //let mut recyc = ba.recyclable_blocks.clone();
         //ba.recyclable_blocks.clear();
         let mut evac_blocks = self.evac_allocator.lock().get_all_blocks();
