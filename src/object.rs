@@ -461,8 +461,12 @@ pub struct WaffleObject {
 }
 
 impl WaffleObject {
-    pub fn lookup(&self, _key: Value) -> Result<Option<Value>, Value> {
-        unimplemented!()
+    pub fn lookup(&self, key: Value) -> Option<&mut Value> {
+        self.map.value().getp(key)
+    }
+
+    pub fn set(&self, key: Value, val: Value) {
+        self.map.value_mut().set(key, val);
     }
 }
 

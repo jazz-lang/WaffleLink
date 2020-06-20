@@ -23,6 +23,9 @@ crossbeam-epoch = "0.8"
 vec_map = "0.8.2"
 bit-set = "0.5.2"
 thread_local = "1.0.1"
+cranelift = "0.65"
+cranelift-simplejit = "0.65"
+cranelift-module = "0.65"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 

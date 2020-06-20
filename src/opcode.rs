@@ -22,6 +22,12 @@ pub enum Opcode {
     GetArg8,
     SetArg16,
     GetArg16,
+    /// set_up r(A),arg(ix: u8)
+    SetUp8,
+    /// get_up r(A),arg(ix: u8)
+    GetUp8,
+    SetUp16,
+    GetUp16,
 
     /// call r(A), r(B), r(C) argc: u8
     ///

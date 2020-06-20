@@ -137,11 +137,11 @@ pub mod __rt_dispatch_impl {
             }
         }
 
-        pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
+        pub fn lookup(&self, key: Value) -> Option<Value> {
             match self.type_of() {
                 WaffleType::Object => {
                     let object = self.try_as_object().unwrap();
-                    object.value().lookup(key)
+                    object.value().lookup(key).copied()
                 }
                 WaffleType::Array => {
                     if key.is_number() {
@@ -151,11 +151,11 @@ pub mod __rt_dispatch_impl {
                             ix = array.value().len() as isize + ix;
                         }
                         if ix >= array.value().len() as isize {
-                            return Ok(None);
+                            return None;
                         }
-                        return Ok(Some(array.value()[ix as usize]));
+                        return Some(array.value()[ix as usize]);
                     }
-                    Ok(None)
+                    None
                 }
                 _ => unimplemented!(),
             }

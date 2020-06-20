@@ -524,11 +524,11 @@ pub mod value_nanboxing {
                 Self::new_double(x)
             }
         }
-        pub fn lookup(&self, key: Value) -> Result<Option<Value>, Value> {
+        pub fn lookup(&self, key: Value) -> Option<Value> {
             if self.is_cell() {
                 self.as_cell().lookup(key)
             } else {
-                Ok(None)
+                None
             }
         }
         pub fn as_cell(self) -> WaffleCellPointer {
