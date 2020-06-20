@@ -1,6 +1,6 @@
 use parking_lot::Condvar;
 use parking_lot::Mutex;
-use setjmp::{jmp_buf, setjmp};
+
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -107,7 +107,7 @@ pub struct Thread {
     pub id: usize,
     pub stack_cur: AtomicUsize,
     pub stack_top: AtomicUsize,
-    pub regs: MaybeUninit<jmp_buf>,
+    //pub regs: MaybeUninit<jmp_buf>,
     pub state: StateManager,
 }
 static TID: AtomicUsize = AtomicUsize::new(0);
@@ -126,7 +126,7 @@ impl Thread {
     fn with_id(id: usize) -> Arc<Thread> {
         Arc::new(Thread {
             id,
-            regs: MaybeUninit::uninit(),
+            //regs: MaybeUninit::uninit(),
             stack_cur: AtomicUsize::new(0),
             stack_top: AtomicUsize::new(0),
             state: StateManager::new(),
@@ -308,10 +308,9 @@ impl Default for ThreadState {
 fn save_ctx<T>(prev: *const T) {
     THREAD.with(|thread| {
         let thread = thread.borrow();
-        unsafe {
-            // Save registers
-            setjmp(thread.regs.as_ptr() as *mut jmp_buf);
-        }
+
+        // Save registers
+        //setjmp(thread.regs.as_ptr() as *mut jmp_buf);
         thread
             .stack_cur
             .store((&prev as *const *const T) as usize, Ordering::Relaxed);
@@ -346,7 +345,7 @@ fn stop_threads(threads: &[Arc<Thread>]) -> usize {
     let safepoint_id = super::VM.state.threads.request_safepoint();
 
     super::VM.state.threads.barrier.guard(safepoint_id);
-
+    // TODO: Arm stack guard or patch code.
     while !all_threads_blocked(&thread_self, threads, safepoint_id) {
         std::sync::atomic::spin_loop_hint();
     }

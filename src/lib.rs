@@ -1,4 +1,5 @@
 use std::sync::Arc;
+pub mod fullcodegen;
 pub mod function;
 pub mod gc;
 pub mod module;
