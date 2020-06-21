@@ -427,8 +427,7 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
             WaffleType::Object => size_of::<WaffleObject>(),
             WaffleType::String => size_of::<WaffleString>(),
             WaffleType::Array => {
-                (size_of::<WaffleArray>() - crate::WORD)
-                    + crate::WORD * self.try_as_array().unwrap().value().len()
+                (size_of::<WaffleArray>() - 8) + 8 * self.try_as_array().unwrap().value().len()
             }
             WaffleType::Map => size_of::<HMap>(),
             WaffleType::FreeObject => self.value().header().forwarding() as usize,
@@ -648,6 +647,25 @@ pub struct WaffleArray {
     value: Value,
 }
 impl WaffleArray {
+    pub fn new(init: Value, count: usize) -> RootedCell<Self> {
+        if count >= 1024 * 1024 * 1024 {
+            panic!("Array is too large");
+        }
+        let mem: RootedCell<Self> = crate::VM
+            .state
+            .heap
+            .allocate(
+                WaffleType::Array,
+                (size_of::<WaffleArray>() - 8) + 8 * count,
+            )
+            .unwrap();
+        for ix in 0..count {
+            *mem.value_mut().at_ref_mut(ix) = init;
+        }
+        mem.value_mut().len = count;
+
+        mem
+    }
     pub fn len(&self) -> usize {
         self.len
     }

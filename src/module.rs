@@ -28,15 +28,24 @@ impl WaffleCellTrait for Module {
 }
 
 impl Module {
-    pub fn new_empty() -> RootedCell<Self> {
+    pub fn new_empty(fcount: usize, constants: &[Value]) -> RootedCell<Self> {
         let module: RootedCell<Module> = VM
             .state
             .heap
             .allocate(WaffleType::Module, std::mem::size_of::<Self>())
             .unwrap();
-        module.value_mut().constants = WaffleCellPointer::null();
+        if constants.is_empty() {
+            module.value_mut().constants = WaffleCellPointer::null();
+        } else {
+            let mut constants_r = WaffleArray::new(Value::undefined(), constants.len());
+            for ix in 0..constants.len() {
+                *constants_r.value_mut().at_ref_mut(ix) = constants[ix];
+            }
+            module.value_mut().constants = constants_r.to_heap();
+        }
         module.value_mut().entry = Value::undefined();
         module.value_mut().name = Value::undefined();
+        module.value_mut().functions = WaffleArray::new(Value::undefined(), fcount).to_heap();
         module
     }
 }

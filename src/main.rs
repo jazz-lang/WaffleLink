@@ -1,5 +1,8 @@
 extern crate wafflelink;
+use fullcodegen::*;
+use opcode::Opcode::*;
 use value::*;
+use wafflelink::module::*;
 use wafflelink::object::*;
 use wafflelink::*;
 fn foo() {
@@ -13,16 +16,9 @@ fn main() {
     //VM.register_thread(&x);
     //simple_logger::init().unwrap();
 
-    {
-        let map = HMap::new_empty(0);
-        map.value_mut().set(Value::new_int(0), Value::new_int(1));
-        map.value_mut().set(Value::new_int(1), Value::new_int(2));
-        map.value_mut().set(Value::new_int(2), Value::new_int(3));
-        map.value_mut().set(
-            Value::new_int(3),
-            Value::from(WaffleObject::new_empty(4).to_heap()),
-        );
-        foo();
-    }
+    let module = Module::new_empty(1, &[Value::new_int(4), Value::new_int(3)]);
+    let code = vec![Constant(0, 0), Constant(1, 1), Add(0, 1, 0), Ret(0)];
+    let mut jit = FullCodegen::new();
+    jit.compile(module.to_heap(), vec![vec![code]]);
     println!("done in {}ms", t.elapsed().as_millis());
 }
