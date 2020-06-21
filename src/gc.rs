@@ -8,6 +8,23 @@ use std::cmp::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering as A};
 use std::sync::Arc;
 
+#[derive(Copy, Clone)]
+pub struct GCValue {
+    pub slot: *mut *mut u8,
+    pub value: GCObjectRef,
+}
+
+impl GCValue {
+    pub fn relocate(&self, addr: *mut u8) {
+        if !self.slot.is_null() && !addr.is_null() {
+            unsafe {
+                *self.slot = addr;
+                //self.value = std::mem::transmute(addr);
+            }
+        }
+    }
+}
+
 /// The type of collection that will be performed.
 pub enum CollectionType {
     /// A simple reference counting collection.
@@ -84,17 +101,23 @@ impl Heap {
         if size >= constants::LARGE_OBJECT {
             todo!("Large space");
         } else {
-            self.immix_space.allocate(ty, size).map(|cell| {
-                let root = Box::into_raw(Box::new(InnerRoot {
-                    val: cell,
-                    rc: AtomicU32::new(1),
-                }));
-                self.roots.insert(root);
-                RootedCell {
-                    inner: std::ptr::NonNull::new(root).unwrap(),
-                    _marker: Default::default(),
-                }
-            })
+            self.immix_space
+                .allocate(ty, size)
+                .or_else(|| {
+                    crate::VM.collect();
+                    self.immix_space.allocate(ty, size)
+                })
+                .map(|cell| {
+                    let root = Box::into_raw(Box::new(InnerRoot {
+                        val: cell,
+                        rc: AtomicU32::new(1),
+                    }));
+                    self.roots.insert(root);
+                    RootedCell {
+                        inner: std::ptr::NonNull::new(root).unwrap(),
+                        _marker: Default::default(),
+                    }
+                })
         }
     }
 
@@ -110,8 +133,8 @@ impl Heap {
                 .retain(|a| !Arc::ptr_eq(a, &*alloc))
         });
     }
-    fn collect_roots(&self, _threads: &[Arc<crate::thread::Thread>]) -> Vec<*const GCObjectRef> {
-        let mut roots: Vec<*const GCObjectRef> = vec![];
+    fn collect_roots(&self, _threads: &[Arc<crate::thread::Thread>]) -> Vec<GCValue> {
+        let mut roots: Vec<GCValue> = vec![];
         /*let immix_filter = self.immix_space.is_gc_object_filter();
         for thread in threads.iter() {
             let mut scan = thread.stack_top.load(A::Relaxed);
@@ -168,18 +191,21 @@ impl Heap {
                 }
             }
         }*/
-        self.roots
-            .iter()
-            .for_each(|root| roots.push(unsafe { &(&**root).val }));
+        self.roots.iter().for_each(|root| unsafe {
+            roots.push(GCValue {
+                slot: &(&**root).val as *const _ as *mut *mut u8,
+                value: (&**root).val,
+            })
+        });
 
         roots
     }
     pub fn collect(&self, threads: &[Arc<crate::thread::Thread>]) {
         log::debug!("GC Cycle started");
         let roots = self.collect_roots(threads);
-        roots.iter().for_each(|obj| unsafe {
+        /*roots.iter().for_each(|obj| unsafe {
             (**obj).value_mut().header_mut().set_pinned();
-        });
+        });*/
         let mut collector = self.collector.lock();
         collector.extend_all_blocks(self.immix_space.get_all_blocks());
         let ty = collector.prepare_collection(
@@ -196,9 +222,9 @@ impl Heap {
             !self.current_live_mark.load(A::Relaxed),
         );
         collector.complete_collection(&ty, &self.immix_space);
-        roots.iter().for_each(|obj| unsafe {
+        /*roots.iter().for_each(|obj| unsafe {
             (**obj).value_mut().header_mut().unpin();
-        });
+        });*/
         if ty.is_immix() {
             self.current_live_mark.fetch_xor(true, A::Relaxed);
             self.immix_space

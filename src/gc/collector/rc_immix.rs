@@ -11,7 +11,7 @@ pub struct RCCollector {
     ///
     /// At the start of a reference counting collection a decrement is
     /// enqueued for every old root.
-    old_root_buffer: Vec<GCObjectRef>,
+    old_root_buffer: Vec<GCValue>,
 
     /// The enqueued decrements on objects.
     ///
@@ -24,7 +24,7 @@ pub struct RCCollector {
     /// Objects are pushed into this buffer if they are encountered for the
     /// first time by the reference counting collector or marked as modified
     /// using the `write_barrier()`.
-    modified_buffer: VecDeque<GCObjectRef>,
+    modified_buffer: VecDeque<GCValue>,
 
     /// Flag if this collection is a evacuating collection.
     perform_evac: bool,
@@ -55,7 +55,7 @@ impl RCCollector {
     pub fn collect(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[*const GCObjectRef],
+        roots: &[GCValue],
         immix_space: &ImmixSpace,
     ) {
         log::debug!("Start RC collection");
@@ -77,7 +77,10 @@ impl RCCollector {
     pub fn write_barrier(&mut self, object: GCObjectRef) -> bool {
         if !object.value_mut().header_mut().set_logged() {
             log::debug!("Write barrier on object {:p}", object.raw());
-            self.modified(object);
+            self.modified(GCValue {
+                slot: std::ptr::null_mut(),
+                value: object,
+            });
             /*for child in unsafe { (*object).children() } {
                 self.decrement(child);
             }*/
@@ -87,8 +90,8 @@ impl RCCollector {
             && self.write_barrier_counter >= WRITE_BARRIER_COLLECT_THRESHOLD
     }
     /// Push an object into the modified buffer.
-    fn modified(&mut self, object: GCObjectRef) {
-        log::debug!("Push object {:p} into mod buffer", object.raw());
+    fn modified(&mut self, object: GCValue) {
+        log::debug!("Push object {:p} into mod buffer", object.value.raw());
         self.modified_buffer.push_back(object);
     }
 
@@ -109,20 +112,23 @@ impl RCCollector {
     fn increment(
         &mut self,
         immix_space: &ImmixSpace,
-        object: GCObjectRef,
+        object: GCValue,
         try_evacuate: bool,
     ) -> Option<GCObjectRef> {
-        log::debug!("Increment object {:p}", object.raw());
-        if object.value_mut().header_mut().increment() {
-            if try_evacuate && true && immix_space.is_gc_object(object) {
-                if let Some(new_object) = immix_space.maybe_evacuate(object) {
+        log::debug!("Increment object {:p}", object.value.raw());
+        if object.value.value_mut().header_mut().increment() {
+            if try_evacuate && true && immix_space.is_gc_object(object.value) {
+                if let Some(new_object) = immix_space.maybe_evacuate(object.value) {
                     log::debug!(
                         "Evacuated object {:p} to {:p}",
-                        object.raw(),
+                        object.value.raw(),
                         new_object.raw()
                     );
-                    immix_space.decrement_lines(object);
-                    self.modified(new_object);
+                    immix_space.decrement_lines(object.value);
+                    self.modified(GCValue {
+                        slot: std::ptr::null_mut(),
+                        value: new_object,
+                    });
                     return Some(new_object);
                 }
             }
@@ -133,18 +139,18 @@ impl RCCollector {
     /// The old roots are enqueued for a decrement.
     fn process_old_roots(&mut self) {
         log::debug!("Process old roots (size {})", self.old_root_buffer.len());
-        self.decrement_buffer.extend(self.old_root_buffer.drain(..));
+        self.decrement_buffer
+            .extend(self.old_root_buffer.drain(..).map(|obj| obj.value));
     }
     /// The current roots are incremented (but never evacuated) and stored as
     /// old roots.
-    fn process_current_roots(&mut self, immix_space: &ImmixSpace, roots: &[*const GCObjectRef]) {
+    fn process_current_roots(&mut self, immix_space: &ImmixSpace, roots: &[GCValue]) {
         log::debug!("Process current roots (size {})", roots.len());
-        unsafe {
-            for root in roots.iter().map(|o| *o) {
-                log::debug!("Process root object {:p}", (*root).raw());
-                self.increment(immix_space, *root, false);
-                self.old_root_buffer.push(*root);
-            }
+
+        for root in roots.iter().map(|o| *o) {
+            log::debug!("Process root object {:p}", root.value.raw());
+            self.increment(immix_space, root, false);
+            self.old_root_buffer.push(root);
         }
     }
 
@@ -153,7 +159,14 @@ impl RCCollector {
     fn process_los_new_objects(&mut self, immix_space: &ImmixSpace, new_objects: Vec<GCObjectRef>) {
         log::debug!("Process los new_objects (size {})", new_objects.len());
         for object in new_objects {
-            self.increment(immix_space, object, false);
+            self.increment(
+                immix_space,
+                GCValue {
+                    slot: std::ptr::null_mut(),
+                    value: object,
+                },
+                false,
+            );
             self.decrement(object);
         }
     }
@@ -163,21 +176,36 @@ impl RCCollector {
     fn process_mod_buffer(&mut self, immix_space: &ImmixSpace) {
         log::debug!("Process mod buffer (size {})", self.modified_buffer.len());
         while let Some(object) = self.modified_buffer.pop_front() {
-            log::debug!("Process object {:p} in mod buffer", object.raw());
+            log::debug!("Process object {:p} in mod buffer", object.value.raw());
             //unsafe {
-            object.value_mut().header_mut().unset_logged();
-            if immix_space.is_in_space(object) {
-                immix_space.set_gc_object(object);
-                immix_space.increment_lines(object);
+            object.value.value_mut().header_mut().unset_logged();
+            if immix_space.is_in_space(object.value) {
+                immix_space.set_gc_object(object.value);
+                immix_space.increment_lines(object.value);
             }
 
-            object.visit(&mut |child_ref| unsafe {
+            object.value.visit(&mut |child_ref| unsafe {
                 let child = *child_ref;
                 if let Some(new_child) = child.value_mut().header().is_forwarded() {
-                    *(child_ref as *mut WaffleCellPointer) = new_child;
-                    self.increment(immix_space, child, false);
+                    let pointer = new_child as usize + immix_space.block_allocator.ch.start;
+                    *(child_ref as *mut WaffleCellPointer) = std::mem::transmute(pointer);
+                    self.increment(
+                        immix_space,
+                        GCValue {
+                            slot: child_ref as *mut _,
+                            value: child,
+                        },
+                        false,
+                    );
                 } else {
-                    if let Some(new_child) = self.increment(immix_space, child, true) {
+                    if let Some(new_child) = self.increment(
+                        immix_space,
+                        GCValue {
+                            slot: child_ref as *mut _,
+                            value: child,
+                        },
+                        true,
+                    ) {
                         *(child_ref as *mut WaffleCellPointer) = new_child;
                     }
                 }

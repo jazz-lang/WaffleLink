@@ -2,15 +2,81 @@ use super::block_info::BlockInfo;
 use crate::gc::lflist::LockFreeList;
 use crate::gc::{constants::*, GCObjectRef};
 use dashmap::DashSet;
-use parking_lot::Mutex;
-use std::alloc::{alloc_zeroed, Layout};
+use std::alloc::Layout;
 
+#[cfg(target_pointer_width = "32")]
+pub const HEAP_SIZE: usize = 1024 * 1024 * 1024 * 2;
+#[cfg(target_pointer_width = "64")]
+pub const HEAP_SIZE: usize = 1024 * 1024 * 1024 * 4;
 pub struct Chunk {
-    start: usize,
+    pub start: usize,
     cursor: AtomicUsize,
-    size: usize,
+    pub mid: usize,
+    limit: usize,
 }
+
 impl Chunk {
+    pub fn new() -> Self {
+        pub fn align_usize(value: usize, align: usize) -> usize {
+            if align == 0 {
+                return value;
+            }
+            ((value + align - 1) / align) * align
+        }
+        #[cfg(target_family = "windows")]
+        let ptr = unsafe {
+            use winapi::um::memoryapi::VirtualAlloc;
+            use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
+            let ptr = VirtualAlloc(
+                std::ptr::null_mut(),
+                HEAP_SIZE + BLOCK_SIZE,
+                MEM_RESERVE,
+                PAGE_READWRITE,
+            );
+            ptr.cast::<u8>()
+        };
+
+        #[cfg(target_family = "unix")]
+        let ptr = unsafe {
+            use libc::*;
+            let ptr = mmap(
+                std::ptr::null_mut(),
+                HEAP_SIZE + BLOCK_SIZE,
+                PROT_READ | PROT_WRITE,
+                MAP_ANONYMOUS | MAP_PRIVATE,
+                -1,
+                0,
+            );
+
+            ptr.cast::<u8>()
+        };
+        let cursor = align_usize(ptr as _, BLOCK_SIZE);
+        let mid = (ptr as usize + HEAP_SIZE + BLOCK_SIZE) / 2;
+        Self {
+            start: ptr as _,
+            mid,
+            cursor: AtomicUsize::new(cursor),
+            limit: ptr as usize + HEAP_SIZE + BLOCK_SIZE,
+        }
+    }
+    pub fn bump_allocate(&self) -> *mut BlockInfo {
+        let mut old = self.cursor.load(Ordering::Relaxed);
+        let mut new;
+        loop {
+            new = old + BLOCK_SIZE;
+            if new > self.limit {
+                return 0 as *mut _;
+            }
+            let res =
+                self.cursor
+                    .compare_exchange_weak(old, new, Ordering::SeqCst, Ordering::Relaxed);
+            match res {
+                Ok(_) => break,
+                Err(x) => old = x,
+            }
+        }
+        old as *mut _
+    }
     pub fn advise_free(&self, block: *mut BlockInfo) {
         #[cfg(target_family = "unix")]
         {
@@ -25,6 +91,7 @@ impl Chunk {
         {
             unsafe {
                 use winapi::um::memoryapi::*;
+                use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
                 let result = VirtualFree(block as *mut _, BLOCK_SIZE as _, MEM_DECOMMIT);
                 if !result {
                     panic!("VirtualFree failed");
@@ -50,7 +117,7 @@ impl Chunk {
                 use winapi::um::memoryapi::*;
                 let result =
                     VirtualAlloc(block as *mut _, BLOCK_SIZE as _, MEM_COMMIT, PAGE_READWRITE);
-                if !result {
+                if result.cast::<BlockInfo>() != block {
                     panic!("VirtualAlloc failed");
                 }
             }
@@ -60,7 +127,7 @@ impl Chunk {
 
 pub const BLOCK_LAYOUT: Layout =
     unsafe { Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE) };
-pub mod blocking_allocator {
+/*pub mod blocking_allocator {
     use super::*;
     /// The `BlockAllocator` is the global resource for blocks for the immix
     /// space.
@@ -139,11 +206,25 @@ pub mod blocking_allocator {
         }
     }
 }
+*/
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub mod lockfree {
     use super::*;
+    /// The `BlockAllocator` is the global resource for blocks for the Immix
+    /// space.
+    ///
+    /// During normal runtime it will allocate blocks on the
+    /// fly from global allocator and store returned blocks in a list.
+    ///
+    /// Blocks from this `BlockAllocator` are always aligned to `BLOCK_SIZE`.
+    ///
+    /// The list of returned free blocks is a stack. The `BlockAllocator` will
+    /// first exhaust the returned free blocks and then fall back to allocating
+    /// new blocks from the memory map. This means it will return recently
+    /// returned blocks first.
     pub struct BlockAllocator {
+        pub(crate) ch: Chunk,
         pub(crate) free_blocks: LockFreeList<*mut BlockInfo>,
         pub(crate) allocated: DashSet<*mut BlockInfo>,
         pub(crate) unavailable_blocks: LockFreeList<*mut BlockInfo>,
@@ -154,6 +235,7 @@ pub mod lockfree {
     impl BlockAllocator {
         pub fn new() -> Self {
             Self {
+                ch: Chunk::new(),
                 free_blocks: LockFreeList::new(),
                 allocated: DashSet::new(),
                 unavailable_blocks: LockFreeList::new(),
@@ -174,14 +256,14 @@ pub mod lockfree {
             blocks
         }
         /// Get a new block aligned to `BLOCK_SIZE`.
-        pub fn get_block(&self) -> *mut BlockInfo {
+        pub fn get_block(&self) -> Option<*mut BlockInfo> {
             self.free_blocks
                 .pop()
                 .and_then(|b| {
                     self.free_blocks_size.fetch_sub(1, Ordering::AcqRel);
                     Some(b)
                 })
-                .unwrap_or_else(|| self.build_next_block())
+                .or_else(|| self.build_next_block())
         }
 
         /// Return a collection of blocks.
@@ -196,8 +278,8 @@ pub mod lockfree {
 
         /// Return the number of unallocated blocks.
         pub fn available_blocks(&self) -> usize {
-            self.free_blocks_size.load(Ordering::Acquire)
-            //(((self.data_bound as usize) - (self.data as usize)) % BLOCK_SIZE) + self.free_blocks.len()
+            ((self.ch.limit - self.ch.cursor.load(Ordering::Relaxed)) % BLOCK_SIZE)
+                + self.free_blocks_size.load(Ordering::Acquire)
         }
 
         /// Return if an address is within the bounds of the memory map.
@@ -208,15 +290,23 @@ pub mod lockfree {
             }
         }
 
-        fn build_next_block(&self) -> *mut BlockInfo {
+        fn build_next_block(&self) -> Option<*mut BlockInfo> {
             unsafe {
                 if self.allocated.len() >= self.threshold.load(Ordering::Relaxed) {
                     crate::VM.collect();
                 }
-                let block = alloc_zeroed(BLOCK_LAYOUT).cast::<BlockInfo>();
+                /*let block = alloc_zeroed(BLOCK_LAYOUT).cast::<BlockInfo>();
                 std::ptr::write(block, BlockInfo::new());
                 self.allocated.insert(block);
-                block
+                block*/
+                let block = self.ch.bump_allocate();
+                if !block.is_null() {
+                    std::ptr::write(block, BlockInfo::new());
+                    self.allocated.insert(block);
+                    Some(block)
+                } else {
+                    None
+                }
             }
         }
         pub fn recycle(&self, blocks: Vec<*mut BlockInfo>) {

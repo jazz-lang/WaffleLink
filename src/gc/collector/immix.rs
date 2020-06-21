@@ -15,7 +15,7 @@ impl ImmixCollector {
     /// Perform the immix tracing collection.
     pub fn collect(
         collection_type: &CollectionType,
-        roots: &[*const GCObjectRef],
+        roots: &[GCValue],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
@@ -24,8 +24,8 @@ impl ImmixCollector {
             roots.len(),
             next_live_mark
         );
-        let mut object_queue: VecDeque<GCObjectRef> = Default::default();
-        roots.iter().for_each(|object| unsafe {
+        let mut object_queue: VecDeque<GCValue> = Default::default();
+        roots.iter().for_each(|object| {
             /*/*if !(**object).value_mut().header_mut().mark(next_live_mark) {
             if immix_space.is_in_space(**object) {
                 immix_space.set_gc_object(**object);
@@ -50,12 +50,12 @@ impl ImmixCollector {
                 log::debug!("Push root {:p} into object queue", (**object).raw());
                 object_queue.push_back(**object);
             }*/
-            object_queue.push_back(**object);
+            object_queue.push_back(*object);
         });
 
         while let Some(object) = object_queue.pop_front() {
-            log::debug!("Process object {:p} in Immix closure", object.raw());
-            if !object.value_mut().header_mut().mark(next_live_mark) {
+            log::debug!("Process object {:p} in Immix closure", object.value.raw());
+            /*if !object.value_mut().header_mut().mark(next_live_mark) {
                 if immix_space.is_in_space(object) {
                     immix_space.set_gc_object(object);
                     immix_space.increment_lines(object);
@@ -82,6 +82,38 @@ impl ImmixCollector {
                         }
                     }
                 });
+            }*/
+            if !object.value.value_mut().header_mut().mark(next_live_mark) {
+                if immix_space.is_in_space(object.value) {
+                    immix_space.set_gc_object(object.value);
+                    immix_space.increment_lines(object.value);
+                    log::debug!(
+                        "Object {:p} was unmarked: process children",
+                        object.value.raw()
+                    );
+                }
+                if let Some(new_child) = object.value.value().header().is_forwarded() {
+                    let pointer = new_child as usize + immix_space.block_allocator.ch.start;
+                    object.relocate(pointer as *mut u8);
+                } else {
+                    if collection_type.is_evac() && immix_space.is_gc_object(object.value) {
+                        if let Some(new_val) = immix_space.maybe_evacuate(object.value) {
+                            log::debug!("Evacuate {:p}->{:p}", object.value.raw(), new_val.raw());
+                            object.relocate(new_val.raw().cast());
+                        }
+                    }
+                }
+                object.value.visit(&mut |child| {
+                    object_queue.push_back(GCValue {
+                        slot: child as *mut _,
+                        value: unsafe { *child },
+                    })
+                });
+            } else {
+                if let Some(new_child) = object.value.value().header().is_forwarded() {
+                    let pointer = new_child as usize + immix_space.block_allocator.ch.start;
+                    object.relocate(pointer as *mut u8);
+                }
             }
         }
         log::debug!("Complete collection");

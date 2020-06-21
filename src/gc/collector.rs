@@ -167,7 +167,7 @@ impl Collector {
     pub fn collect(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[*const GCObjectRef],
+        roots: &[GCValue],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {
@@ -189,7 +189,7 @@ impl Collector {
     fn perform_rc_collection(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[*const GCObjectRef],
+        roots: &[GCValue],
         immix_space: &ImmixSpace,
     ) {
         //if cfg!(feature = "valgrind") {
@@ -235,7 +235,7 @@ impl Collector {
     pub fn perform_immix_collection(
         &mut self,
         collection_type: &CollectionType,
-        roots: &[*const GCObjectRef],
+        roots: &[GCValue],
         immix_space: &ImmixSpace,
         next_live_mark: bool,
     ) {

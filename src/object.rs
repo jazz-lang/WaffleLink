@@ -34,7 +34,131 @@ pub struct WaffleTypeHeader {
 
 pub mod default_header {
     use super::*;
+    bitfield::bitfield! {
+        pub struct WaffleSmallHeader(u32);
+        #[doc="If the object at this address was forwarded somewhere else."]
+        pub forwarded,set_forwarded_: 0;
+        #[doc="If this object was already visited by the tracing collector.
+        
+            _Note_: true/false do not mean marked/unmarked. The tracing collector
+            will flip the meaning of the value for every collection cycle. See
+            `Heap.current_live_mark`."
+        ]
+        pub marked,set_marked_: 1;
+        #[doc="If this object was pushed on the `modBuffer` in `RCCollector`."]
+        pub logged,set_logged_: 2;
+        #[doc="If this object must not be evacuated (moved) by the collector."]
+        pub pinned,set_pinned_: 3;
+        #[doc="If this object was never touched by the collectors."]
+        pub new,set_new_: 4;
+        #[doc="Object type"]
+        pub ty_,set_ty: 13,5;
+        #[doc="18 bit reference counter, on overflow we use hashmap."]
+        pub rc,set_rc: 31,13;
+        #[doc="31 bit forwarding difference between pointer and chunk of memory."]
+        pub forwarding,set_forwarding_: 31,1;
+    }
+    impl WaffleSmallHeader {
+        pub fn increment(&mut self) -> bool {
+            let rc = self.rc();
+            self.set_rc(rc + 1);
+            if self.is_new() {
+                self.unsed_new();
+                true
+            } else {
+                false
+            }
+        }
+        pub fn decrement(&mut self) -> bool {
+            let rc = self.rc();
+            if rc == 0 {
+                return false;
+            }
+            self.set_rc(rc - 1);
+            self.rc() == 0
+        }
 
+        pub fn set_logged(&mut self) -> bool {
+            let x = self.logged();
+            self.set_logged_(true);
+            x
+        }
+
+        pub fn unset_logged(&mut self) -> bool {
+            let x = self.logged();
+            self.set_logged_(false);
+            x
+        }
+
+        pub fn mark(&mut self, x: bool) -> bool {
+            let y = self.marked();
+            if x {
+                self.set_marked_(true);
+            } else {
+                self.set_marked_(false);
+            }
+            y
+        }
+
+        pub fn unmark(&mut self) {
+            self.set_marked_(false);
+        }
+
+        pub fn is_marked(&self, b: bool) -> bool {
+            if b {
+                self.marked()
+            } else {
+                !self.marked()
+            }
+        }
+
+        pub fn is_pinned(&self) -> bool {
+            self.pinned()
+        }
+
+        pub fn set_pinned(&mut self) {
+            self.set_pinned_(true);
+        }
+
+        pub fn unpin(&mut self) {
+            self.set_pinned_(false);
+        }
+
+        pub fn is_forwarded(&self) -> Option<u32> {
+            if self.forwarded() {
+                Some(self.forwarding())
+            } else {
+                None
+            }
+        }
+
+        pub fn set_forwarded(&mut self, ptr: i32) {
+            self.set_forwarding_(ptr as u32);
+            self.set_forwarded_(true);
+        }
+
+        pub fn set_new(&mut self) {
+            self.set_new_(true);
+        }
+
+        pub fn is_new(&self) -> bool {
+            self.new()
+        }
+
+        pub fn unsed_new(&mut self) {
+            self.set_new_(false);
+        }
+
+        pub fn ty(&self) -> WaffleType {
+            let t = self.ty_();
+            unsafe { std::mem::transmute(t as u8) }
+        }
+
+        pub fn set_type(&mut self, ty: WaffleType) {
+            let x = ty as u8;
+            self.set_ty(x as _);
+        }
+    }
     bitfield::bitfield! {
     pub struct WaffleHeader(u64);
         pub forwarded,set_forwarded_: 0;
@@ -251,9 +375,7 @@ pub mod fat_header {
     }
 }
 //pub use fat_header::WaffleTypeHeader;
-pub use default_header::WaffleHeader as WaffleTypeHeader;
-/*
-*/
+pub use default_header::WaffleSmallHeader as WaffleTypeHeader;
 #[repr(C)]
 pub struct WaffleCell {
     pub header: WaffleTypeHeader,

@@ -102,7 +102,7 @@ impl Threads {
         }
     }
 }
-use std::mem::MaybeUninit;
+
 pub struct Thread {
     pub id: usize,
     pub stack_cur: AtomicUsize,

@@ -193,7 +193,7 @@ impl BlockInfo {
             self.hole_count >= hole_count,
             self.hole_count
         );
-        self.evacuation_candidate = true //self.hole_count >= hole_count;
+        self.evacuation_candidate = self.hole_count >= hole_count;
     }
 
     /// Return if this is an evacuation candidate.

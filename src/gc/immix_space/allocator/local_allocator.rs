@@ -50,10 +50,14 @@ impl Allocator for LocalAllocator {
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         log::debug!("Request new block");
         let b = self.normal_allocator.block_allocator.get_block();
-        unsafe {
-            (*b).set_allocated();
+        if let Some(b) = b {
+            unsafe {
+                (*b).set_allocated();
+            }
+            Some((b, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))
+        } else {
+            None
         }
-        Some((b, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))
     }
 
     fn handle_full_block(&mut self, block: *mut BlockInfo) {

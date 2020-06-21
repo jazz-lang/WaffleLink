@@ -46,15 +46,15 @@ impl Allocator for OverflowAllocator {
     fn get_new_block(&mut self) -> Option<BlockTuple> {
         log::debug!("Request new block");
         let b = self.block_allocator.get_block();
-        /*.map(|b| unsafe {
-            (*b).set_allocated();
-            b
-        })
-        .map(|block| (block, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))*/
-        unsafe {
-            (*b).set_allocated();
+
+        if let Some(b) = b {
+            unsafe {
+                (*b).set_allocated();
+            }
+            Some((b, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))
+        } else {
+            None
         }
-        Some((b, LINE_SIZE as u16, (BLOCK_SIZE - 1) as u16))
     }
 
     #[allow(unused_variables)]

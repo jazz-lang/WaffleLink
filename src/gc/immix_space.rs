@@ -223,7 +223,9 @@ impl ImmixSpace {
                     new_object.raw() as *mut u8,
                     size,
                 );
-                object.value_mut().header_mut().set_forwarded(object);
+                object.value_mut().header_mut().set_forwarded(
+                    (new_object.raw() as usize - self.block_allocator.ch.start) as _,
+                );
                 //(*object).set_forwarded(new_object);
                 self.set_gc_object(object);
             }
