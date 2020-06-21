@@ -1,9 +1,11 @@
 use std::sync::Arc;
+pub mod callstack;
 pub mod fullcodegen;
 pub mod function;
 pub mod gc;
 pub mod module;
 pub mod object;
+pub mod opcode;
 pub mod pure_nan;
 pub mod runtime;
 pub mod tagged;

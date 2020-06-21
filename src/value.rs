@@ -381,7 +381,7 @@ pub mod value_nanboxing {
                 },
             }
         }
-        pub fn is_double(&self) -> bool {
+        pub fn is_double(self) -> bool {
             !self.is_int32() && self.is_number()
         }
         pub fn as_double(&self) -> f64 {

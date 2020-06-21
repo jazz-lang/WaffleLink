@@ -8,6 +8,7 @@ pub struct Module {
     pub header: WaffleTypeHeader,
     pub name: Value,
     pub constants: WaffleCellPointer<WaffleArray>,
+    pub functions: WaffleCellPointer<WaffleArray>,
     pub entry: Value,
 }
 

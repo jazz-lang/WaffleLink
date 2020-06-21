@@ -921,3 +921,18 @@ impl WaffleCellTrait for HMap {
         &mut self.header
     }
 }
+
+use std::ops::{Deref, DerefMut};
+
+impl<T: WaffleCellTrait> Deref for WaffleCellPointer<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.value()
+    }
+}
+
+impl<T: WaffleCellTrait> DerefMut for WaffleCellPointer<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.value_mut()
+    }
+}
