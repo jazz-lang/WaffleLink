@@ -1,5 +1,4 @@
 extern crate wafflelink;
-use fullcodegen::*;
 use opcode::Opcode::*;
 use value::*;
 use wafflelink::module::*;
@@ -18,7 +17,5 @@ fn main() {
 
     let module = Module::new_empty(1, &[Value::new_int(4), Value::new_int(3)]);
     let code = vec![Constant(0, 0), Constant(1, 1), Add(0, 1, 0), Ret(0)];
-    let mut jit = FullCodegen::new();
-    jit.compile(module.to_heap(), vec![vec![code]]);
     println!("done in {}ms", t.elapsed().as_millis());
 }
