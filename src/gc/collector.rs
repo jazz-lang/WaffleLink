@@ -299,15 +299,19 @@ impl Collector {
         let free_to_os = (free_blocks.len() as f64 * 0.5).floor() as usize;
         immix_space
             .extend_evac_headroom(free_blocks.iter().take(evac_headroom).map(|&b| b).collect());
-        free_blocks
-            .iter()
-            .skip(evac_headroom)
-            .take(free_to_os)
-            .for_each(|b| unsafe {
-                use std::alloc::*;
-                immix_space.block_allocator.allocated.remove(b);
-                dealloc(*b as *mut u8, block_allocator::BLOCK_LAYOUT);
-            });
+        if free_to_os != 0 {
+            free_blocks
+                .iter()
+                .skip(evac_headroom)
+                .take(free_to_os)
+                .for_each(|b| {
+                    //use std::alloc::*;
+                    //immix_space.block_allocator.allocated.remove(b);
+                    //dealloc(*b as *mut u8, block_allocator::BLOCK_LAYOUT);
+                    log::debug!("Free block {:p} to OS", *b);
+                    immix_space.block_allocator.ch.advise_free(*b);
+                });
+        }
         immix_space.return_blocks(free_blocks.iter().skip(evac_headroom).map(|&b| b).collect());
         if immix_space.block_allocator.allocated.len()
             >= immix_space.block_allocator.threshold.load(A::Relaxed)

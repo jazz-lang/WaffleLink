@@ -284,10 +284,9 @@ pub mod lockfree {
 
         /// Return if an address is within the bounds of the memory map.
         pub fn is_in_space(&self, object: GCObjectRef) -> bool {
-            unsafe {
-                let block = BlockInfo::get_block_ptr(object);
-                self.allocated.contains(&block) && { (&*block).is_in_block(object) }
-            }
+            /*let block = BlockInfo::get_block_ptr(object);
+            self.allocated.contains(&block) && { (&*block).is_in_block(object) }*/
+            self.ch.start <= object.raw() as usize && self.ch.limit >= object.raw() as usize
         }
 
         fn build_next_block(&self) -> Option<*mut BlockInfo> {

@@ -107,7 +107,7 @@ pub struct Thread {
     pub id: usize,
     pub stack_cur: AtomicUsize,
     pub stack_top: AtomicUsize,
-    //pub regs: MaybeUninit<jmp_buf>,
+    pub regs: std::mem::MaybeUninit<setjmp::jmp_buf>,
     pub state: StateManager,
 }
 static TID: AtomicUsize = AtomicUsize::new(0);
@@ -126,7 +126,7 @@ impl Thread {
     fn with_id(id: usize) -> Arc<Thread> {
         Arc::new(Thread {
             id,
-            //regs: MaybeUninit::uninit(),
+            regs: std::mem::MaybeUninit::uninit(),
             stack_cur: AtomicUsize::new(0),
             stack_top: AtomicUsize::new(0),
             state: StateManager::new(),
@@ -310,7 +310,9 @@ fn save_ctx<T>(prev: *const T) {
         let thread = thread.borrow();
 
         // Save registers
-        //setjmp(thread.regs.as_ptr() as *mut jmp_buf);
+        unsafe {
+            setjmp::setjmp(thread.regs.as_ptr() as *mut setjmp::jmp_buf);
+        }
         thread
             .stack_cur
             .store((&prev as *const *const T) as usize, Ordering::Relaxed);
@@ -320,7 +322,7 @@ pub fn stop_the_world<F, R>(f: F, _prev: *const bool) -> R
 where
     F: FnOnce(&[Arc<Thread>]) -> R,
 {
-    //save_ctx(&prev);
+    save_ctx(&_prev);
     THREAD.with(|thread| {
         let thread = thread.borrow();
         thread.park();
@@ -393,15 +395,7 @@ pub extern "C" fn guard_check() {
 
 #[inline(never)]
 pub fn block(thread: &Thread, _prev: *const bool) {
-    // Save stack pointer
-    /*thread
-        .stack_cur
-        .store((&prev as *const *const bool) as usize, Ordering::Relaxed);
-    unsafe {
-        // Save registers
-        setjmp(thread.regs.as_ptr() as *mut jmp_buf);
-    }*/
-    //save_ctx(&prev);
+    save_ctx(&_prev);
     let safepoint_id = super::VM.state.threads.safepoint_id();
     assert_ne!(safepoint_id, 0);
     let state = thread.state();

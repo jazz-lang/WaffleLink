@@ -134,9 +134,11 @@ impl Heap {
         });
     }
     fn collect_roots(&self, _threads: &[Arc<crate::thread::Thread>]) -> Vec<GCValue> {
+        log::debug!("GC Phase 1: Collect roots");
         let mut roots: Vec<GCValue> = vec![];
-        /*let immix_filter = self.immix_space.is_gc_object_filter();
-        for thread in threads.iter() {
+        let immix_filter = self.immix_space.is_gc_object_filter();
+        let mut count_conservative = 0;
+        for thread in _threads.iter() {
             let mut scan = thread.stack_top.load(A::Relaxed);
             let mut end = thread.stack_cur.load(A::Relaxed);
             if end < scan {
@@ -146,6 +148,21 @@ impl Heap {
             let end = Address::from(end);
             debug_assert!(scan.is_non_null());
             debug_assert!(end.is_non_null());
+            let mut rscan = thread.regs.as_ptr().cast::<u8>();
+            let mut rend = (rscan as usize
+                + (std::mem::size_of::<setjmp::jmp_buf>() / std::mem::size_of::<usize>())
+                - 1) as *const u8;
+            if end < scan {
+                std::mem::swap(&mut rend, &mut rscan);
+            }
+            log::debug!(
+                "Collect conservative roots for Thread #{}: \n Stack begin: {:p} end: {:p}\n Registers begin: {:p} end: {:p}",
+                thread.id,
+                scan.to_mut_ptr::<u8>(),
+                end.to_mut_ptr::<u8>(),
+                rscan,
+                rend,
+            );
             while scan < end {
                 // Scan for GC object.
                 let frame = scan.to_ptr::<*mut u8>();
@@ -155,42 +172,61 @@ impl Heap {
                         scan = scan.add_ptr(1);
                         continue;
                     } else {
-                        let cell = WaffleCellPointer::from_ptr(value.cast());
-                        //log::debug!("Try {:p} at {:p}", cell.raw(), frame);
+                        let cell: WaffleCellPointer = WaffleCellPointer::from_ptr(value.cast());
                         if immix_filter(cell) {
-                            log::trace!("Root object {:p} at {:p}", cell.raw(), frame);
-                            roots.push(cell);
+                            cell.value_mut().header_mut().set_pinned(); // pin conservative root.
+                            log::trace!(
+                                "Root object {:p} at {:p} it is {:?}",
+                                cell.raw(),
+                                frame,
+                                cell.type_of()
+                            );
+                            roots.push(GCValue {
+                                slot: std::ptr::null_mut(),
+                                value: cell,
+                            });
+                            count_conservative += 1;
                         }
                     }
                 }
                 scan = scan.add_ptr(1);
             }
-            let mut scan = thread.regs.as_ptr().cast::<u8>();
-            let end = (scan as usize
-                + (std::mem::size_of::<setjmp::jmp_buf>() / std::mem::size_of::<usize>())
-                - 1) as *const u8;
-            while scan < end {
-                let frame = scan.cast::<crate::value::Value>();
+            while rscan < rend {
+                let frame = rscan.cast::<*mut u8>();
                 unsafe {
-                    // We're dereferencing `Value` and it takes 64 bits of space so this code will not work on 32 bit machines.
                     let value = *frame;
-                    if value.is_empty() || !value.is_cell() {
-                        scan = scan.offset(crate::WORD as _);
+                    let val = WaffleCellPointer::from_ptr(value as *mut WaffleCell);
+                    if value.is_null() {
+                        rscan = rscan.offset(crate::WORD as _);
                         continue;
                     } else {
-                        if immix_filter(value.as_cell()) {
+                        if immix_filter(val) {
+                            val.value_mut().header_mut().set_pinned();
                             log::trace!(
-                                "Root object(in reg) {:p} at {:p}",
-                                value.as_cell().raw(),
-                                frame
+                                "Root object(in reg) {:p} at {:p} it is {:?}",
+                                val.raw(),
+                                frame,
+                                val.type_of()
                             );
-                            roots.push(value.as_cell());
+                            roots.push(GCValue {
+                                slot: std::ptr::null_mut(),
+                                value: val,
+                            });
+                            count_conservative += 1;
                         }
                     }
-                    scan = scan.offset(crate::WORD as _);
+                    rscan = rscan.offset(crate::WORD as _);
                 }
             }
-        }*/
+        }
+        if count_conservative != 0 {
+            log::debug!(
+                "Found {} conservative root(s) and pinned them. ",
+                count_conservative
+            );
+        } else {
+            log::debug!("No conservative roots found");
+        }
         self.roots.iter().for_each(|root| unsafe {
             roots.push(GCValue {
                 slot: &(&**root).val as *const _ as *mut *mut u8,
@@ -222,9 +258,9 @@ impl Heap {
             !self.current_live_mark.load(A::Relaxed),
         );
         collector.complete_collection(&ty, &self.immix_space);
-        /*roots.iter().for_each(|obj| unsafe {
-            (**obj).value_mut().header_mut().unpin();
-        });*/
+        roots.iter().for_each(|obj| {
+            obj.value.value_mut().header_mut().unpin();
+        });
         if ty.is_immix() {
             self.current_live_mark.fetch_xor(true, A::Relaxed);
             self.immix_space

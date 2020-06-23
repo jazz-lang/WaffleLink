@@ -18,6 +18,8 @@ crossbeam-epoch = "0.8"
 vec_map = "0.8.2"
 errno = "0.2"
 bit-set = "0.5.2"
+llvm-sys = "100.0"
+setjmp = "0.1"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 

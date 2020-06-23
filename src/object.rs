@@ -432,7 +432,8 @@ impl<T: WaffleCellTrait> WaffleCellPointer<T> {
             WaffleType::Map => size_of::<HMap>(),
             WaffleType::FreeObject => self.value().header().forwarding() as usize,
             WaffleType::MapNode => size_of::<MapNode>(),
-            _ => todo!(),
+            WaffleType::Module => size_of::<crate::module::Module>(),
+            _ => todo!("{:?}", self.type_of()),
         }
     }
     pub fn visit(&self, trace: &mut dyn FnMut(*const WaffleCellPointer)) {
@@ -754,7 +755,7 @@ impl HMap {
         let hash = crate::runtime::hash::waffle_get_hash_of(key);
         let mut current = &self.nodes;
         while current.is_null() == false {
-            log::trace!("{:p}", current.raw());
+            //log::trace!("{:p}", current.raw());
             if current.value().hash == hash {
                 return Some(*current);
             }
@@ -871,7 +872,7 @@ impl HMap {
                         == std::mem::transmute::<_, *const u8>(&c2)
                 );
                 trace(std::mem::transmute(&c2));
-                log::trace!("{}", c2.raw() as u64 == 0x7fff0000000000b8);
+                //log::trace!("{}", c2.raw() as u64 == 0x7fff0000000000b8);
                 c2 = c2.value().next;
             }
         }
