@@ -1,38 +1,18 @@
 [package]
-name = "wafflelink"
-version = "0.1.0"
-authors = ["playX <gtashnik11@gmail.com>"]
+authors = ["playX <adel.prokurov@protonmail.com>"]
 edition = "2018"
+name    = "wafflelink"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
-libc = "0.2"
-lazy_static = "1.4"
-murmur3 = "0.5"
-parking_lot = "0.10"
-log = "0.4"
-bitfield = "*"
-simple_logger = "1.6.0"
-dashmap = "3.11"
-crossbeam-epoch = "0.8"
-vec_map = "0.8.2"
-errno = "0.2"
-bit-set = "0.5.2"
-llvm-sys = "100.0"
-setjmp = "0.1"
+masm = { git = "https://github.com/playxe/masm-rs" }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 
-[build-dependencies]
-cc = "1.0"
-
-
 [features]
+default    = ["value64"]
 value32-64 = []
-value64 = []
-use-vtable = []
-
-default = ["value64"]
-
-[profile.release]
-debug = true
+value64    = []
