@@ -39,7 +39,7 @@ impl<'a> JIT<'a> {
     }
 
     pub fn call(&mut self) -> masm::Call {
-        self.masm.call()
+        self.masm.call_6args()
     }
 }
 #[cfg(target_pointer_width = "64")]

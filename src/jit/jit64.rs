@@ -73,6 +73,8 @@ impl<'a> JIT<'a> {
                         j.link_to(&mut jit.masm, label);
                     }));
                 }
+
+                Ins::Add(left, right, dest) => {}
                 _ => todo!(),
             }
         }
@@ -83,7 +85,7 @@ impl<'a> JIT<'a> {
     }
 
     pub fn box_double(&mut self, src: FPReg, dest: Reg, has_nr: bool) -> Reg {
-        self.masm.move_double_to_gp(src, dest);
+        self.masm.move_fp_to_gp(src, dest);
         if !has_nr {
             self.masm.sub64_imm64(crate::value::Value::NUMBER_TAG, dest);
         } else {
@@ -99,7 +101,7 @@ impl<'a> JIT<'a> {
         fpr: FPReg,
     ) -> FPReg {
         self.masm.add64(NUMBER_TAG_REGISTER, gpr, result_gpr);
-        self.masm.move_gp_to_double(result_gpr, fpr);
+        self.masm.move_gp_to_fp(result_gpr, fpr);
         fpr
     }
 
@@ -130,6 +132,53 @@ impl<'a> JIT<'a> {
 
     pub fn box_cell(&mut self, src: Reg, dest: Reg) {
         self.masm.move_rr(src, dest);
+    }
+
+    pub fn branch_if_not_number(&mut self, src: Reg, have_tag_regs: bool) -> Jump {
+        if have_tag_regs {
+            return self
+                .masm
+                .branch64_test(ResultCondition::Zero, src, NUMBER_TAG_REGISTER);
+        }
+        self.masm
+            .branch64_test_imm64(ResultCondition::Zero, src, crate::value::Value::NUMBER_TAG)
+    }
+
+    pub fn branch_if_not_int32(&mut self, src: Reg, have_tag_regs: bool) -> Jump {
+        if have_tag_regs {
+            self.masm
+                .branch64(RelationalCondition::Below, src, NUMBER_TAG_REGISTER)
+        } else {
+            self.masm.branch64_imm64(
+                RelationalCondition::Below,
+                src,
+                crate::value::Value::NUMBER_TAG,
+            )
+        }
+    }
+    pub fn branch_if_int32(&mut self, src: Reg, have_tag_regs: bool) -> Jump {
+        if have_tag_regs {
+            self.masm
+                .branch64(RelationalCondition::AboveOrEqual, src, NUMBER_TAG_REGISTER)
+        } else {
+            self.masm.branch64_imm64(
+                RelationalCondition::AboveOrEqual,
+                src,
+                crate::value::Value::NUMBER_TAG,
+            )
+        }
+    }
+    pub fn branch_if_number(&mut self, src: Reg, have_tag_regs: bool) -> Jump {
+        if have_tag_regs {
+            return self
+                .masm
+                .branch64_test(ResultCondition::NonZero, src, NUMBER_TAG_REGISTER);
+        }
+        self.masm.branch64_test_imm64(
+            ResultCondition::NonZero,
+            src,
+            crate::value::Value::NUMBER_TAG,
+        )
     }
 }
 
