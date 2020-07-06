@@ -322,14 +322,14 @@ impl Value {
     pub fn false_() -> Self {
         Self {
             u: EncodedValueDescriptor {
-                as_int64: Self::VALUE_TRUE,
+                as_int64: Self::VALUE_FALSE,
             },
         }
     }
     pub fn true_() -> Self {
         Self {
             u: EncodedValueDescriptor {
-                as_int64: Self::VALUE_FALSE,
+                as_int64: Self::VALUE_TRUE,
             },
         }
     }
@@ -368,7 +368,7 @@ impl Value {
     }
 
     pub fn is_boolean(&self) -> bool {
-        unsafe { self.u.as_int64 & !Self::UNDEFINED_TAG == Self::VALUE_FALSE }
+        unsafe { (self.u.as_int64 & !1) == Self::VALUE_FALSE }
     }
     pub fn is_cell(&self) -> bool {
         unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK) == 0 }

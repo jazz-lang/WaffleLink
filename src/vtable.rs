@@ -1,5 +1,6 @@
 use crate::builtins::*;
 use crate::object::*;
+use crate::stack::callframe::CallFrame;
 use crate::value::Value;
 #[repr(C)]
 pub struct VTable {
@@ -13,7 +14,7 @@ pub struct VTable {
     /// pointers to non GC memory.
     pub destroy_fn: Option<fn(Ref<Obj>)>,
     /// Invoke object.
-    pub apply_fn: Option<fn(Ref<Obj>)>,
+    pub apply_fn: Option<fn(&mut CallFrame) -> WResult>,
     pub parent: Option<&'static VTable>,
     pub instance_size: usize,
     pub element_size: usize,

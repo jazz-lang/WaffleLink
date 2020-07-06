@@ -32,11 +32,22 @@ pub struct WResult {
 }
 
 impl WResult {
+    #[inline(always)]
     pub fn to_result(&self) -> Result<Value, Value> {
         if self.ok {
             Ok(self.value)
         } else {
             Err(self.value)
         }
+    }
+    #[allow(non_snake_case)]
+    #[inline]
+    pub const fn Ok(value: Value) -> Self {
+        Self { ok: true, value }
+    }
+    #[allow(non_snake_case)]
+    #[inline]
+    pub const fn Err(value: Value) -> Self {
+        Self { ok: false, value }
     }
 }

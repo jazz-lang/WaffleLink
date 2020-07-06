@@ -34,9 +34,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.56"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c1f1d60091c1b73e2b1f4560ab419204b178e625fa945ded7b660becd2bd46"
+checksum = "0fde55d2a2bfaa4c9668bbc63f531fbdeee3ffe188f4662511ce2c22b3eedebe"
 
 [[package]]
 name = "errno"
@@ -83,13 +83,13 @@ dependencies = [
 [[package]]
 name = "masm"
 version = "0.1.0"
-source = "git+https://github.com/playxe/masm-rs#199597a70a510d3e441ce2d3c4aab0e8bfcd2c7f"
 dependencies = [
  "bitfield",
  "capstone",
  "errno",
  "libc",
  "region",
+ "winapi",
 ]
 
 [[package]]
