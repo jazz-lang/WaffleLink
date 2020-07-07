@@ -1,6 +1,7 @@
 //! Code generation for 64 bit architectures.
 use super::*;
 use crate::bytecode::*;
+use crate::value::Value;
 pub mod add_generator;
 use masm::linkbuffer::*;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
@@ -13,10 +14,33 @@ impl<'a> JIT<'a> {
         let data = self.masm.move_with_patch_ptr(0, to);
         self.addr_loads.push((label, data));
     }
-
     pub fn compile_bytecode(&mut self) {
-        let mut slow_paths: Vec<Box<dyn FnOnce(&mut Self)>> = vec![];
-        for (ix, ins) in self.ins.iter().enumerate() {
+        self.function_prologue(0);
+        let frame_top_offset = self.code_block.num_vars as i32 * 8;
+        self.masm.add64_imm32(-frame_top_offset, BP, T1);
+        self.masm.move_rr(T1, SP);
+         = self.private_compile_bytecode();
+
+        self.function_epilogue();
+        self.masm.ret();
+        /*for slow_path in self.slow_paths.iter().cloned() {
+            slow_path(self);
+        }*/
+        while let Some(slow) = self.slow_paths.pop() {
+            slow(self);
+        }
+    }
+    pub fn check_exception(&mut self) {
+        let slow = self.masm.branch32_imm(RelationalCondition::Equal, 1, RET0);
+            self.slow_paths.push(Box::new(move |jit| {
+                slow.link(&mut jit.masm);
+                jit.masm.function_epilogue();
+                jit.masm.ret();
+            }));
+    }
+    pub fn private_compile_bytecode(&mut self) {
+    
+        for (ix, ins) in self.code_block.instructions.iter().enumerate() {
             let lbl = self.masm.label();
             self.ins_to_lbl.insert(ix as _, lbl);
             match *ins {
@@ -30,7 +54,7 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Jump(offset) => {
                     let to = ix as isize + offset as isize;
-                    assert!(to < self.ins.len() as isize && to >= 0);
+                    assert!(to < self.code_block.instructions.len() as isize && to >= 0);
                     let jmp = self.masm.jump();
                     self.jumps_to_finalize.push((to as _, jmp));
                 }
@@ -67,7 +91,7 @@ impl<'a> JIT<'a> {
                     let slow_path_jump = self.masm.branch32_imm(RelationalCondition::Equal, 1, T0);
                     let label = self.masm.label();
                     // emit slow path at end of the function
-                    slow_paths.push(Box::new(move |jit| {
+                    self.slow_paths.push(Box::new(move |jit| {
                         slow_path_jump.link(&mut jit.masm);
                         #[cfg(target_arch = "x86_64")]
                         {
@@ -87,6 +111,14 @@ impl<'a> JIT<'a> {
                         j.link_to(&mut jit.masm, label);
                     }));
                 }
+                Ins::Enter => {
+                    for ix in 0..self.code_block.num_vars {
+                        self.masm.store64_imm64(
+                            crate::value::Value::VALUE_UNDEFINED,
+                            Self::address_for_reg(ix as _),
+                        );
+                    }
+                }
 
                 Ins::Add(left, right, dest) => {
                     self.get_register(left, T0);
@@ -99,12 +131,55 @@ impl<'a> JIT<'a> {
                     self.masm.move_i64(0, T0);
                     self.put_register(to, T0);
                 }
+                Ins::Call(this, func, dest, argc) => {
+                    self.get_register(func, T3);
+                    self.masm.prepare_call_with_arg_count(1);
+                    self.masm.pass_reg_as_arg(T3, 0);
+                    self.masm.move_i64(resolve_fn_addr as _, SCRATCH_REG);
+                    self.masm.call_reg(SCRATCH_REG, 1);
+                    let err = self.masm.branch32_imm(RelationalCondition::Equal, 1, RET0);
+                    self.masm.move_rr(RET1, T5);
+                    self.slow_paths.push(Box::new(move |jit: &mut JIT<'_>| {
+                        err.link(&mut jit.masm); // TODO!
+                    }));
+                    self.masm
+                        .add64_imm32(-(self.code_block.num_vars as i32 * 8), BP, SP);
+
+                    #[cfg(windows)]
+                    {
+                        self.push(RegisterID::ECX);
+                        //self.push(RegisterID::EDX);
+                        self.push(RegisterID::R8);
+                        self.push(RegisterID::R9);
+                        self.push(RegisterID::R10);
+                        self.push(RegisterID::R11);
+                        self.masm.sub32_imm(40, SP);
+                    }
+
+                    let r = self.masm.register_for_arg(0);
+                    self.masm.move_rr(T3, r);
+                    let r = self.masm.register_for_arg(1);
+                    self.get_register(this, T1);
+                    self.masm.move_rr(T1, r);
+                    self.masm.call_r(T5);
+
+                    self.masm
+                        .add64_imm32(-(self.code_block.num_vars as i32 * 8), BP, SP);
+                    #[cfg(windows)]
+                    {
+                        self.masm.sub32_imm(-40, SP);
+                        self.pop(RegisterID::R11);
+                        self.pop(RegisterID::R10);
+                        self.pop(RegisterID::R9);
+                        self.pop(RegisterID::R8);
+                        //self.pop(RegisterID::EDX);
+                        self.pop(RegisterID::ECX);
+                    }
+                    self.check_exception();
+                    self.put_register(dest, RET1);
+                }
                 _ => todo!(),
             }
-        }
-        self.masm.ret();
-        for slow_path in slow_paths {
-            slow_path(self);
         }
     }
 
@@ -215,7 +290,8 @@ mod tests {
     #[test]
     fn test_box_int32() {
         use masm::*;
-        let mut jit = JIT::new(&[]);
+        let c = CodeBlock::new();
+        let mut jit = JIT::new(&c);
         jit.masm.function_prologue(0);
         jit.box_int32_const(42, RET0, false);
         jit.masm.function_epilogue();
@@ -236,7 +312,8 @@ mod tests {
     #[test]
     fn test_box_bool() {
         use masm::*;
-        let mut jit = JIT::new(&[]);
+        let c = CodeBlock::new();
+        let mut jit = JIT::new(&c);
         jit.masm.function_prologue(0);
         jit.box_boolean_payload_const(true, RET0);
         jit.masm.function_epilogue();
@@ -257,7 +334,8 @@ mod tests {
     #[test]
     fn test_box_double() {
         use masm::*;
-        let mut jit = JIT::new(&[]);
+        let c = CodeBlock::new();
+        let mut jit = JIT::new(&c);
         jit.masm.function_prologue(0);
         let my_float = 42.42;
         jit.masm.load_double_at_addr(&my_float, FT0);
@@ -276,5 +354,16 @@ mod tests {
             assert!(res.is_double());
             assert!(res.as_number() == 42.42);
         }
+    }
+}
+use crate::function::*;
+use crate::object::*;
+use crate::vtable::VTable;
+extern "C" fn resolve_fn_addr(f: Ref<Obj>) -> (u8, u64) {
+    if f.header().vtblptr().to_usize() == (&FUNCTION_VTBL as *const VTable as usize) {
+        let addr = f.cast::<Function>();
+        (1, addr.func_ptr as _)
+    } else {
+        (0, 0)
     }
 }

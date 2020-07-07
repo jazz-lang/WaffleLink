@@ -13,3 +13,4 @@ pub type JITFunction = extern "C" fn(&mut CallFrame) -> WResult;
 pub type JITTrampoline = extern "C" fn(&mut CallFrame, usize) -> WResult;
 
 pub extern "C" fn safepoint_slow_path(_sp: *mut u8) {}
+

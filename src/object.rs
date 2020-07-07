@@ -285,7 +285,9 @@ impl Obj {
     pub fn header_mut(&mut self) -> &mut Header {
         &mut self.header
     }
-
+    pub fn cast<T>(&self) -> Ref<T> {
+        unsafe { std::mem::transmute(self) }
+    }
     #[inline(always)]
     pub fn data(&self) -> *const u8 {
         unsafe { (self as *const Self as *const u8).offset(Header::size() as _) }

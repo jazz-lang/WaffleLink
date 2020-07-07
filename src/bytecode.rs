@@ -1,5 +1,7 @@
+use crate::value::Value;
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum Ins {
+    Enter,
     Move(u8, u8),
     Swap(u8, u8),
     MoveInt(i32, u8),
@@ -53,4 +55,22 @@ pub enum Ins {
     ),
 
     Return(u8),
+}
+
+pub struct CodeBlock {
+    pub num_vars: u32,
+    pub num_args: u32,
+    pub instructions: Vec<Ins>,
+    pub constants: Vec<Value>,
+}
+
+impl CodeBlock {
+    pub fn new() -> Self {
+        Self {
+            num_vars: 0,
+            instructions: vec![],
+            num_args: 0,
+            constants: vec![],
+        }
+    }
 }

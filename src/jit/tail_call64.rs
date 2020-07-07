@@ -7,7 +7,8 @@ pub struct TailCallStub {
 
 impl TailCallStub {
     pub fn generate(mem: &mut Memory) -> Self {
-        let mut jit = JIT::new(&[]);
+        let c = crate::bytecode::CodeBlock::new();
+        let mut jit = JIT::new(&c);
 
         let masm = &mut jit.masm;
         #[cfg(target_arch = "x86_64")]
