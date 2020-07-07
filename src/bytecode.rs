@@ -33,7 +33,8 @@ pub enum Ins {
     Jump(i32),
     JumpIfZero(u8, i32),
     JumpIfNotZero(u8, i32),
-
+    TryCatch(u32 /* try block */, u32 /* catch block */),
+    GetException(u8),
     Call(
         u8,  /* this */
         u8,  /* function */

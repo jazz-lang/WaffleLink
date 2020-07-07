@@ -1,12 +1,19 @@
 //! Code generation for 64 bit architectures.
 use super::*;
 use crate::bytecode::*;
-
+pub mod add_generator;
+use masm::linkbuffer::*;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 use masm::x86_assembler;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
 use masm::x86masm::*;
+
 impl<'a> JIT<'a> {
+    pub fn load_label(&mut self, label: i32, to: Reg) {
+        let data = self.masm.move_with_patch_ptr(0, to);
+        self.addr_loads.push((label, data));
+    }
+
     pub fn compile_bytecode(&mut self) {
         let mut slow_paths: Vec<Box<dyn FnOnce(&mut Self)>> = vec![];
         for (ix, ins) in self.ins.iter().enumerate() {
@@ -42,6 +49,13 @@ impl<'a> JIT<'a> {
                     self.put_register(x, T1);
                     self.put_register(y, T0);
                 }
+                Ins::TryCatch(try_, catch) => {
+                    self.load_label(catch as _, T0);
+                    if try_ as usize != ix + 1 {
+                        let j = self.masm.jump();
+                        self.jumps_to_finalize.push((try_ as _, j));
+                    }
+                }
                 Ins::Safepoint => {
                     // load address of safepoint page to T0 (AX on x86/x64)
                     self.masm
@@ -55,7 +69,7 @@ impl<'a> JIT<'a> {
                     // emit slow path at end of the function
                     slow_paths.push(Box::new(move |jit| {
                         slow_path_jump.link(&mut jit.masm);
-                        #[cfg(target_arch = "x86-64")]
+                        #[cfg(target_arch = "x86_64")]
                         {
                             // safepoint_slow_path requires first argument to be stack pointer. It is used
                             // by conservative roots scanner.
@@ -74,11 +88,21 @@ impl<'a> JIT<'a> {
                     }));
                 }
 
-                Ins::Add(left, right, dest) => {}
+                Ins::Add(left, right, dest) => {
+                    self.get_register(left, T0);
+                    self.get_register(right, T1);
+                    let mut add = add_generator::AddGenerator::new(T2, T0, T1, T2, FT0, FT1);
+                    add.generate_fastpath(self);
+                    self.put_register(dest, T2);
+                }
+                Ins::GetException(to) => {
+                    self.masm.move_i64(0, T0);
+                    self.put_register(to, T0);
+                }
                 _ => todo!(),
             }
         }
-
+        self.masm.ret();
         for slow_path in slow_paths {
             slow_path(self);
         }
@@ -104,7 +128,9 @@ impl<'a> JIT<'a> {
         self.masm.move_gp_to_fp(result_gpr, fpr);
         fpr
     }
-
+    pub fn unbox_double_non_destructive(&mut self, reg: Reg, dest_fpr: FPReg, result: Reg) {
+        self.unbox_double_without_assertions(reg, result, dest_fpr);
+    }
     pub fn box_boolean_payload(&mut self, bool_gpr: Reg, payload: Reg) {
         self.masm
             .add32i(crate::value::Value::VALUE_FALSE as _, bool_gpr, payload);

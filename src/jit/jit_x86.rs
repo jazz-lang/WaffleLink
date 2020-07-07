@@ -4,12 +4,14 @@ use masm::x86_assembler::*;
 use masm::x86masm::*;
 pub const SP: RegisterID = RegisterID::ESP;
 pub const BP: RegisterID = RegisterID::EBP;
-
 use crate::bytecode::Ins;
+use linkbuffer::*;
+use masm::*;
 use std::collections::HashMap;
 pub struct JIT<'a> {
     pub ins_to_lbl: HashMap<i32, Label>,
     pub jumps_to_finalize: Vec<(i32, Jump)>,
+    pub addr_loads: Vec<(i32, DataLabelPtr)>,
     pub ins: &'a [Ins],
     pub masm: MacroAssemblerX86,
 }
@@ -21,7 +23,65 @@ impl<'a> JIT<'a> {
             jumps_to_finalize: vec![],
             ins: code,
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
+            addr_loads: vec![],
         }
+    }
+    pub fn finalize(mut self, mem: &mut Memory, dism: bool) -> (*mut u8, usize) {
+        use capstone::prelude::*;
+
+        if dism {
+            let cs = Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode64)
+                .syntax(arch::x86::ArchSyntax::Att)
+                .detail(true)
+                .build()
+                .expect("Failed to create Capstone object");
+            let code = self.masm.asm.data();
+            let insns = cs.disasm_all(code, 0x0);
+            for i in insns.unwrap().iter() {
+                println!("{}", i);
+            }
+        }
+        self.link_jumps();
+        let code = mem.allocate(self.masm.asm.data().len(), 8).unwrap();
+        let buf = LinkBuffer::<MacroAssemblerX86>::new(code);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.masm.asm.data().as_ptr(),
+                code,
+                self.masm.asm.data().len(),
+            );
+        }
+        for (label, load) in self.addr_loads.iter() {
+            unsafe {
+                println!("{}", load.asm_label().0);
+                println!("{:p}", code.offset(load.asm_label().0 as i32 as isize));
+                let label = self.ins_to_lbl.get(label).unwrap();
+                buf.link_data(
+                    load.asm_label(),
+                    code.offset(label.asm_label().0 as i32 as isize),
+                );
+            }
+        }
+        if dism {
+            let cs = Capstone::new()
+                .x86()
+                .mode(arch::x86::ArchMode::Mode64)
+                .syntax(arch::x86::ArchSyntax::Att)
+                .detail(true)
+                .build()
+                .expect("Failed to create Capstone object");
+            let insns = cs.disasm_all(
+                unsafe { std::slice::from_raw_parts(code, self.masm.asm.data().len()) },
+                code as _,
+            );
+            for i in insns.unwrap().iter() {
+                println!("{}", i);
+            }
+        }
+        mem.set_readable_and_executable_ptr(code, self.masm.asm.data().len());
+        (code, self.masm.asm.data().len())
     }
     pub fn link_jumps(&mut self) {
         for j in self.jumps_to_finalize.iter() {
@@ -111,7 +171,7 @@ pub const FT3: FPReg = FPReg::XMM3;
 pub const FT4: FPReg = FPReg::XMM4;
 pub const FT5: FPReg = FPReg::XMM5;
 
-pub const REG_CALLFRAME: RegisterID = RegisterID::R13;
+pub const REG_CALLFRAME: RegisterID = RegisterID::R12;
 pub const NUMBER_TAG_REGISTER: RegisterID = RegisterID::R14;
 pub const NOT_CELL_MASK_REGISTER: RegisterID = RegisterID::R15;
 
