@@ -3,13 +3,8 @@ use crate::gc::*;
 use crate::value::*;
 use crate::vtable::VTable;
 use std;
-use std::cmp;
-use std::ffi::CString;
-use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::ptr;
-use std::slice;
-use std::str;
 use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct Header {
     vtable: AtomicUsize,
@@ -19,8 +14,7 @@ const MARK_BITS: usize = 2;
 const MARK_MASK: usize = (2 << MARK_BITS) - 1;
 const FWD_MASK: usize = !0 & !MARK_MASK;
 impl Header {
-    #[cfg(test)]
-    const fn new() -> Header {
+    pub const fn new() -> Header {
         Header {
             vtable: AtomicUsize::new(0),
             fwdptr: AtomicUsize::new(0),

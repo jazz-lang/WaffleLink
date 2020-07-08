@@ -1,9 +1,10 @@
 use crate::stack::callframe::CallFrame;
 use crate::value::*;
-use masm::x86_assembler::*;
-use masm::x86masm::*;
+pub use masm::x86_assembler::*;
+pub use masm::x86masm::*;
 pub const SP: RegisterID = RegisterID::ESP;
 pub const BP: RegisterID = RegisterID::EBP;
+use super::*;
 use crate::bytecode::CodeBlock;
 use linkbuffer::*;
 use masm::*;
@@ -15,8 +16,14 @@ pub struct JIT<'a> {
     pub code_block: &'a CodeBlock,
     pub masm: MacroAssemblerX86,
     pub slow_paths: Vec<Box<dyn FnOnce(&mut Self)>>,
+    pub labels: Vec<Label>,
+    pub jmptable: Vec<JumpTable>,
+    pub slow_cases: Vec<SlowCaseEntry>,
+    pub calls: Vec<CallRecord>,
+    pub call_compilation_info: Vec<CallCompilationInfo>,
+    pub link_buffer: LinkBuffer<MacroAssemblerX86>,
+    pub bytecode_index: usize,
 }
-
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
         Self {
@@ -26,6 +33,13 @@ impl<'a> JIT<'a> {
             code_block: code,
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
             addr_loads: vec![],
+            labels: vec![],
+            jmptable: vec![],
+            calls: vec![],
+            slow_cases: vec![],
+            call_compilation_info: vec![],
+            bytecode_index: 0,
+            link_buffer: LinkBuffer::new(0 as *mut _),
         }
     }
     pub fn finalize(mut self, mem: &mut Memory, dism: bool) -> (*mut u8, usize) {

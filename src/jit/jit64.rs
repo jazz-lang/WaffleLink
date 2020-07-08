@@ -39,7 +39,7 @@ impl<'a> JIT<'a> {
         }));
     }
     pub fn private_compile_bytecode(&mut self) {
-        for (ix, ins) in self.code_block.instructions.iter().enumerate() {
+        /*for (ix, ins) in self.code_block.instructions.iter().enumerate() {
             let lbl = self.masm.label();
             self.ins_to_lbl.insert(ix as _, lbl);
             match *ins {
@@ -179,7 +179,7 @@ impl<'a> JIT<'a> {
                 }
                 _ => todo!(),
             }
-        }
+        }*/
     }
 
     pub fn box_double(&mut self, src: FPReg, dest: Reg, has_nr: bool) -> Reg {

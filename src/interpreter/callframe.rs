@@ -24,10 +24,6 @@ use virtual_register::*;
 pub struct CallFrame(Register);
 
 impl CallFrame {
-    pub fn registers(&self) -> *mut Register {
-        self as *const Self as *mut _
-    }
-
     pub fn caller_frame_and_pc(&self) -> &mut CallerFrameAndPc {
         unsafe { &mut *std::mem::transmute::<_, *mut CallerFrameAndPc>(self) }
     }
@@ -81,9 +77,13 @@ impl CallFrame {
     pub unsafe fn get_argument_unsafe(&self, idx: usize) -> Value {
         return (*self.registers().offset(idx as _)).u.value;
     }
+    pub fn registers(&self) -> *mut Register {
+        self as *const Self as *mut _
+    }
     pub const fn this_argument_offset() -> i32 {
         Self::argument_offset_including_this(0)
     }
+
     pub fn this(&self) -> Value {
         unsafe {
             (*self.registers().offset(Self::this_argument_offset() as _))
@@ -140,6 +140,9 @@ impl CallFrame {
         if self.code_block().is_null() {
             return self.registers();
         }
-        unimplemented!()
+        unsafe {
+            self.registers()
+                .offset((&*self.code_block()).stack_pointer_offset() as _)
+        }
     }
 }
