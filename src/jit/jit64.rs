@@ -19,7 +19,7 @@ impl<'a> JIT<'a> {
         let frame_top_offset = self.code_block.num_vars as i32 * 8;
         self.masm.add64_imm32(-frame_top_offset, BP, T1);
         self.masm.move_rr(T1, SP);
-         = self.private_compile_bytecode();
+        self.private_compile_bytecode();
 
         self.function_epilogue();
         self.masm.ret();
@@ -32,14 +32,13 @@ impl<'a> JIT<'a> {
     }
     pub fn check_exception(&mut self) {
         let slow = self.masm.branch32_imm(RelationalCondition::Equal, 1, RET0);
-            self.slow_paths.push(Box::new(move |jit| {
-                slow.link(&mut jit.masm);
-                jit.masm.function_epilogue();
-                jit.masm.ret();
-            }));
+        self.slow_paths.push(Box::new(move |jit| {
+            slow.link(&mut jit.masm);
+            jit.masm.function_epilogue();
+            jit.masm.ret();
+        }));
     }
     pub fn private_compile_bytecode(&mut self) {
-    
         for (ix, ins) in self.code_block.instructions.iter().enumerate() {
             let lbl = self.masm.label();
             self.ins_to_lbl.insert(ix as _, lbl);

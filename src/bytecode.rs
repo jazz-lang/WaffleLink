@@ -1,4 +1,5 @@
 use crate::value::Value;
+pub mod virtual_register;
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum Ins {
     Enter,

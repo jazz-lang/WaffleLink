@@ -10,6 +10,7 @@ pub mod builtins;
 pub mod bytecode;
 pub mod function;
 pub mod gc;
+pub mod interpreter;
 pub mod jit;
 pub mod object;
 pub mod pure_nan;
