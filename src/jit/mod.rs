@@ -67,6 +67,7 @@ pub struct JumpTable {
     pub to_bytecode_offset: u32,
 }
 
+#[derive(Copy, Clone)]
 pub struct SlowCaseEntry {
     pub from: Jump,
     pub to: u32,
@@ -119,7 +120,7 @@ impl<'a> JIT<'a> {
     }
     pub fn compile_without_linking(&mut self) {
         self.emit_function_prologue();
-        let frame_top_offset = self.stack_pointer_offset_for(self.code_block);
+        let frame_top_offset = self.stack_pointer_offset_for(self.code_block) * 8;
         // let max_frame_size = -frame_top_offset;
         #[cfg(target_pointer_width = "64")]
         {
@@ -135,7 +136,8 @@ impl<'a> JIT<'a> {
         self.materialize_tag_check_regs();
 
         self.private_compile_bytecode();
-
+        self.private_compile_link_pass();
+        self.private_compile_slow_cases();
         stack_overflow.link(&mut self.masm);
         if MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL != 0 {
             #[cfg(target_pointer_width = "64")]
@@ -149,6 +151,8 @@ impl<'a> JIT<'a> {
                     .add32i(-(MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL as i32), SP, SP);
             }
         }
+
+        self.link_buffer = JITLinkBuffer::from_masm(&mut self.masm);
     }
 
     fn private_compile_link_pass(&mut self) {
@@ -161,13 +165,52 @@ impl<'a> JIT<'a> {
         self.jmptable.clear();
     }
     fn private_compile_slow_cases(&mut self) {
-        /*for case in self.slow_cases.iter() {
+        let slow_cases = unsafe { &*(&self.slow_cases as *const Vec<SlowCaseEntry>) };
+        let mut iter = slow_cases.iter().peekable();
+        while let Some(case) = iter.peek() {
             self.bytecode_index = case.to as _;
-            // TODO
-        }*/
+            let curr = &self.code_block.instructions[self.bytecode_index];
+            match curr {
+                Ins::Add(_src1, _src2, _dest) => {
+                    self.emit_slow_op_add(curr, &mut iter);
+                }
+                _ => (),
+            }
+        }
+    }
+
+    pub fn link_slow_case(&mut self, case: SlowCaseEntry) {
+        if case.from.label().asm_label().is_set() {
+            case.from.link(&mut self.masm);
+        } else {
+        }
+    }
+
+    pub fn link_all_slow_cases_for_bytecode_index(
+        &mut self,
+        iter: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+        idx: u32,
+    ) {
+        while let Some(item) = iter.next() {
+            if item.to == idx {
+                self.link_slow_case(*item);
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn link_all_slow_cases(
+        &mut self,
+        iter: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        self.link_all_slow_cases_for_bytecode_index(iter, self.bytecode_index as _);
     }
     pub fn link(&mut self) {
         let patch_buffer = &mut self.link_buffer;
+        if patch_buffer.did_fail_to_allocate() {
+            panic!("Cannot allocate link buf");
+        }
         while let Some(record) = self.calls.pop() {
             if record.callee != 0 {
                 patch_buffer.link_call(record.from, record.callee as *const _);
@@ -181,6 +224,25 @@ impl<'a> JIT<'a> {
                     patch_buffer.location_of_label(self.labels[off].asm_label()),
                 );
             }
+        }
+    }
+
+    pub fn disasm(&mut self) {
+        let code = self.link_buffer.code;
+        let size = self.link_buffer.size;
+        let code_slice = unsafe { std::slice::from_raw_parts(code, size) };
+        use capstone::prelude::*;
+
+        let cs = Capstone::new()
+            .x86()
+            .mode(arch::x86::ArchMode::Mode64)
+            .syntax(arch::x86::ArchSyntax::Att)
+            .detail(true)
+            .build()
+            .expect("Failed to create Capstone object");
+        let asm = cs.disasm_all(code_slice, 0x00).unwrap();
+        for i in asm.iter() {
+            println!("{}", i);
         }
     }
 

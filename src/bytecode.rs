@@ -5,7 +5,7 @@ pub mod call_link_info;
 pub mod opcode_size;
 pub mod virtual_register;
 use virtual_register::VirtualRegister;
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub enum Ins {
     Enter,
     Move(VirtualRegister, VirtualRegister),

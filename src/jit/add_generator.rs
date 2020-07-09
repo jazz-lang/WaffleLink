@@ -93,6 +93,7 @@ impl MathICGenerator for AddGenerator {
                 self.left,
                 scratch,
             ));
+
             jit.box_int32(scratch, self.result, true);
             end_jump_list.push(jit.masm.jump());
 
@@ -116,7 +117,7 @@ impl MathICGenerator for AddGenerator {
         }
 
         jit.masm.add_double_rr(self.right_fpr, self.left_fpr);
-
+        assert!(slow_path_jump_list.jumps.len() == 4);
         jit.box_double(self.left_fpr, self.result, true);
         true
     }

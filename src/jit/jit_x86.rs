@@ -22,6 +22,7 @@ pub struct JIT<'a> {
     pub link_buffer: LinkBuffer<MacroAssemblerX86>,
     pub bytecode_index: usize,
     pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
+    pub ins_to_mathic: HashMap<*const Ins, *mut u8>,
 }
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
@@ -30,12 +31,13 @@ impl<'a> JIT<'a> {
             ins_to_lbl: HashMap::new(),
             jumps_to_finalize: vec![],
             code_block: code,
+            ins_to_mathic_state: HashMap::new(),
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
             addr_loads: vec![],
             labels: vec![],
-            ins_to_mathic_state: HashMap::new(),
             jmptable: vec![],
             calls: vec![],
+            ins_to_mathic: HashMap::new(),
             slow_cases: vec![],
             call_compilation_info: vec![],
             bytecode_index: 0,

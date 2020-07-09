@@ -146,6 +146,19 @@ impl<T: MathICGenerator> MathIC<T> {
         }
         link_jump_out_of_line_snippet(self);
     }
+
+    pub fn finalize_inline_code(
+        &mut self,
+        state: &MathICGenerationState,
+        link_buffer: &mut JITLinkBuffer,
+    ) {
+        let start = link_buffer.location_of_label(state.fast_path_start.asm_label());
+        self.inline_start = start;
+        self.inline_end = link_buffer.location_of_label(state.fast_path_end.asm_label());
+
+        self.slow_path_call_loc = link_buffer.location_of_label(state.slow_path_call.label);
+        self.slow_path_start_loc = link_buffer.location_of_label(state.slow_path_start.asm_label());
+    }
 }
 
 pub trait MathICGenerator {

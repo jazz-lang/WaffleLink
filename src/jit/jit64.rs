@@ -31,6 +31,30 @@ impl<'a> JIT<'a> {
         }));
     }
     pub fn private_compile_bytecode(&mut self) {
+        for i in 0..self.code_block.instructions.len() {
+            self.bytecode_index = i as _;
+            let ins = &self.code_block.instructions[i];
+            match ins {
+                Ins::Add { .. } => self.emit_op_add(ins),
+                Ins::Return(val) => {
+                    self.emit_get_virtual_register(*val, RET0);
+                    self.masm.function_epilogue();
+                    self.masm.ret();
+                }
+                Ins::Enter => {
+                    let count = self.code_block.num_vars;
+                    for x in 0..count {
+                        self.masm.store64_imm64(
+                            unsafe { Value::undefined().u.as_int64 },
+                            Self::address_for_vreg(virtual_register::virtual_register_for_local(
+                                x as _,
+                            )),
+                        );
+                    }
+                }
+                _ => todo!(),
+            }
+        }
         /*for (ix, ins) in self.code_block.instructions.iter().enumerate() {
             let lbl = self.masm.label();
             self.ins_to_lbl.insert(ix as _, lbl);

@@ -17,7 +17,7 @@ pub const fn is_argument(operand: i32) -> bool {
     operand >= 0
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VirtualRegister {
     virtual_register: i32,
 }
@@ -57,7 +57,11 @@ impl VirtualRegister {
     pub const fn to_argument(self) -> i32 {
         Self::operand_to_argument(self.virtual_register)
     }
-
+    pub const fn new_constant_index(i: i32) -> Self {
+        Self {
+            virtual_register: i + FIRST_CONSTANT_REGISTER_INDEX,
+        }
+    }
     pub const fn to_constant_index(self) -> i32 {
         self.virtual_register - FIRST_CONSTANT_REGISTER_INDEX
     }
@@ -147,5 +151,11 @@ impl fmt::Display for VirtualRegister {
         }
 
         write!(f, "loc{}", self.to_local())
+    }
+}
+
+impl fmt::Debug for VirtualRegister {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
