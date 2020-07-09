@@ -1,13 +1,5 @@
 //! Code generation for 64 bit architectures.
 use super::*;
-use crate::bytecode::*;
-use crate::value::Value;
-pub mod add_generator;
-use masm::linkbuffer::*;
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-use masm::x86_assembler;
-#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
-use masm::x86masm::*;
 
 impl<'a> JIT<'a> {
     pub fn load_label(&mut self, label: i32, to: Reg) {

@@ -1,8 +1,16 @@
+#![allow(dead_code)]
 use std::sync::atomic::AtomicU8;
 
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {
         unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
+    };
+}
+
+#[macro_export]
+macro_rules! declare_call_frame {
+    ($vm: expr) => {
+        unsafe { &mut *vm.top_call_frame }
     };
 }
 pub(crate) static mut SAFEPOINT_PAGE: AtomicU8 = AtomicU8::new(0);
@@ -14,7 +22,6 @@ pub mod interpreter;
 pub mod jit;
 pub mod object;
 pub mod pure_nan;
-pub mod stack;
 pub mod value;
 pub mod vtable;
 
@@ -40,4 +47,8 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
         }
         None
     }
+}
+
+pub struct VM {
+    pub top_call_frame: *mut interpreter::callframe::CallFrame,
 }

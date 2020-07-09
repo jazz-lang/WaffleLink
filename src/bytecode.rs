@@ -2,63 +2,65 @@ use crate::jit::*;
 use crate::object::*;
 use crate::value::Value;
 pub mod call_link_info;
+pub mod opcode_size;
 pub mod virtual_register;
+use virtual_register::VirtualRegister;
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum Ins {
     Enter,
-    Move(u8, u8),
-    Swap(u8, u8),
-    MoveInt(i32, u8),
-    LoadArg(u32, u8),
-    SetArg(u8, u32),
-    Load(u8, u8, u8),
-    Store(u8, u8, u8),
-    LoadId(u32, u8, u8),
-    StoreId(u8, u32, u8),
-    LoadConst(u32, u8),
+    Move(VirtualRegister, VirtualRegister),
+    Swap(VirtualRegister, VirtualRegister),
+    MoveInt(i32, VirtualRegister),
+    LoadArg(u32, VirtualRegister),
+    SetArg(VirtualRegister, u32),
+    Load(VirtualRegister, VirtualRegister, VirtualRegister),
+    Store(VirtualRegister, VirtualRegister, VirtualRegister),
+    LoadId(u32, VirtualRegister, VirtualRegister),
+    StoreId(VirtualRegister, u32, VirtualRegister),
+    LoadConst(u32, VirtualRegister),
 
-    LoadGlobal(u32 /* id constant */, u8),
-    StoreGlobal(u8, u32 /* id constant */),
+    LoadGlobal(u32 /* id constant */, VirtualRegister),
+    StoreGlobal(VirtualRegister, u32 /* id constant */),
 
-    Add(u8, u8, u8),
-    Sub(u8, u8, u8),
-    Mul(u8, u8, u8),
-    Div(u8, u8, u8),
-    Rem(u8, u8, u8),
-    LShift(u8, u8, u8),
-    RShift(u8, u8, u8),
-    URShift(u8, u8, u8),
-    Equal(u8, u8, u8),
-    NotEqual(u8, u8, u8),
-    Greater(u8, u8, u8),
-    GreaterOrEqual(u8, u8, u8),
-    Less(u8, u8, u8),
-    LessOrEqul(u8, u8, u8),
+    Add(VirtualRegister, VirtualRegister, VirtualRegister),
+    Sub(VirtualRegister, VirtualRegister, VirtualRegister),
+    Mul(VirtualRegister, VirtualRegister, VirtualRegister),
+    Div(VirtualRegister, VirtualRegister, VirtualRegister),
+    Rem(VirtualRegister, VirtualRegister, VirtualRegister),
+    LShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    RShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    URShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    Equal(VirtualRegister, VirtualRegister, VirtualRegister),
+    NotEqual(VirtualRegister, VirtualRegister, VirtualRegister),
+    Greater(VirtualRegister, VirtualRegister, VirtualRegister),
+    GreaterOrEqual(VirtualRegister, VirtualRegister, VirtualRegister),
+    Less(VirtualRegister, VirtualRegister, VirtualRegister),
+    LessOrEqul(VirtualRegister, VirtualRegister, VirtualRegister),
     Safepoint,
     LoopHint,
     Jump(i32),
-    JumpIfZero(u8, i32),
-    JumpIfNotZero(u8, i32),
+    JumpIfZero(VirtualRegister, i32),
+    JumpIfNotZero(VirtualRegister, i32),
     TryCatch(u32 /* try block */, u32 /* catch block */),
-    GetException(u8),
+    GetException(VirtualRegister),
     Call(
-        u8,  /* this */
-        u8,  /* function */
-        u8,  /* dest */
-        u32, /* argc */
+        VirtualRegister, /* this */
+        VirtualRegister, /* function */
+        VirtualRegister, /* dest */
+        u32,             /* argc */
     ),
     TailCall(
-        u8,  /* this */
-        u8,  /* function */
-        u32, /* argc */
+        VirtualRegister, /* this */
+        VirtualRegister, /* function */
+        u32,             /* argc */
     ),
     New(
-        u8,  /* constructor or object */
-        u8,  /* dest */
-        u32, /* argc */
+        VirtualRegister, /* constructor or object */
+        VirtualRegister, /* dest */
+        u32,             /* argc */
     ),
 
-    Return(u8),
+    Return(VirtualRegister),
 }
 
 #[repr(C)]
@@ -70,6 +72,12 @@ pub struct CodeBlock {
     pub instructions: Vec<Ins>,
     pub jit_type: JITType,
     pub constants: Vec<Value>,
+    pub jit_data: parking_lot::Mutex<JITData>,
+}
+#[derive(Default)]
+pub struct JITData {
+    pub add_ics: Vec<mathic::MathIC<add_generator::AddGenerator>>,
+    pub code_map: std::collections::HashMap<u32, *mut u8>,
 }
 
 impl CodeBlock {
@@ -82,9 +90,23 @@ impl CodeBlock {
             constants: vec![],
             callee_locals: 0,
             jit_type: JITType::Baseline,
+            jit_data: parking_lot::Mutex::new(JITData::default()),
         }
     }
-
+    pub fn get_constant(&self, src: VirtualRegister) -> Value {
+        if src.is_constant() {
+            if (src.to_constant_index() as usize) < self.constants.len() {
+                self.constants[src.to_constant_index() as usize]
+            } else {
+                Value::undefined()
+            }
+        } else {
+            Value::undefined()
+        }
+    }
+    pub fn jit_data(&self) -> parking_lot::MutexGuard<'_, JITData> {
+        self.jit_data.lock()
+    }
     pub fn frame_register_count(&self) -> usize {
         match self.jit_type {
             JITType::Interp => 0,

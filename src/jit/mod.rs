@@ -1,11 +1,20 @@
+macro_rules! op_unreachable {
+    () => {
+        unsafe { std::hint::unreachable_unchecked() };
+    };
+}
 use crate::value::Value;
 use std::collections::HashMap;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod jit_x86;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub use jit_x86::*;
+pub mod add_generator;
+pub mod arithmetic;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
+pub mod mathic;
+pub mod operations;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
 use crate::builtins::WResult;
@@ -70,6 +79,22 @@ pub struct CallCompilationInfo {
 }
 
 impl<'a> JIT<'a> {
+    pub fn address_for_vreg(src: virtual_register::VirtualRegister) -> Mem {
+        return Mem::Base(BP, src.offset() * std::mem::size_of::<u64>() as i32);
+    }
+    pub fn emit_get_virtual_register(&mut self, src: virtual_register::VirtualRegister, dest: Reg) {
+        if src.is_constant() {
+            let value = self.code_block.get_constant(src);
+            self.masm.move_i64(unsafe { value.u.as_int64 }, dest);
+        } else {
+            self.masm.load64(Self::address_for_vreg(src), dest);
+        }
+    }
+
+    pub fn emit_put_virtual_register(&mut self, dst: virtual_register::VirtualRegister, from: Reg) {
+        self.masm.store64(from, Self::address_for_vreg(dst));
+    }
+
     pub fn emit_function_prologue(&mut self) {
         self.masm.push(BP);
         self.masm.move_rr(SP, BP);
@@ -152,10 +177,17 @@ impl<'a> JIT<'a> {
         for off in 0..self.labels.len() {
             if self.labels[off].asm_label().is_set() {
                 code_map.insert(
-                    off,
+                    off as u32,
                     patch_buffer.location_of_label(self.labels[off].asm_label()),
                 );
             }
         }
+    }
+
+    pub fn add_slow_case(&mut self, j: Jump) {
+        self.slow_cases.push(SlowCaseEntry {
+            from: j,
+            to: self.bytecode_index as _,
+        });
     }
 }

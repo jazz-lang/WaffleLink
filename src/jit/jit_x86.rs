@@ -1,5 +1,3 @@
-use crate::stack::callframe::CallFrame;
-use crate::value::*;
 pub use masm::x86_assembler::*;
 pub use masm::x86masm::*;
 pub const SP: RegisterID = RegisterID::ESP;
@@ -23,6 +21,7 @@ pub struct JIT<'a> {
     pub call_compilation_info: Vec<CallCompilationInfo>,
     pub link_buffer: LinkBuffer<MacroAssemblerX86>,
     pub bytecode_index: usize,
+    pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
 }
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
@@ -34,6 +33,7 @@ impl<'a> JIT<'a> {
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
             addr_loads: vec![],
             labels: vec![],
+            ins_to_mathic_state: HashMap::new(),
             jmptable: vec![],
             calls: vec![],
             slow_cases: vec![],
@@ -121,53 +121,18 @@ impl<'a> JIT<'a> {
     pub fn address_for_reg(reg: u8) -> Mem {
         Mem::Base(RegisterID::EBP, reg as i32 * 8)
     }
+    pub fn patchable_jump_size(&self) -> usize {
+        5
+    }
 }
 #[cfg(target_pointer_width = "64")]
 impl<'a> JIT<'a> {
-    pub fn get_callframe(&mut self, to: Reg) {
-        self.masm.move_rr(REG_CALLFRAME, to);
-    }
-    pub fn get_argument(&mut self, at: u32, to: Reg) {
-        let off = offset_of!(CallFrame, arguments);
-        self.masm.load64(Mem::Base(REG_CALLFRAME, off as _), to);
-        self.masm.load64(Mem::Base(to, at as i32 * 8), to);
-    }
-
-    pub fn get_register(&mut self, reg: u8, to: Reg) {
-        /* let off = offset_of!(CallFrame, registers);
-        self.masm.load64(Mem::Base(REG_CALLFRAME, off as _), to);
-        self.masm.load64(Mem::Base(to, reg as i32 * 8), to);*/
-        self.masm.load64(Self::address_for_reg(reg), to)
-    }
-    pub fn put_argument(&mut self, at: u32, src: Reg) {
-        let off = offset_of!(CallFrame, arguments);
-        self.masm.load64(Mem::Base(REG_CALLFRAME, off as _), src);
-        self.masm.store64(src, Mem::Base(src, at as i32 * 8));
-    }
-
     pub fn put_register(&mut self, reg: u8, src: Reg) {
         self.masm.store64(src, Self::address_for_reg(reg));
     }
 }
 #[cfg(target_pointer_width = "32")]
 impl<'a> JIT<'a> {
-    pub fn get_callframe(&mut self, to: Reg) {
-        self.masm.load32(Mem::Base(Reg::EBP, 0), to);
-    }
-    pub fn get_argument(&mut self, at: u32, tag: Reg, payload: Reg) {
-        let off = offset_of!(AsBits, payload) + (at as usize * 8);
-        let off1 = offset_of!(AsBits, tag) + (at as usize * 8);
-        let regs = offset_of!(CallFrame, arguments);
-        self.get_callframe(tag);
-        self.masm.load32(Mem::Base(tag, regs as _), payload);
-        self.masm.load32(Mem::Base(payload, off1 as _), tag);
-        self.masm.load32(Mem::Base(payload, off as _), payload);
-    }
-    pub fn get_register(&mut self, at: u8, tag: Reg, payload: Reg) {
-        self.masm.load32(Self::payload_address_for_reg(at), payload);
-        self.masm.load32(Self::tag_address_for_reg(at), tag);
-    }
-
     pub fn payload_address_for_reg(reg: u8) -> Mem {
         Mem::Base(
             RegisterID::EBP,
@@ -235,3 +200,5 @@ pub const NOT_CELL_MASK_REGISTER: RegisterID = RegisterID::R15;
 
 pub const RET0: Reg = Reg::EAX;
 pub const RET1: Reg = Reg::EDX;
+
+pub type JITLinkBuffer = LinkBuffer<MacroAssemblerX86>;

@@ -20,7 +20,6 @@ pub enum CallFrameSlot {
 use crate::bytecode::*;
 use crate::interpreter::register::*;
 use crate::value::Value;
-use virtual_register::*;
 pub struct CallFrame(Register);
 
 impl CallFrame {
