@@ -16,7 +16,7 @@ fn main() {
         OpcodeMetadata::new(),
         {
             let mut meta = OpcodeMetadata::new();
-            //meta.arith_profile.lhs_saw_int32();
+            meta.arith_profile.lhs_saw_int32();
             //meta.arith_profile.rhs_saw_int32();
             meta
         },
@@ -24,7 +24,7 @@ fn main() {
     ];
     cb.instructions = vec![
         Ins::Enter,
-        Ins::Add(
+        Ins::Sub(
             VirtualRegister::new_constant_index(0),
             VirtualRegister::new_constant_index(1),
             virtual_register_for_local(7),

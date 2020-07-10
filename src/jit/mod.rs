@@ -16,6 +16,7 @@ pub mod call;
 pub mod jit64;
 pub mod mathic;
 pub mod operations;
+pub mod sub_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
 use crate::builtins::WResult;
@@ -199,6 +200,7 @@ impl<'a> JIT<'a> {
             self.labels[i] = self.masm.label();
             let ins = &self.code_block.instructions[i];
             match ins {
+                Ins::Sub { .. } => self.emit_op_sub(ins),
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Return(val) => {
                     self.emit_get_virtual_register(*val, RET0);
@@ -230,6 +232,10 @@ impl<'a> JIT<'a> {
             match curr {
                 Ins::Add(_src1, _src2, _dest) => {
                     self.emit_slow_op_add(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::Sub { .. } => {
+                    self.emit_slow_op_sub(curr, &mut iter);
                     self.bytecode_index += 1;
                 }
                 _ => (),

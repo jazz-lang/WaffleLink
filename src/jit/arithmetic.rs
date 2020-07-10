@@ -47,6 +47,50 @@ impl<'a> JIT<'a> {
             _ => op_unreachable!(),
         }
     }
+    pub fn emit_op_sub(&mut self, op: &Ins) {
+        match op {
+            Ins::Sub(src1, src2, dest) => {
+                let meta = self.code_block.metadata(self.bytecode_index as _);
+                let math_ic = self.code_block.add_jit_subic(&meta.arith_profile);
+                self.ins_to_mathic
+                    .insert(op as *const Ins, math_ic as *mut MathIC<_> as *mut u8);
+                self.emit_mathic_fast_bin(
+                    math_ic,
+                    op,
+                    *src1,
+                    *src2,
+                    *dest,
+                    0 as *mut _,
+                    operations::operation_value_sub as *const u8,
+                );
+            }
+            _ => op_unreachable!(),
+        }
+    }
+
+    pub fn emit_slow_op_sub(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        self.link_all_slow_cases(slow_cases);
+        match op {
+            Ins::Sub(src1, src2, dest) => {
+                let ic = *self.ins_to_mathic.get(&(op as *const Ins)).unwrap();
+                let math_ic = unsafe { &mut *(ic as *mut MathIC<sub_generator::SubGenerator>) };
+                self.emit_mathic_slow_bin(
+                    math_ic,
+                    op,
+                    *src1,
+                    *src2,
+                    *dest,
+                    0xdead as *const _,
+                    operations::operation_value_sub_optimize as *const _,
+                );
+            }
+            _ => op_unreachable!(),
+        }
+    }
 
     pub fn emit_mathic_slow_bin<GEN: MathICGenerator + BinaryMathICGenerator>(
         &mut self,
@@ -85,9 +129,9 @@ impl<'a> JIT<'a> {
         self.emit_get_virtual_register(src2, right_reg);
         let slow_path_call = {
             self.masm.prepare_call_with_arg_count(4);
-            self.masm.pass_ptr_as_arg(math_ic as *mut _ as usize, 3);
             self.masm.pass_reg_as_arg(right_reg, 2);
             self.masm.pass_reg_as_arg(left_reg, 1);
+            self.masm.pass_ptr_as_arg(math_ic as *mut _ as usize, 3);
             self.masm
                 .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0); // TODO: Put VM pointer as first argument
             self.update_top_frame();

@@ -78,6 +78,7 @@ pub struct CodeBlock {
 #[derive(Default)]
 pub struct JITData {
     pub add_ics: HashMap<*const ArithProfile, mathic::MathIC<add_generator::AddGenerator>>,
+    pub sub_ics: HashMap<*const ArithProfile, mathic::MathIC<sub_generator::SubGenerator>>,
     pub code_map: std::collections::HashMap<u32, *mut u8>,
 }
 
@@ -134,7 +135,19 @@ impl CodeBlock {
             .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
             .unwrap()
     }
-
+    pub fn add_jit_subic(
+        &self,
+        profile: *const ArithProfile,
+    ) -> &mut mathic::MathIC<sub_generator::SubGenerator> {
+        let mut data = self.jit_data();
+        let mut ic = mathic::MathIC::<sub_generator::SubGenerator>::new();
+        ic.arith_profile = Some(profile);
+        data.sub_ics.insert(profile, ic);
+        data.sub_ics
+            .get(&profile)
+            .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
+            .unwrap()
+    }
     pub fn stack_pointer_offset(&self) -> i32 {
         virtual_register::virtual_register_for_local(self.frame_register_count() as i32 - 1)
             .offset()
