@@ -120,6 +120,9 @@ impl<'a> JIT<'a> {
     }
     pub fn compile_without_linking(&mut self) {
         self.emit_function_prologue();
+        self.labels = Vec::with_capacity(self.code_block.instructions.len());
+        self.labels
+            .resize(self.code_block.instructions.len(), Label::default());
         let frame_top_offset = self.stack_pointer_offset_for(self.code_block) * 8;
         // let max_frame_size = -frame_top_offset;
         #[cfg(target_pointer_width = "64")]
@@ -173,12 +176,18 @@ impl<'a> JIT<'a> {
             match curr {
                 Ins::Add(_src1, _src2, _dest) => {
                     self.emit_slow_op_add(curr, &mut iter);
+                    self.bytecode_index += 1;
                 }
                 _ => (),
             }
+            let jump = self.masm.jump();
+            self.emit_jump_slow_to_hot(jump, 0);
         }
     }
-
+    pub fn emit_jump_slow_to_hot(&mut self, j: Jump, relative_offset: i32) {
+        let label = self.labels[(self.bytecode_index as i32 as i32 + relative_offset) as usize];
+        j.link_to(&mut self.masm, label);
+    }
     pub fn link_slow_case(&mut self, case: SlowCaseEntry) {
         if case.from.label().asm_label().is_set() {
             case.from.link(&mut self.masm);

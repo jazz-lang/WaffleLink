@@ -33,6 +33,7 @@ impl<'a> JIT<'a> {
     pub fn private_compile_bytecode(&mut self) {
         for i in 0..self.code_block.instructions.len() {
             self.bytecode_index = i as _;
+            self.labels[i] = self.masm.label();
             let ins = &self.code_block.instructions[i];
             match ins {
                 Ins::Add { .. } => self.emit_op_add(ins),
