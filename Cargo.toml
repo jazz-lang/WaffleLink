@@ -10,6 +10,9 @@ version = "0.1.0"
 masm = { path = "masm-rs" }
 capstone = "0.7"
 parking_lot = "0.11"
+simple_logger = "*"
+num-bigint = "0.3"
+log = "0.4"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 

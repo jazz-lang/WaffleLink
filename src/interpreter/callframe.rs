@@ -135,6 +135,14 @@ impl CallFrame {
         };
     }
 
+    pub fn code_block_ref(&self) -> Option<&mut CodeBlock> {
+        if self.code_block().is_null() {
+            return None;
+        } else {
+            return Some(unsafe { &mut *self.code_block() });
+        }
+    }
+
     pub fn top_of_frame(&self) -> *mut Register {
         if self.code_block().is_null() {
             return self.registers();

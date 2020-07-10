@@ -17,9 +17,10 @@ pub mod mathic;
 pub mod operations;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
+
 use crate::builtins::WResult;
 use crate::bytecode::*;
-use crate::interpreter::callframe::CallFrame;
+use crate::interpreter::callframe::*;
 use crate::interpreter::stack_alignment::*;
 pub type JITFunction = extern "C" fn(&mut CallFrame) -> WResult;
 pub type JITTrampoline = extern "C" fn(&mut CallFrame, usize) -> WResult;
@@ -120,6 +121,14 @@ impl<'a> JIT<'a> {
     }
     pub fn compile_without_linking(&mut self) {
         self.emit_function_prologue();
+        self.masm.move_i64(self.code_block as *const _ as i64, T0);
+        self.masm.store64(
+            T0,
+            Mem::Base(
+                BP,
+                -virtual_register::virtual_register_for_local(1).offset() * 8,
+            ),
+        );
         self.labels = Vec::with_capacity(self.code_block.instructions.len());
         self.labels
             .resize(self.code_block.instructions.len(), Label::default());
@@ -157,7 +166,13 @@ impl<'a> JIT<'a> {
 
         self.link_buffer = JITLinkBuffer::from_masm(&mut self.masm);
     }
-
+    pub fn update_top_frame(&mut self) {
+        self.masm.move_i64(
+            &crate::get_vm().top_call_frame as *const *mut _ as i64,
+            SCRATCH_REG,
+        );
+        self.masm.store64(BP, Mem::Base(SCRATCH_REG, 0));
+    }
     fn private_compile_link_pass(&mut self) {
         for i in 0..self.jmptable.len() {
             self.jmptable[i].from.link_to(
@@ -167,7 +182,35 @@ impl<'a> JIT<'a> {
         }
         self.jmptable.clear();
     }
+    fn private_compile_bytecode(&mut self) {
+        for i in 0..self.code_block.instructions.len() {
+            self.bytecode_index = i as _;
+            self.labels[i] = self.masm.label();
+            let ins = &self.code_block.instructions[i];
+            match ins {
+                Ins::Add { .. } => self.emit_op_add(ins),
+                Ins::Return(val) => {
+                    self.emit_get_virtual_register(*val, RET0);
+                    self.masm.function_epilogue();
+                    self.masm.ret();
+                }
+                Ins::Enter => {
+                    let count = self.code_block.num_vars;
+                    for x in 0..count {
+                        self.masm.store64_imm64(
+                            unsafe { Value::undefined().u.as_int64 },
+                            Self::address_for_vreg(virtual_register::virtual_register_for_local(
+                                x as _,
+                            )),
+                        );
+                    }
+                }
+                _ => todo!(),
+            }
+        }
+    }
     fn private_compile_slow_cases(&mut self) {
+        // SAFE: we do not mutate slow_cases when generating slow paths.
         let slow_cases = unsafe { &*(&self.slow_cases as *const Vec<SlowCaseEntry>) };
         let mut iter = slow_cases.iter().peekable();
         while let Some(case) = iter.peek() {
@@ -234,6 +277,7 @@ impl<'a> JIT<'a> {
                 );
             }
         }
+        self.link_buffer.perform_finalization();
     }
 
     pub fn disasm(&mut self) {
@@ -249,7 +293,7 @@ impl<'a> JIT<'a> {
             .detail(true)
             .build()
             .expect("Failed to create Capstone object");
-        let asm = cs.disasm_all(code_slice, 0x00).unwrap();
+        let asm = cs.disasm_all(code_slice, code as _).unwrap();
         for i in asm.iter() {
             println!("{}", i);
         }
@@ -260,5 +304,22 @@ impl<'a> JIT<'a> {
             from: j,
             to: self.bytecode_index as _,
         });
+    }
+}
+
+pub fn disasm_code(code: *const u8, len: usize) {
+    let code_slice = unsafe { std::slice::from_raw_parts(code, len) };
+    use capstone::prelude::*;
+
+    let cs = Capstone::new()
+        .x86()
+        .mode(arch::x86::ArchMode::Mode64)
+        .syntax(arch::x86::ArchSyntax::Att)
+        .detail(true)
+        .build()
+        .expect("Failed to create Capstone object");
+    let asm = cs.disasm_all(code_slice, code as _).unwrap();
+    for i in asm.iter() {
+        println!("{}", i);
     }
 }

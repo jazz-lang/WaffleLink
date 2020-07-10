@@ -65,10 +65,42 @@ use mathic::*;
 impl MathICGenerator for AddGenerator {
     fn generate_inline(
         &mut self,
-        _jit: &mut JIT<'_>,
-        _state: &mut MathICGenerationState,
+        jit: &mut JIT<'_>,
+        state: &mut MathICGenerationState,
+        profile: Option<&ArithProfile>,
     ) -> MathICResult {
-        // TODO: Type info
+        let mut scratch = self.scratch_gpr;
+        let mut lhs = ObservedType::default().with_int32();
+        let mut rhs = ObservedType::default().with_int32();
+        if let Some(profile) = profile {
+            lhs = profile.lhs_observed_type();
+            rhs = profile.rhs_observed_type();
+        }
+
+        if lhs.is_only_non_number() && rhs.is_only_non_number() {
+            log::debug!("Non number operation, do not generate code");
+            return MathICResult::DontGenerate;
+        }
+        if lhs.is_only_int32() && rhs.is_only_int32() {
+            log::debug!("Generating code for int32 operation");
+            state
+                .slow_path_jumps
+                .push(jit.branch_if_not_int32(self.left, true));
+            state
+                .slow_path_jumps
+                .push(jit.branch_if_not_int32(self.right, true));
+            if self.left != self.result && self.right != self.result {
+                scratch = self.result;
+            }
+            state.slow_path_jumps.push(jit.masm.branch_add32(
+                ResultCondition::Overflow,
+                self.right,
+                self.left,
+                scratch,
+            ));
+            jit.box_int32(scratch, self.result, true);
+            return MathICResult::GenFastPath;
+        }
         return MathICResult::GenFullSnippet;
     }
 
@@ -81,6 +113,7 @@ impl MathICGenerator for AddGenerator {
     ) -> bool {
         if false {
         } else {
+            log::debug!("Emit call to patchable 'add' function");
             let left_not_int = jit.branch_if_not_int32(self.left, true);
             let right_not_int = jit.branch_if_not_int32(self.right, true);
             let mut scratch = self.scratch_gpr;
@@ -117,7 +150,7 @@ impl MathICGenerator for AddGenerator {
         }
 
         jit.masm.add_double_rr(self.right_fpr, self.left_fpr);
-        assert!(slow_path_jump_list.jumps.len() == 4);
+
         jit.box_double(self.left_fpr, self.result, true);
         true
     }

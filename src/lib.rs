@@ -14,6 +14,7 @@ macro_rules! declare_call_frame {
     };
 }
 pub(crate) static mut SAFEPOINT_PAGE: AtomicU8 = AtomicU8::new(0);
+pub mod bigint;
 pub mod builtins;
 pub mod bytecode;
 pub mod function;
@@ -24,7 +25,6 @@ pub mod object;
 pub mod pure_nan;
 pub mod value;
 pub mod vtable;
-
 pub struct MutatingVecIter<'a, T>(&'a mut Vec<T>, usize);
 
 impl<'a, T> MutatingVecIter<'a, T> {
@@ -51,4 +51,31 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
 
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
+}
+
+impl VM {
+    pub fn new() -> Self {
+        Self {
+            top_call_frame: std::ptr::null_mut(),
+        }
+    }
+    pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {
+        if self.top_call_frame.is_null() {
+            return None;
+        } else {
+            return Some(unsafe { &mut *self.top_call_frame });
+        }
+    }
+}
+
+pub static mut VM_PTR: *mut VM = std::ptr::null_mut();
+
+pub fn set_vm(vm: *const VM) {
+    unsafe {
+        VM_PTR = vm as *mut _;
+    }
+}
+
+pub fn get_vm() -> &'static mut VM {
+    unsafe { &mut *VM_PTR }
 }

@@ -6,10 +6,8 @@ impl<'a> JIT<'a> {
     pub fn emit_op_add(&mut self, op: &Ins) {
         match op {
             Ins::Add(src1, src2, dest) => {
-                let math_ic = MathIC::<AddGenerator>::new();
-                let mut jit_data = self.code_block.jit_data();
-                jit_data.add_ics.push(math_ic);
-                let math_ic = jit_data.add_ics.last_mut().unwrap();
+                let meta = self.code_block.metadata(self.bytecode_index as _);
+                let math_ic = self.code_block.add_jit_addic(&meta.arith_profile);
                 self.ins_to_mathic
                     .insert(op as *const Ins, math_ic as *mut MathIC<_> as *mut u8);
                 self.emit_mathic_fast_bin(
@@ -43,7 +41,7 @@ impl<'a> JIT<'a> {
                     *src2,
                     *dest,
                     0xdead as *const _,
-                    0xdead as *const _,
+                    operations::operation_value_add_optimize as *const _,
                 );
             }
             _ => op_unreachable!(),
@@ -60,6 +58,7 @@ impl<'a> JIT<'a> {
         _profiled_fn: *const u8, // TODO: Type info
         repatch_fn: *const u8,
     ) {
+        log::debug!("[JIT Arithmetic] Emit slow MathIC case");
         let label = self.masm.label();
         self.ins_to_mathic_state
             .get_mut(&(ins as *const Ins))
@@ -85,11 +84,13 @@ impl<'a> JIT<'a> {
         self.emit_get_virtual_register(src1, left_reg);
         self.emit_get_virtual_register(src2, right_reg);
         let slow_path_call = {
-            self.masm.prepare_call_with_arg_count(3);
-            self.masm.prepare_call_with_arg_count(3);
+            self.masm.prepare_call_with_arg_count(4);
+            self.masm.pass_ptr_as_arg(math_ic as *mut _ as usize, 3);
             self.masm.pass_reg_as_arg(right_reg, 2);
             self.masm.pass_reg_as_arg(left_reg, 1);
-            self.masm.pass_ptr_as_arg(0, 0); // TODO: Put VM pointer as first argument
+            self.masm
+                .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0); // TODO: Put VM pointer as first argument
+            self.update_top_frame();
             let call = self.masm.call_ptr_repatch_argc(repatch_fn, 3);
             self.masm.move_rr(RET0, result_reg);
             call
@@ -121,6 +122,7 @@ impl<'a> JIT<'a> {
         _profiled_fn: *const u8, // TODO: Type info
         non_profiled_fn: *const u8,
     ) {
+        log::debug!("[JIT Arithmetic] Emit fast MathIC case");
         let left_reg = T1;
         let right_reg = T2;
         let result_reg = T0;
@@ -152,11 +154,12 @@ impl<'a> JIT<'a> {
             self.masm.prepare_call_with_arg_count(3);
             self.masm.pass_reg_as_arg(right_reg, 2);
             self.masm.pass_reg_as_arg(left_reg, 1);
-            self.masm.pass_ptr_as_arg(0, 0); // TODO: Put VM pointer as first argument
+            self.masm
+                .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0); // TODO: Put VM pointer as first argument
+            self.update_top_frame();
             self.masm.call_ptr(non_profiled_fn);
             self.masm.move_rr(RET0, result_reg);
         } else {
-            assert!(unsafe { (&*state).slow_path_jumps.jumps.len() == 4 });
             // inline code generated, now we can generate slow path at end of the function.
             for j in unsafe { (&*state).slow_path_jumps.jumps.iter() } {
                 self.add_slow_case(*j);

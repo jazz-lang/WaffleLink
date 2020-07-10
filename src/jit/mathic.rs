@@ -17,7 +17,7 @@ pub struct MathIC<T: MathICGenerator> {
     slow_path_call_loc: *mut u8,
     slow_path_start_loc: *mut u8,
     generate_fastpath_on_repatch: bool,
-    arith_profile: Option<()>,
+    pub arith_profile: Option<*const ArithProfile>,
 }
 
 impl<T: MathICGenerator> MathIC<T> {
@@ -39,15 +39,33 @@ impl<T: MathICGenerator> MathIC<T> {
         state: &mut MathICGenerationState,
         should_profile: bool,
     ) -> bool {
+        log::debug!("[MathIC] Trying to generate inline code");
         state.fast_path_start = jit.masm.label();
         let start_size = jit.masm.asm.data().len();
-        // TODO: Collect type info
-        if let Some(ref _arith_profile) = self.arith_profile.as_ref() {
-            todo!();
+
+        if let Some(arith_profile) = self.arith_profile.map(|x| unsafe { &*x }) {
+            if arith_profile.is_observed_type_empty() {
+                // It looks like the MathIC has yet to execute. We don't want to emit code in this
+                // case for a couple reasons. First, the operation may never execute, so if we don't emit
+                // code, it's a win. Second, if the operation does execute, we can emit better code
+                // once we have an idea about the types.
+                log::debug!("[MathIC] No type info found, do not emit code");
+                state.slow_path_jumps.push(jit.masm.jump());
+                let _inline_size = jit.masm.asm.data().len() - start_size;
+                state.should_slow_path_repatch = true;
+                state.fast_path_end = jit.masm.label();
+                self.generate_fastpath_on_repatch = true;
+                return true;
+            }
         }
-        let result = self.generator.as_mut().unwrap().generate_inline(jit, state);
+        let result = self.generator.as_mut().unwrap().generate_inline(
+            jit,
+            state,
+            self.arith_profile.map(|x| unsafe { &*x }),
+        );
         match result {
             MathICResult::GenFastPath => {
+                log::debug!("[MathIC] Generating fast path patchable jump");
                 let inline_size = jit.masm.asm.data().len() - start_size;
                 if inline_size < jit.patchable_jump_size() {
                     let nops_to_emit = jit.patchable_jump_size() - inline_size;
@@ -60,6 +78,7 @@ impl<T: MathICGenerator> MathIC<T> {
                 return true;
             }
             MathICResult::GenFullSnippet => {
+                log::debug!("[MathIC] Generating full code snippet");
                 let mut end_jump_list = JumpList::new();
                 let result = self.generator.as_mut().unwrap().generate_fastpath(
                     jit,
@@ -75,20 +94,32 @@ impl<T: MathICGenerator> MathIC<T> {
                 }
                 return false;
             }
-            _ => return false,
+            MathICResult::DontGenerate => {
+                log::debug!("[MathIC] Do not generate code");
+                return false;
+            }
         }
     }
 
     pub fn generate_out_of_line(&mut self, code_block: &CodeBlock, call_replacement: *const u8) {
+        log::debug!("Generating out of line IC snippet:");
         let link_jump_out_of_line_snippet = |this: &mut Self| {
             let mut jit = JIT::new(code_block);
             let jump = jit.masm.jump();
-            let link_buffer = JITLinkBuffer::new(this.inline_start.clone());
+            let mut link_buffer = JITLinkBuffer::new(this.inline_start.clone());
+            link_buffer.size = jit.masm.asm.data().len();
             link_buffer.link_jump_ptr(jump.label().asm_label(), this.code);
+            log::debug!(
+                "Generated JIT code for MathIC: linking constant jump out of line stub: {:p}",
+                this.code
+            );
+            disasm_code(link_buffer.code, link_buffer.size);
         };
         let replace_call = |this: &mut Self| unsafe {
+            log::trace!("Replace call {:p}", call_replacement);
             #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
             {
+                assert!(!this.slow_path_call_loc.is_null());
                 X86Asm::repatch_pointer(
                     this.slow_path_call_loc
                         .offset(-(REPATCH_OFFSET_CALL_R11 as isize)),
@@ -103,20 +134,21 @@ impl<T: MathICGenerator> MathIC<T> {
             let generated_inline = self.generate_inline(&mut jit, &mut state, false);
             self.generate_fastpath_on_repatch = false;
             if generated_inline {
-                let jump_to_done = jit.masm.label();
+                let jump_to_done = jit.masm.jump();
                 let buffer = JITLinkBuffer::from_masm(&mut jit.masm);
                 if !buffer.did_fail_to_allocate() {
                     for j in state.slow_path_jumps.jumps.iter() {
                         buffer.link_jump_ptr(j.label().asm_label(), self.slow_path_start_loc);
-
                         self.code = buffer.code;
-                        if !state.should_slow_path_repatch {
-                            replace_call(self);
-                        }
-                        link_jump_out_of_line_snippet(self);
-                        return;
                     }
-                    buffer.link_jump_ptr(jump_to_done.asm_label(), self.inline_end);
+                    if !state.should_slow_path_repatch {
+                        replace_call(self);
+                    }
+                    buffer.link_jump_ptr(jump_to_done.label().asm_label(), self.inline_end);
+                    log::warn!("Generated IC snippet:");
+                    disasm_code(buffer.code, buffer.size);
+                    link_jump_out_of_line_snippet(self);
+                    return;
                 }
             }
         }
@@ -144,7 +176,10 @@ impl<T: MathICGenerator> MathIC<T> {
         for j in slow_path_jump_list.jumps.iter() {
             buffer.link_jump_ptr(j.label().asm_label(), self.slow_path_start_loc);
         }
+        self.code = buffer.code;
+        disasm_code(self.code, buffer.size);
         link_jump_out_of_line_snippet(self);
+        log::debug!("[MathIC] Generated code");
     }
 
     pub fn finalize_inline_code(
@@ -166,6 +201,7 @@ pub trait MathICGenerator {
         &mut self,
         jit: &mut JIT<'_>,
         state: &mut MathICGenerationState,
+        profile: Option<&ArithProfile>,
     ) -> MathICResult;
     fn generate_fastpath(
         &mut self,

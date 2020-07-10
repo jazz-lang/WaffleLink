@@ -3,7 +3,10 @@ use crate::object::*;
 use crate::value::Value;
 pub mod call_link_info;
 pub mod opcode_size;
+pub mod profile;
 pub mod virtual_register;
+pub use profile::*;
+use std::collections::HashMap;
 use virtual_register::VirtualRegister;
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub enum Ins {
@@ -73,10 +76,11 @@ pub struct CodeBlock {
     pub jit_type: JITType,
     pub constants: Vec<Value>,
     pub jit_data: parking_lot::Mutex<JITData>,
+    pub metadata: Vec<OpcodeMetadata>,
 }
 #[derive(Default)]
 pub struct JITData {
-    pub add_ics: Vec<mathic::MathIC<add_generator::AddGenerator>>,
+    pub add_ics: HashMap<*const ArithProfile, mathic::MathIC<add_generator::AddGenerator>>,
     pub code_map: std::collections::HashMap<u32, *mut u8>,
 }
 
@@ -91,6 +95,7 @@ impl CodeBlock {
             callee_locals: 0,
             jit_type: JITType::Baseline,
             jit_data: parking_lot::Mutex::new(JITData::default()),
+            metadata: Vec::new(),
         }
     }
     pub fn get_constant(&self, src: VirtualRegister) -> Value {
@@ -115,8 +120,38 @@ impl CodeBlock {
         }
     }
 
+    pub fn metadata(&self, op: u32) -> &OpcodeMetadata {
+        &self.metadata[op as usize]
+    }
+
+    pub fn add_jit_addic(
+        &self,
+        profile: *const ArithProfile,
+    ) -> &mut mathic::MathIC<add_generator::AddGenerator> {
+        let mut data = self.jit_data();
+        let mut ic = mathic::MathIC::<add_generator::AddGenerator>::new();
+        ic.arith_profile = Some(profile);
+        data.add_ics.insert(profile, ic);
+        data.add_ics
+            .get(&profile)
+            .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
+            .unwrap()
+    }
+
     pub fn stack_pointer_offset(&self) -> i32 {
         virtual_register::virtual_register_for_local(self.frame_register_count() as i32 - 1)
             .offset()
+    }
+}
+
+pub struct OpcodeMetadata {
+    pub arith_profile: ArithProfile,
+}
+
+impl OpcodeMetadata {
+    pub fn new() -> Self {
+        Self {
+            arith_profile: ArithProfile::Binary(0),
+        }
     }
 }
