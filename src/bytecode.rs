@@ -8,6 +8,7 @@ pub mod virtual_register;
 pub use profile::*;
 use std::collections::HashMap;
 use virtual_register::VirtualRegister;
+
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
 pub enum Ins {
     Enter,
@@ -47,16 +48,12 @@ pub enum Ins {
     TryCatch(u32 /* try block */, u32 /* catch block */),
     GetException(VirtualRegister),
     Call(
-        VirtualRegister, /* this */
         VirtualRegister, /* function */
         VirtualRegister, /* dest */
         u32,             /* argc */
+        u32,             /* argv */
     ),
-    TailCall(
-        VirtualRegister, /* this */
-        VirtualRegister, /* function */
-        u32,             /* argc */
-    ),
+    TailCall(VirtualRegister /* function */, u32 /* argc */),
     New(
         VirtualRegister, /* constructor or object */
         VirtualRegister, /* dest */

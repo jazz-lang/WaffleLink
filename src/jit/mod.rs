@@ -11,13 +11,13 @@ pub mod jit_x86;
 pub use jit_x86::*;
 pub mod add_generator;
 pub mod arithmetic;
+pub mod call;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
 pub mod mathic;
 pub mod operations;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
-
 use crate::builtins::WResult;
 use crate::bytecode::*;
 use crate::interpreter::callframe::*;
@@ -74,6 +74,7 @@ pub struct SlowCaseEntry {
     pub to: u32,
 }
 
+#[derive(Default)]
 pub struct CallCompilationInfo {
     pub hot_path_begin: DataLabelPtr,
     pub hot_path_other: masm::Call,
@@ -81,6 +82,16 @@ pub struct CallCompilationInfo {
 }
 
 impl<'a> JIT<'a> {
+    pub fn branch_ptr_with_patch(
+        &mut self,
+        cond: RelationalCondition,
+        left: Reg,
+        data_label: &mut DataLabelPtr,
+        initial: usize,
+    ) -> Jump {
+        *data_label = self.masm.move_with_patch_ptr(initial, SCRATCH_REG);
+        return self.masm.branch64(cond, left, SCRATCH_REG);
+    }
     pub fn address_for_vreg(src: virtual_register::VirtualRegister) -> Mem {
         return Mem::Base(BP, src.offset() * std::mem::size_of::<u64>() as i32);
     }
@@ -236,6 +247,16 @@ impl<'a> JIT<'a> {
             case.from.link(&mut self.masm);
         } else {
         }
+    }
+
+    pub fn emit_naked_call(&mut self, ptr: *const u8) -> masm::Call {
+        let call = self.masm.near_call();
+        self.calls.push(CallRecord {
+            from: call,
+            idx: self.bytecode_index,
+            callee: ptr as usize,
+        });
+        call
     }
 
     pub fn link_all_slow_cases_for_bytecode_index(
