@@ -1,3 +1,4 @@
 [submodule "masm-rs"]
 	path = masm-rs
 	url = https://github.com/playxe/masm-rs
+	branch = master
