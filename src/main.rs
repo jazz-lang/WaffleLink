@@ -16,8 +16,8 @@ fn main() {
         OpcodeMetadata::new(),
         {
             let mut meta = OpcodeMetadata::new();
-            meta.arith_profile.lhs_saw_int32();
-            //meta.arith_profile.rhs_saw_int32();
+            meta.arith_profile.lhs_saw_number();
+            meta.arith_profile.rhs_saw_number();
             meta
         },
         OpcodeMetadata::new(),
@@ -39,5 +39,5 @@ fn main() {
     let f: extern "C" fn() -> Value = unsafe { std::mem::transmute(jit.link_buffer.code) };
 
     println!("{}", f().to_int32());
-    //jit.disasm();
+    jit.disasm();
 }

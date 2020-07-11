@@ -44,7 +44,6 @@ impl MathICGenerator for MulGenerator {
             lhs = profile.lhs_observed_type();
             rhs = profile.rhs_observed_type();
         }
-
         if lhs.is_only_non_number() && rhs.is_only_non_number() {
             log::debug!("Non number operation, do not generate code");
             return MathICResult::DontGenerate;
@@ -104,6 +103,9 @@ impl MathICGenerator for MulGenerator {
         profile: Option<&mut ArithProfile>,
         should_profile: bool,
     ) -> bool {
+        if true {
+            return false;
+        }
         let left_not_int = jit.branch_if_not_int32(self.left, true);
         let right_not_int = jit.branch_if_not_int32(self.right, true);
 

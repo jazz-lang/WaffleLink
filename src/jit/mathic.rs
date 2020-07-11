@@ -109,6 +109,10 @@ impl<T: MathICGenerator> MathIC<T> {
             let jump = jit.masm.jump();
             let mut link_buffer = JITLinkBuffer::new(this.inline_start.clone());
             link_buffer.size = jit.masm.asm.data().len();
+            assert!(
+                jit.masm.asm.data().len() as isize
+                    <= this.inline_end as isize - this.inline_start as isize
+            );
             link_buffer.link_jump_ptr(jump.label().asm_label(), this.code);
             log::debug!(
                 "Generated JIT code for MathIC: linking constant jump out of line stub: {:p}",
@@ -117,7 +121,11 @@ impl<T: MathICGenerator> MathIC<T> {
             disasm_code(link_buffer.code, link_buffer.size);
         };
         let replace_call = |this: &mut Self| unsafe {
-            log::trace!("Replace call {:p}", call_replacement);
+            log::trace!(
+                "Replace call at 0x{:x} to {:p}",
+                this.slow_path_call_loc as isize - REPATCH_OFFSET_CALL_R11 as isize,
+                call_replacement
+            );
             #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
             {
                 assert!(!this.slow_path_call_loc.is_null());
@@ -164,6 +172,7 @@ impl<T: MathICGenerator> MathIC<T> {
             self.arith_profile.map(|x| unsafe { &mut *(x as *mut _) }),
             false,
         );
+        end_jump_list.push(jit.masm.jump());
         if !emitted_fast_path {
             return;
         }
