@@ -83,6 +83,33 @@ impl<'a> JIT<'a> {
         self.masm.move_rr(src, dest);
     }
 
+    pub fn branch_if_not_double_known_not_int32(&mut self, src: Reg, mode: bool) -> Jump {
+        if mode {
+            self.masm
+                .branch64_test(ResultCondition::Zero, src, NUMBER_TAG_REGISTER)
+        } else {
+            self.masm
+                .branch64_test_imm64(ResultCondition::Zero, src, Value::NUMBER_TAG)
+        }
+    }
+
+    pub fn branch_if_boolean(&mut self, reg: Reg, tmp: Reg) -> Jump {
+        self.masm.move_rr(reg, tmp);
+        self.masm.xor64_imm32(Value::VALUE_FALSE as _, tmp);
+        return self
+            .masm
+            .branch64_test_imm32(ResultCondition::NonZero, tmp, !1);
+    }
+    pub fn branch_if_not_cell(&mut self, reg: Reg, mode: bool) -> Jump {
+        if mode {
+            return self
+                .masm
+                .branch64_test(ResultCondition::NonZero, reg, NOT_CELL_MASK_REGISTER);
+        }
+        return self
+            .masm
+            .branch64_test_imm64(ResultCondition::NonZero, reg, Value::NOT_CELL_MASK);
+    }
     pub fn branch_if_not_number(&mut self, src: Reg, have_tag_regs: bool) -> Jump {
         if have_tag_regs {
             return self

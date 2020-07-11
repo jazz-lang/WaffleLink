@@ -19,7 +19,7 @@ pub const fn is_argument(operand: i32) -> bool {
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct VirtualRegister {
-    virtual_register: i32,
+    pub virtual_register: i32,
 }
 
 impl VirtualRegister {

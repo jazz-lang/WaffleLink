@@ -15,6 +15,7 @@ pub mod call;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
 pub mod mathic;
+pub mod mul_generator;
 pub mod operations;
 pub mod sub_generator;
 #[cfg(target_pointer_width = "64")]
@@ -202,6 +203,7 @@ impl<'a> JIT<'a> {
             match ins {
                 Ins::Sub { .. } => self.emit_op_sub(ins),
                 Ins::Add { .. } => self.emit_op_add(ins),
+                Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Return(val) => {
                     self.emit_get_virtual_register(*val, RET0);
                     self.masm.function_epilogue();
@@ -236,6 +238,10 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Sub { .. } => {
                     self.emit_slow_op_sub(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::Mul { .. } => {
+                    self.emit_slow_op_mul(curr, &mut iter);
                     self.bytecode_index += 1;
                 }
                 _ => (),

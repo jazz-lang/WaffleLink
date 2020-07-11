@@ -84,6 +84,7 @@ impl<T: MathICGenerator> MathIC<T> {
                     jit,
                     &mut end_jump_list,
                     &mut state.slow_path_jumps,
+                    self.arith_profile.map(|x| unsafe { &mut *(x as *mut _) }),
                     should_profile,
                 );
                 if result {
@@ -160,6 +161,7 @@ impl<T: MathICGenerator> MathIC<T> {
             &mut jit,
             &mut end_jump_list,
             &mut slow_path_jump_list,
+            self.arith_profile.map(|x| unsafe { &mut *(x as *mut _) }),
             false,
         );
         if !emitted_fast_path {
@@ -208,6 +210,7 @@ pub trait MathICGenerator {
         jit: &mut JIT<'_>,
         end_jump_list: &mut JumpList,
         slow_path_jump_list: &mut JumpList,
+        profile: Option<&mut ArithProfile>,
         should_profile: bool,
     ) -> bool;
 }

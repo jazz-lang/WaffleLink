@@ -17,6 +17,7 @@ pub(crate) static mut SAFEPOINT_PAGE: AtomicU8 = AtomicU8::new(0);
 pub mod bigint;
 pub mod builtins;
 pub mod bytecode;
+pub mod bytecompiler;
 pub mod function;
 pub mod gc;
 pub mod interpreter;

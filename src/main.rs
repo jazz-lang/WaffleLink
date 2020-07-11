@@ -24,7 +24,7 @@ fn main() {
     ];
     cb.instructions = vec![
         Ins::Enter,
-        Ins::Sub(
+        Ins::Mul(
             VirtualRegister::new_constant_index(0),
             VirtualRegister::new_constant_index(1),
             virtual_register_for_local(7),

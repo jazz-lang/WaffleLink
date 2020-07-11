@@ -1,3 +1,4 @@
+use crate::jit::*;
 use crate::value::Value;
 
 #[derive(Default, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -137,6 +138,70 @@ pub enum ArithProfile {
 }
 
 impl ArithProfile {
+    pub fn emit_uncoditional_set(&self, jit: &mut JIT<'_>, mask: u16) {
+        jit.masm.or16_imm(
+            mask as _,
+            Mem::Absolute(self.bits_ref() as *const u16 as usize),
+        );
+    }
+    pub fn should_emit_set_double(&self) -> bool {
+        let mask = Int32Overflow as u16 | NegZeroDouble as u16 | NonNegZeroDouble as u16;
+        (self.bits() & mask) != 0
+    }
+
+    pub fn emit_set_double(&self, jit: &mut JIT<'_>) {
+        if self.should_emit_set_double() {
+            self.emit_uncoditional_set(
+                jit,
+                Int32Overflow as u16 | NegZeroDouble as u16 | NonNegZeroDouble as u16,
+            );
+        }
+    }
+
+    pub fn should_emit_set_non_numeric(&self) -> bool {
+        (self.bits() & NonNumeric as u16) != 0
+    }
+
+    pub fn emit_set_non_numeric(&self, jit: &mut JIT<'_>) {
+        if self.should_emit_set_non_numeric() {
+            self.emit_uncoditional_set(jit, NonNumeric as _);
+        }
+    }
+
+    pub fn should_emit_set_heap_bigint(&self) -> bool {
+        (self.bits() & HeapBigInt as u16) != 0
+    }
+
+    pub fn emit_set_heap_bigint(&self, jit: &mut JIT<'_>) {
+        if self.should_emit_set_non_numeric() {
+            self.emit_uncoditional_set(jit, HeapBigInt as _);
+        }
+    }
+
+    pub fn emit_observe_result(&self, jit: &mut JIT<'_>, reg: Reg, has_tag_regs: bool) {
+        if !self.should_emit_set_double()
+            && !self.should_emit_set_non_numeric()
+            && !self.should_emit_set_heap_bigint()
+        {
+            return;
+        }
+
+        let mut done = JumpList::new();
+        let mut non_numeric = JumpList::new();
+
+        done.push(jit.branch_if_int32(reg, has_tag_regs));
+        let not_double = jit.branch_if_not_double_known_not_int32(reg, has_tag_regs);
+        self.emit_set_double(jit);
+        done.push(jit.masm.jump());
+
+        not_double.link(&mut jit.masm);
+
+        non_numeric.push(jit.branch_if_not_cell(reg, has_tag_regs));
+
+        non_numeric.link(&mut jit.masm);
+        self.emit_set_non_numeric(jit);
+        done.link(&mut jit.masm);
+    }
     pub fn bits(self) -> u16 {
         match self {
             ArithProfile::Binary(x) => x,

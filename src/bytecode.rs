@@ -79,6 +79,7 @@ pub struct CodeBlock {
 pub struct JITData {
     pub add_ics: HashMap<*const ArithProfile, mathic::MathIC<add_generator::AddGenerator>>,
     pub sub_ics: HashMap<*const ArithProfile, mathic::MathIC<sub_generator::SubGenerator>>,
+    pub mul_ics: HashMap<*const ArithProfile, mathic::MathIC<mul_generator::MulGenerator>>,
     pub code_map: std::collections::HashMap<u32, *mut u8>,
 }
 
@@ -144,6 +145,19 @@ impl CodeBlock {
         ic.arith_profile = Some(profile);
         data.sub_ics.insert(profile, ic);
         data.sub_ics
+            .get(&profile)
+            .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
+            .unwrap()
+    }
+    pub fn add_jit_mulic(
+        &self,
+        profile: *const ArithProfile,
+    ) -> &mut mathic::MathIC<mul_generator::MulGenerator> {
+        let mut data = self.jit_data();
+        let mut ic = mathic::MathIC::<mul_generator::MulGenerator>::new();
+        ic.arith_profile = Some(profile);
+        data.mul_ics.insert(profile, ic);
+        data.mul_ics
             .get(&profile)
             .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
             .unwrap()

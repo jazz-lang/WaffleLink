@@ -91,7 +91,50 @@ impl<'a> JIT<'a> {
             _ => op_unreachable!(),
         }
     }
+    pub fn emit_op_mul(&mut self, op: &Ins) {
+        match op {
+            Ins::Mul(src1, src2, dest) => {
+                let meta = self.code_block.metadata(self.bytecode_index as _);
+                let math_ic = self.code_block.add_jit_mulic(&meta.arith_profile);
+                self.ins_to_mathic
+                    .insert(op as *const Ins, math_ic as *mut MathIC<_> as *mut u8);
+                self.emit_mathic_fast_bin(
+                    math_ic,
+                    op,
+                    *src1,
+                    *src2,
+                    *dest,
+                    0 as *mut _,
+                    operations::operation_value_mul as *const u8,
+                );
+            }
+            _ => op_unreachable!(),
+        }
+    }
 
+    pub fn emit_slow_op_mul(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        self.link_all_slow_cases(slow_cases);
+        match op {
+            Ins::Mul(src1, src2, dest) => {
+                let ic = *self.ins_to_mathic.get(&(op as *const Ins)).unwrap();
+                let math_ic = unsafe { &mut *(ic as *mut MathIC<mul_generator::MulGenerator>) };
+                self.emit_mathic_slow_bin(
+                    math_ic,
+                    op,
+                    *src1,
+                    *src2,
+                    *dest,
+                    0xdead as *const _,
+                    operations::operation_value_mul_optimize as *const _,
+                );
+            }
+            _ => op_unreachable!(),
+        }
+    }
     pub fn emit_mathic_slow_bin<GEN: MathICGenerator + BinaryMathICGenerator>(
         &mut self,
         math_ic: &mut MathIC<GEN>,

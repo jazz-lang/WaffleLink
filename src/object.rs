@@ -5,9 +5,10 @@ use std;
 use std::ops::{Deref, DerefMut};
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[repr(transparent)]
 pub struct Header {
     vtable: AtomicUsize,
-    fwdptr: AtomicUsize,
 }
 const MARK_BITS: usize = 2;
 const MARK_MASK: usize = (2 << MARK_BITS) - 1;
@@ -16,7 +17,6 @@ impl Header {
     pub const fn new() -> Header {
         Header {
             vtable: AtomicUsize::new(0),
-            fwdptr: AtomicUsize::new(0),
         }
     }
 
@@ -136,7 +136,7 @@ impl Header {
         }
     }
 
-    #[inline(always)]
+    /*#[inline(always)]
     pub fn clear_fwdptr(&self) {
         self.fwdptr.store(0, Ordering::Relaxed);
     }
@@ -191,7 +191,7 @@ impl Header {
         self.fwdptr
             .compare_exchange(old, old | 1, Ordering::SeqCst, Ordering::Relaxed)
             .is_ok()
-    }
+    }*/
 }
 
 #[repr(C)]
