@@ -17,10 +17,13 @@ pub struct JIT<'a> {
     pub labels: Vec<Label>,
     pub jmptable: Vec<JumpTable>,
     pub slow_cases: Vec<SlowCaseEntry>,
+    pub exception_check: Vec<Vec<Jump>>,
     pub calls: Vec<CallRecord>,
     pub call_compilation_info: Vec<CallCompilationInfo>,
     pub link_buffer: LinkBuffer<MacroAssemblerX86>,
     pub bytecode_index: usize,
+    pub try_end: u32,
+    pub try_start: u32,
     pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
     pub ins_to_mathic: HashMap<*const Ins, *mut u8>,
 }
@@ -28,6 +31,8 @@ impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
         Self {
             slow_paths: vec![],
+            try_end: 0,
+            try_start: 0,
             ins_to_lbl: HashMap::new(),
             jumps_to_finalize: vec![],
             code_block: code,
@@ -40,6 +45,7 @@ impl<'a> JIT<'a> {
             ins_to_mathic: HashMap::new(),
             slow_cases: vec![],
             call_compilation_info: vec![],
+            exception_check: vec![],
             bytecode_index: 0,
             link_buffer: LinkBuffer::new(0 as *mut _),
         }

@@ -28,7 +28,23 @@ impl DivGenerator {
 
     pub fn generate_fast_path(&mut self, jit: &mut JIT<'_>) {
         self.did_emit_fast_path = true;
-        self.load_operand(jit, self.left, self.left_fpr);
+        fn div(x: Value, y: Value) -> Value {
+            if x.is_number() && y.is_number() {
+                let res = x.to_number() / y.to_number();
+                if res as i32 as f64 == res {
+                    return Value::new_int(res as _);
+                } else {
+                    return Value::new_double(res);
+                }
+            }
+            Value::new_double(std::f64::NAN)
+        }
+        jit.masm.prepare_call_with_arg_count(2);
+        jit.masm.pass_reg_as_arg(self.left, 0);
+        jit.masm.pass_reg_as_arg(self.right, 1);
+        jit.masm.call_ptr_argc(div as *const _, 2);
+        jit.masm.move_rr(RET0, self.result);
+        /*self.load_operand(jit, self.left, self.left_fpr);
         self.load_operand(jit, self.right, self.right_fpr);
         jit.masm
             .div_double(self.right_fpr, self.left_fpr, self.left_fpr);
@@ -66,7 +82,7 @@ impl DivGenerator {
         if let Some(profile) = self.arith_profile.as_ref().map(|x| unsafe { &*(*x) }) {
             profile.emit_uncoditional_set(jit, SPECIAL_FAST_PATH_BIT);
         }
-        jit.box_double(self.left_fpr, self.result, true);
+        jit.box_double(self.left_fpr, self.result, true);*/
     }
 }
 

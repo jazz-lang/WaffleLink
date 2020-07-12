@@ -52,12 +52,14 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
 
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
+    pub exception: value::Value,
 }
 
 impl VM {
     pub fn new() -> Self {
         Self {
             top_call_frame: std::ptr::null_mut(),
+            exception: value::Value::undefined(),
         }
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {
@@ -66,6 +68,10 @@ impl VM {
         } else {
             return Some(unsafe { &mut *self.top_call_frame });
         }
+    }
+
+    pub fn exception_addr(&self) -> *const value::Value {
+        &self.exception
     }
 }
 

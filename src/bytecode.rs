@@ -45,8 +45,8 @@ pub enum Ins {
     Jump(i32),
     JumpIfZero(VirtualRegister, i32),
     JumpIfNotZero(VirtualRegister, i32),
-    TryCatch(u32 /* try block */, u32 /* catch block */),
-    GetException(VirtualRegister),
+    Try(u32 /* code size */),
+    Catch(VirtualRegister),
     Call(
         VirtualRegister, /* function */
         VirtualRegister, /* dest */

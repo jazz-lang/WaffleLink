@@ -1,4 +1,4 @@
-function foo(x,y,z) {
+function foo(x, y, z) {
    if (x + y == 182200) {
       throw "Heeey!"
    }
@@ -6,6 +6,10 @@ function foo(x,y,z) {
    return x + y + z;
 }
 
-for (let i = 0;i<100001;i++) {
-   foo(i,"x" + i,[] + i);
+for (let i = 0; i < 100001; i++) {
+   try {
+      foo(i, i + 2);
+   } catch (e) {
+      print(e);
+   }
 }

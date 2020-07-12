@@ -165,6 +165,7 @@ impl<'a> JIT<'a> {
         self.private_compile_link_pass();
         self.private_compile_slow_cases();
         stack_overflow.link(&mut self.masm);
+
         if MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL != 0 {
             #[cfg(target_pointer_width = "64")]
             {
@@ -187,6 +188,23 @@ impl<'a> JIT<'a> {
         );
         self.masm.store64(BP, Mem::Base(SCRATCH_REG, 0));
     }
+    /// Check if RET0 reg has exception pointer.
+    pub fn check_exception(&mut self, force: bool) {
+        if (self.bytecode_index as u32 >= self.try_start
+            && self.bytecode_index < self.try_end as usize)
+            || force
+        {
+            let br = self.masm.branch64_imm64(
+                RelationalCondition::Equal,
+                RET0,
+                crate::get_vm().exception_addr() as _,
+            );
+            self.exception_check.last_mut().unwrap().push(br);
+        } else {
+            self.function_epilogue();
+            self.masm.ret();
+        }
+    }
     fn private_compile_link_pass(&mut self) {
         for i in 0..self.jmptable.len() {
             self.jmptable[i].from.link_to(
@@ -206,6 +224,18 @@ impl<'a> JIT<'a> {
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Div { .. } => self.emit_op_div(ins),
+                Ins::Try(off) => {
+                    self.try_start = self.bytecode_index as _;
+                    self.try_end = self.bytecode_index as u32 + *off;
+                    self.exception_check.push(Vec::with_capacity(1));
+                }
+                Ins::Catch(dest) => {
+                    let x = self.exception_check.pop().unwrap();
+                    for jump in x {
+                        jump.link(&mut self.masm);
+                    }
+                    self.emit_put_virtual_register(*dest, RET0);
+                }
                 Ins::Return(val) => {
                     self.emit_get_virtual_register(*val, RET0);
                     self.masm.function_epilogue();

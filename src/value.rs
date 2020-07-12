@@ -75,6 +75,7 @@ pub enum JSTag {
 }
 
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub struct Value {
     pub u: EncodedValueDescriptor,
 }

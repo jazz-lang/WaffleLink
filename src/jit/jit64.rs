@@ -22,14 +22,6 @@ impl<'a> JIT<'a> {
             slow(self);
         }
     }
-    pub fn check_exception(&mut self) {
-        let slow = self.masm.branch32_imm(RelationalCondition::Equal, 1, RET0);
-        self.slow_paths.push(Box::new(move |jit| {
-            slow.link(&mut jit.masm);
-            jit.masm.function_epilogue();
-            jit.masm.ret();
-        }));
-    }
 
     pub fn box_double(&mut self, src: FPReg, dest: Reg, has_nr: bool) -> Reg {
         self.masm.move_fp_to_gp(src, dest);
@@ -229,16 +221,5 @@ mod tests {
             assert!(res.is_double());
             assert!(res.as_number() == 42.42);
         }
-    }
-}
-use crate::function::*;
-use crate::object::*;
-use crate::vtable::VTable;
-extern "C" fn resolve_fn_addr(f: Ref<Obj>) -> (u8, u64) {
-    if f.header().vtblptr().to_usize() == (&FUNCTION_VTBL as *const VTable as usize) {
-        let addr = f.cast::<Function>();
-        (1, addr.func_ptr as _)
-    } else {
-        (0, 0)
     }
 }
