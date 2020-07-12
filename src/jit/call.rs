@@ -68,4 +68,25 @@ impl<'a> JIT<'a> {
             SP,
         );
     }
+
+    pub fn compile_op_call_slowcase(
+        &mut self,
+        ins: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+        call_link_info_idx: u32,
+    ) {
+        self.link_all_slow_cases(slow_cases);
+        self.masm.move_i64(crate::get_vm() as *const _ as i64, T3);
+        //let x = self.call_compilation_info[call_link_info_idx as usize].call
+        self.call_compilation_info[call_link_info_idx as usize].call_return_location =
+            self.emit_naked_call(0 as *mut _);
+        self.masm
+            .add64_imm32(self.stack_pointer_offset_for(self.code_block) * 8, BP, SP);
+        match ins {
+            Ins::Call(_, dest, ..) => {
+                self.emit_put_virtual_register(*dest, RET0);
+            }
+            _ => (),
+        }
+    }
 }

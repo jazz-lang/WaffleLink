@@ -17,7 +17,7 @@ pub struct JIT<'a> {
     pub labels: Vec<Label>,
     pub jmptable: Vec<JumpTable>,
     pub slow_cases: Vec<SlowCaseEntry>,
-    pub exception_check: Vec<Vec<Jump>>,
+    pub exception_check: Vec<(Vec<Jump>, (u32, u32))>,
     pub calls: Vec<CallRecord>,
     pub call_compilation_info: Vec<CallCompilationInfo>,
     pub link_buffer: LinkBuffer<MacroAssemblerX86>,
@@ -210,3 +210,23 @@ pub const RET0: Reg = Reg::EAX;
 pub const RET1: Reg = Reg::EDX;
 
 pub type JITLinkBuffer = LinkBuffer<MacroAssemblerX86>;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub const AGPR0: Reg = Reg::ECX;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub const AGPR1: Reg = Reg::EDX;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub const AGPR2: Reg = Reg::R8;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub const AGPR3: Reg = Reg::R9;
+#[cfg(all(not(windows), target_arch = "x86_64"))]
+pub mod args {
+    use super::*;
+    pub const AGPR0: Reg = Reg::EDI;
+    pub const AGPR1: Reg = Reg::ESI;
+    pub const AGPR2: Reg = Reg::EDX;
+    pub const AGPR3: Reg = Reg::ECX;
+    pub const AGPR4: Reg = Reg::R8;
+    pub const AGPR5: Reg = Reg::R9;
+}
+#[cfg(all(not(windows), target_arch = "x86_64"))]
+pub use args::*;

@@ -21,6 +21,7 @@ pub mod operations;
 pub mod sub_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
+pub mod thunk_generator;
 use crate::builtins::WResult;
 use crate::bytecode::*;
 use crate::interpreter::callframe::*;
@@ -85,6 +86,91 @@ pub struct CallCompilationInfo {
 }
 
 impl<'a> JIT<'a> {
+    pub fn prepare_for_tail_call_slow(&mut self, callee: Reg) {
+        let temp1 = if callee == T0 { T3 } else { T0 };
+        let temp2 = if callee == T1 { T3 } else { T1 };
+        let temp3 = if callee == T2 { T3 } else { T2 };
+        let new_frame_pointer = temp1;
+        let new_frame_size = temp2;
+        {
+            // The old frame size is its number of arguments (or number of
+            // parameters in case of arity fixup), plus the frame header size,
+            // aligned
+            let old_frame_size = temp2;
+            {
+                let argc = old_frame_size;
+                self.masm.load32(
+                    Mem::Base(
+                        BP,
+                        CallFrameSlot::ArgumentCountIncludingThis as i32 * 8
+                            + offset_of!(crate::value::AsBits, payload) as i32,
+                    ),
+                    argc,
+                );
+                {
+                    let num_parameters = temp1;
+                    {
+                        let code_block = num_parameters;
+                        self.masm.load64(
+                            Mem::Base(BP, CallFrameSlot::CodeBlock as i32 * 8),
+                            code_block,
+                        );
+                        self.masm.load32(
+                            Mem::Base(code_block, offset_of!(CodeBlock, num_params) as i32),
+                            num_parameters,
+                        );
+                    }
+                    let argc_was_not_fixed_up =
+                        self.masm
+                            .branch32(RelationalCondition::BelowOrEqual, num_parameters, argc);
+
+                    self.masm.move_rr(num_parameters, argc);
+                    argc_was_not_fixed_up.link(&mut self.masm);
+                }
+                self.masm.add32i(
+                    2 + CallFrameSlot::ArgumentCountIncludingThis as i32,
+                    argc,
+                    old_frame_size,
+                );
+                self.masm.and32_imm(2, old_frame_size, old_frame_size);
+                // We assume < 2^28 arguments
+                self.masm.mul32_imm(8, old_frame_size, old_frame_size);
+            }
+            self.masm.add64(BP, old_frame_size, new_frame_pointer);
+            self.masm.load32(
+                Mem::Base(
+                    SP,
+                    CallFrameSlot::ArgumentCountIncludingThis as i32 * 8
+                        + offset_of!(crate::value::AsBits, payload) as i32
+                        - 16,
+                ),
+                new_frame_size,
+            );
+            self.masm.add32i(
+                2 + CallFrameSlot::ArgumentCountIncludingThis as i32 - 1,
+                new_frame_pointer,
+                new_frame_size,
+            );
+            self.masm.and32(-2, new_frame_size, new_frame_size);
+            self.masm.mul32_imm(8, new_frame_size, new_frame_size);
+        }
+        let temp = temp3;
+        self.masm.load64(Mem::Base(BP, 8), temp);
+        self.masm.push(temp);
+        self.masm.sub64_imm32(8, new_frame_size);
+        self.masm.sub64(new_frame_size, new_frame_pointer);
+        self.masm.load64(Mem::Base(BP, 0), BP);
+        let copy_loop = self.masm.label();
+        self.masm.sub64_imm32(8, new_frame_size);
+        self.masm.load64(Mem::Index(SP, new_frame_size, 0, 0), temp);
+        self.masm
+            .store64(temp, Mem::Index(new_frame_pointer, new_frame_size, 0, 0));
+        self.masm
+            .branch32_test_imm32(ResultCondition::NonZero, new_frame_size, 0)
+            .link_to(&mut self.masm, copy_loop);
+        // and finally we're ready for jump!
+        self.masm.move_rr(new_frame_pointer, SP);
+    }
     pub fn branch_ptr_with_patch(
         &mut self,
         cond: RelationalCondition,
@@ -199,7 +285,7 @@ impl<'a> JIT<'a> {
                 RET0,
                 crate::get_vm().exception_addr() as _,
             );
-            self.exception_check.last_mut().unwrap().push(br);
+            self.exception_check.last_mut().unwrap().0.push(br);
         } else {
             self.function_epilogue();
             self.masm.ret();
@@ -227,14 +313,17 @@ impl<'a> JIT<'a> {
                 Ins::Try(off) => {
                     self.try_start = self.bytecode_index as _;
                     self.try_end = self.bytecode_index as u32 + *off;
-                    self.exception_check.push(Vec::with_capacity(1));
+                    self.exception_check
+                        .push((Vec::with_capacity(1), (self.try_start, self.try_end)));
                 }
                 Ins::Catch(dest) => {
-                    let x = self.exception_check.pop().unwrap();
+                    let (x, (prev_start, prev_end)) = self.exception_check.pop().unwrap();
                     for jump in x {
                         jump.link(&mut self.masm);
                     }
                     self.emit_put_virtual_register(*dest, RET0);
+                    self.try_start = prev_start;
+                    self.try_end = prev_end;
                 }
                 Ins::Return(val) => {
                     self.emit_get_virtual_register(*val, RET0);

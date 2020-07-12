@@ -68,6 +68,7 @@ pub struct CodeBlock {
     pub header: Header,
     pub num_vars: u32,
     pub num_args: u32,
+    pub num_params: u32,
     pub callee_locals: i32,
     pub instructions: Vec<Ins>,
     pub jit_type: JITType,
@@ -87,6 +88,7 @@ impl CodeBlock {
     pub fn new() -> Self {
         Self {
             header: Header::new(),
+            num_params: 0,
             num_vars: 0,
             instructions: vec![],
             num_args: 0,
