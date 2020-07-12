@@ -3,6 +3,32 @@ use add_generator::*;
 use mathic::*;
 
 impl<'a> JIT<'a> {
+    pub fn emit_op_div(&mut self, op: &Ins) {
+        if let Ins::Div(op1, op2, dest) = op {
+            let left = T0;
+            let right = T1;
+            let result = left;
+            let scratch = T2;
+            let scratch_fp = FT2;
+
+            self.emit_get_virtual_register(*op1, left);
+            self.emit_get_virtual_register(*op2, right);
+            let mut gen = div_generator::DivGenerator::new(
+                result, left, right, FT0, FT1, scratch, scratch_fp,
+            );
+
+            gen.generate_fast_path(self);
+
+            if gen.did_emit_fast_path {
+                gen.end_jump_list
+                    .iter()
+                    .for_each(|item| item.link(&mut self.masm));
+                self.emit_put_virtual_register(*dest, result);
+                self.add_slow_cases(&gen.slow_path_jump_list);
+            }
+        }
+    }
+
     pub fn emit_op_add(&mut self, op: &Ins) {
         match op {
             Ins::Add(src1, src2, dest) => {

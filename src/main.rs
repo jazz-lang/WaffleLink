@@ -9,7 +9,7 @@ fn main() {
     simple_logger::init().unwrap();
     let mut cb = CodeBlock::new();
     cb.constants.push(Value::new_int(2));
-    cb.constants.push(Value::new_int(4));
+    cb.constants.push(Value::new_int(5));
     cb.num_vars = 1;
     cb.callee_locals = 7;
     cb.metadata = vec![
@@ -24,9 +24,9 @@ fn main() {
     ];
     cb.instructions = vec![
         Ins::Enter,
-        Ins::Mul(
-            VirtualRegister::new_constant_index(0),
+        Ins::Div(
             VirtualRegister::new_constant_index(1),
+            VirtualRegister::new_constant_index(0),
             virtual_register_for_local(7),
         ),
         Ins::Return(virtual_register_for_local(7)),

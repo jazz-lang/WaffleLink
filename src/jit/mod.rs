@@ -12,6 +12,7 @@ pub use jit_x86::*;
 pub mod add_generator;
 pub mod arithmetic;
 pub mod call;
+pub mod div_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
 pub mod mathic;
@@ -204,6 +205,7 @@ impl<'a> JIT<'a> {
                 Ins::Sub { .. } => self.emit_op_sub(ins),
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
+                Ins::Div { .. } => self.emit_op_div(ins),
                 Ins::Return(val) => {
                     self.emit_get_virtual_register(*val, RET0);
                     self.masm.function_epilogue();
@@ -234,6 +236,10 @@ impl<'a> JIT<'a> {
             match curr {
                 Ins::Add(_src1, _src2, _dest) => {
                     self.emit_slow_op_add(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::Div(..) => {
+                    self.link_all_slow_cases(&mut iter);
                     self.bytecode_index += 1;
                 }
                 Ins::Sub { .. } => {
@@ -337,6 +343,14 @@ impl<'a> JIT<'a> {
             from: j,
             to: self.bytecode_index as _,
         });
+    }
+    pub fn add_slow_cases(&mut self, j: &Vec<Jump>) {
+        for j in j.iter() {
+            self.slow_cases.push(SlowCaseEntry {
+                from: *j,
+                to: self.bytecode_index as _,
+            });
+        }
     }
 }
 
