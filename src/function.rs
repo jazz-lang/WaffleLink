@@ -20,6 +20,7 @@ pub static FUNCTION_VTBL: VTable = VTable {
     calc_size_fn: None,
     apply_fn: None,
     destroy_fn: None,
+    trace_fn: None,
     set_fn: None,
     set_index_fn: None,
 };

@@ -20,6 +20,7 @@ pub mod bytecode;
 pub mod bytecompiler;
 pub mod function;
 pub mod gc;
+pub mod heap;
 pub mod interpreter;
 pub mod jit;
 pub mod object;
@@ -53,6 +54,7 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
     pub exception: value::Value,
+    pub stop_world: bool,
 }
 
 impl VM {
@@ -60,6 +62,7 @@ impl VM {
         Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
+            stop_world: false,
         }
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {

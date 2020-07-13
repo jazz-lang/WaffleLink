@@ -1,10 +1,24 @@
+use bigint::*;
 use bytecode::*;
+use gc::*;
+use heap::*;
 use jit::*;
+use num_bigint::*;
 use value::*;
 use virtual_register::*;
 use wafflelink::*;
+fn foo(heap: &mut Heap) {
+    let bigint = BigIntObject::new(heap, Sign::Plus, vec![0]);
+    let top = false;
+
+    heap.collect(Address::from_ptr(&top));
+}
 fn main() {
-    let vm = VM::new();
+    simple_logger::init().unwrap();
+    let start = false;
+    let mut heap = Heap::new(&start);
+    foo(&mut heap);
+    /*let vm = VM::new();
     set_vm(&vm);
     simple_logger::init().unwrap();
     let mut cb = CodeBlock::new();
@@ -24,6 +38,7 @@ fn main() {
     ];
     cb.instructions = vec![
         Ins::Enter,
+        Ins::Safepoint,
         Ins::Div(
             VirtualRegister::new_constant_index(1),
             VirtualRegister::new_constant_index(0),
@@ -39,5 +54,5 @@ fn main() {
     let f: extern "C" fn() -> Value = unsafe { std::mem::transmute(jit.link_buffer.code) };
 
     println!("{}", f().to_int32());
-    jit.disasm();
+    jit.disasm();*/
 }

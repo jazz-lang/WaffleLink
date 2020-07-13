@@ -14,6 +14,10 @@ const MARK_BITS: usize = 2;
 const MARK_MASK: usize = (2 << MARK_BITS) - 1;
 const FWD_MASK: usize = !0 & !MARK_MASK;
 impl Header {
+    pub fn init_vtbl(&mut self, vtbl: &'static VTable) {
+        self.vtable
+            .store(vtbl as *const _ as usize, Ordering::Relaxed);
+    }
     pub const fn new() -> Header {
         Header {
             vtable: AtomicUsize::new(0),
@@ -134,6 +138,23 @@ impl Header {
                 Err((result & !1).into())
             }
         }
+    }
+    #[inline(always)]
+    pub fn mark_non_atomic(&mut self) {
+        let fwdptr = self.vtable.load(Ordering::Relaxed);
+        self.vtable.store(fwdptr | 1, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    pub fn unmark_non_atomic(&mut self) {
+        let fwdptr = self.vtable.load(Ordering::Relaxed);
+        self.vtable.store(fwdptr & FWD_MASK, Ordering::Relaxed);
+    }
+
+    #[inline(always)]
+    pub fn is_marked_non_atomic(&self) -> bool {
+        let fwdptr = self.vtable.load(Ordering::Relaxed);
+        (fwdptr & MARK_MASK) != 0
     }
 
     /*#[inline(always)]

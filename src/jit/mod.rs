@@ -310,6 +310,14 @@ impl<'a> JIT<'a> {
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Div { .. } => self.emit_op_div(ins),
+                Ins::Safepoint => {
+                    self.masm.load64(
+                        Mem::Absolute(&crate::get_vm().stop_world as *const bool as usize),
+                        T0,
+                    );
+                    let j = self.masm.branch64_imm32(RelationalCondition::Equal, 1, T0);
+                    self.add_slow_case(j);
+                }
                 Ins::Try(off) => {
                     self.try_start = self.bytecode_index as _;
                     self.try_end = self.bytecode_index as u32 + *off;
@@ -367,6 +375,16 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Mul { .. } => {
                     self.emit_slow_op_mul(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::Safepoint => {
+                    self.link_all_slow_cases(&mut iter);
+                    extern "C" fn safepoint(vm: &crate::VM, stack_top: *const u8) {}
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *const _ as usize, 0);
+                    self.masm.pass_reg_as_arg(SP, 1);
+                    self.masm.call_ptr_argc(safepoint as *const _, 2);
                     self.bytecode_index += 1;
                 }
                 _ => (),

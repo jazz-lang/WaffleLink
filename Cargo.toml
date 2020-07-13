@@ -12,6 +12,7 @@ capstone = "0.7"
 parking_lot = "0.11"
 simple_logger = "*"
 num-bigint = "0.3"
+bitset-core = "0.1"
 log = "0.4"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }

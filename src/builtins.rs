@@ -11,6 +11,7 @@ pub static ARRAY_VTBL: VTable = VTable {
     apply_fn: None,
     destroy_fn: None,
     set_fn: None,
+    trace_fn: None,
     set_index_fn: None,
 };
 
