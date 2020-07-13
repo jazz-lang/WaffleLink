@@ -45,7 +45,13 @@ impl CallFrame {
             .payload() as _
         }
     }
-
+    pub fn value_callee(&self) -> Value {
+        unsafe {
+            return (&*self.registers().offset(CallFrameSlot::Callee as _))
+                .u
+                .value;
+        }
+    }
     pub fn argument_count(&self) -> usize {
         self.argument_count_including_this() - 1
     }

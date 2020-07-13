@@ -151,7 +151,7 @@ impl<'a> JIT<'a> {
                 new_frame_pointer,
                 new_frame_size,
             );
-            self.masm.and32(-2, new_frame_size, new_frame_size);
+            self.masm.and32_imm(-2, new_frame_size, new_frame_size);
             self.masm.mul32_imm(8, new_frame_size, new_frame_size);
         }
         let temp = temp3;

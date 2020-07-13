@@ -1,6 +1,7 @@
 use super::{add_generator::*, mathic::*, sub_generator::*, *};
 use crate::value::*;
 use crate::*;
+use thunk_generator::*;
 pub extern "C" fn operation_value_add(_vm: &VM, op1: Value, op2: Value) -> Value {
     if op1.is_number() && op2.is_number() {
         let result = op1.to_number() + op2.to_number();
@@ -95,4 +96,15 @@ pub extern "C" fn operation_value_mul_optimize(
         operation_value_sub as *const u8,
     );
     operation_value_mul(vm, op1, op2)
+}
+
+pub unsafe extern "C" fn operation_link_call(
+    callee_frame: *mut CallFrame,
+    vm: &VM,
+) -> SlowPathReturn {
+    let call_frame = (&*callee_frame).caller_frame();
+
+    let callee_as_value = (&*call_frame).value_callee();
+
+    return SlowPathReturn::encode(0, 0);
 }
