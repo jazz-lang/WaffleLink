@@ -4,20 +4,21 @@ use gc::*;
 use heap::*;
 use jit::*;
 use num_bigint::*;
+use object::*;
 use value::*;
 use virtual_register::*;
 use wafflelink::*;
-fn foo(heap: &mut Heap) {
-    let bigint = BigIntObject::new(heap, Sign::Plus, vec![0]);
-    let top = false;
 
-    heap.collect(Address::from_ptr(&top));
-}
 fn main() {
     simple_logger::init().unwrap();
     let start = false;
     let mut heap = Heap::new(&start);
-    foo(&mut heap);
+    let array = Array::new(&mut heap, 10, Value::new_int(42));
+    assert!(array.get_at(3).is_int32());
+    let array = Array::new(&mut heap, 10, Value::new_int(4));
+    assert!(array.get_at(3).is_int32());
+    let top = false;
+    heap.collect(Address::from_ptr(&top));
     /*let vm = VM::new();
     set_vm(&vm);
     simple_logger::init().unwrap();

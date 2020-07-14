@@ -11,9 +11,18 @@ pub static ARRAY_VTBL: VTable = VTable {
     apply_fn: None,
     destroy_fn: None,
     set_fn: None,
-    trace_fn: None,
+    trace_fn: Some(trace_array),
     set_index_fn: None,
 };
+pub fn trace_array(arr: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
+    let arr = arr.cast::<Array>();
+    for i in 0..arr.len() {
+        let item = arr.get_at(i);
+        if item.is_cell() {
+            trace(item.as_cell());
+        }
+    }
+}
 
 fn determine_array_size(obj: Ref<Obj>) -> usize {
     let handle: Ref<Array> = Ref {

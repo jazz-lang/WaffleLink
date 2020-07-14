@@ -35,7 +35,7 @@ impl Header {
 
     #[inline(always)]
     pub fn vtblptr(&self) -> Address {
-        self.vtable.load(Ordering::Relaxed).into()
+        (self.vtable.load(Ordering::Relaxed) & FWD_MASK).into()
     }
 
     #[inline(always)]
@@ -384,6 +384,20 @@ pub struct Array {
 }
 
 impl Array {
+    pub fn new(heap: &mut crate::heap::Heap, size: usize, init: Value) -> Ref<Self> {
+        let ssize = (std::mem::size_of::<Self>() - 8) + size * 8;
+        let mem = heap.allocate(ssize);
+        let mut this = Ref {
+            ptr: mem.to_mut_ptr::<Self>(),
+        };
+        this.header = Header::new();
+        this.length = size;
+        this.header_mut().init_vtbl(&crate::builtins::ARRAY_VTBL);
+        for i in 0..size {
+            this.set_at(i, init);
+        }
+        this
+    }
     pub fn header(&self) -> &Header {
         &self.header
     }

@@ -8,6 +8,8 @@ pub struct HeapBlock {
     free_list: *mut FreeListEntry,
     bitset: HashSet<Address>,
     cursor: Address,
+    pub next: Address,
+    pub prev: Address,
     storage: u8,
 }
 
@@ -30,27 +32,39 @@ impl HeapBlock {
                     }
                     std::ptr::write_bytes(cell_addr.to_mut_ptr::<u8>(), 0, this.cell_size);
                     if free_list.is_null() {
+                        log::debug!("Initialize free list with {:p}", cell.raw());
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = std::ptr::null_mut();
                     } else {
                         let next = free_list;
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = next as *mut _;
+                        log::debug!("Sweep {:p} to free list {:p}", cell.raw(), next);
                     }
                 }
             } else {
                 let next = free_list;
                 free_list = cell_addr.to_mut_ptr();
                 (&mut *free_list).next = next as *mut _;
+                //log::debug!("Add {:p} to free list {:p}", cell_addr.to_ptr::<()>(), next);
             }
         });
         self.free_list = free_list;
         true
     }
     pub fn allocate(&mut self) -> Address {
-        let addr = if self.cursor.offset(self.cell_size) < self.storage().offset(Self::BLOCK_SIZE) {
+        let addr = if self.cursor.offset(self.cell_size)
+            < self
+                .storage()
+                .offset(Self::BLOCK_SIZE - std::mem::size_of::<Self>())
+        {
             let c = self.cursor;
             self.cursor = self.cursor.offset(self.cell_size);
+            log::debug!(
+                "Bump allocate {:p}->{:p}",
+                c.to_ptr::<()>(),
+                self.cursor.to_ptr::<()>()
+            );
             c
         } else {
             if self.free_list.is_null() {
@@ -59,6 +73,11 @@ impl HeapBlock {
                 unsafe {
                     let x = self.free_list;
                     self.free_list = (&*x).next.cast();
+                    log::debug!(
+                        "Allocate {:p} from free list,next free list cell: {:p} ",
+                        x,
+                        self.free_list
+                    );
                     Address::from_ptr(x)
                 }
             }
@@ -68,7 +87,7 @@ impl HeapBlock {
         }
         addr
     }
-    pub fn new(cell_size: usize) -> Box<Self> {
+    pub fn new(cell_size: usize) -> *mut Self {
         let mem = unsafe {
             std::alloc::alloc_zeroed(std::alloc::Layout::from_size_align_unchecked(
                 16 * 1024,
@@ -76,6 +95,8 @@ impl HeapBlock {
             ))
             .cast::<Self>()
         };
+        log::debug!("Allocate HeapBlock with cell size {} bytes", cell_size);
+        const FORCE_FREELIST: bool = true;
 
         unsafe {
             mem.write(Self {
@@ -83,12 +104,31 @@ impl HeapBlock {
                 free_list: std::ptr::null_mut(),
                 bitset: HashSet::new(),
                 cursor: Address::null(),
+                next: Address::null(),
+                prev: Address::null(),
                 storage: 0,
             });
             let mut this = Box::from_raw(mem);
-            this.cursor = Address::from_ptr(&this.storage);
+            if !FORCE_FREELIST {
+                this.cursor = Address::from_ptr(&this.storage);
+            } else {
+                log::debug!("Force initialize freelist");
+                this.cursor = this
+                    .storage()
+                    .offset(Self::BLOCK_SIZE - std::mem::size_of::<Self>());
+                let mut free_list: *mut FreeListEntry = std::ptr::null_mut();
+                this.for_each_cell(|addr| {
+                    let next = free_list;
+                    {
+                        free_list = addr.to_mut_ptr();
+                        (&mut *free_list).next = next.cast();
+                    }
+                });
+                this.free_list = free_list;
+            }
             this.init_bitset();
-            this
+
+            Box::into_raw(this)
         }
     }
     pub const BLOCK_SIZE: usize = 16 * 1024;

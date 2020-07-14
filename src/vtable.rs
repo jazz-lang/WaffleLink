@@ -1,13 +1,14 @@
 use crate::builtins::*;
 use crate::object::*;
 use crate::value::Value;
+use crate::*;
 #[repr(C)]
 pub struct VTable {
     pub trace_fn: Option<fn(Ref<Obj>, &mut dyn FnMut(Ref<Obj>))>,
-    pub lookup_fn: Option<fn(Ref<Obj>, Value) -> WResult>,
-    pub index_fn: Option<fn(Ref<Obj>, usize) -> WResult>,
-    pub set_fn: Option<fn(Ref<Obj>, Value, Value) -> WResult>,
-    pub set_index_fn: Option<fn(Ref<Obj>, usize, Value) -> WResult>,
+    pub lookup_fn: Option<fn(&VM, Ref<Obj>, Value) -> WResult>,
+    pub index_fn: Option<fn(&VM, Ref<Obj>, usize) -> WResult>,
+    pub set_fn: Option<fn(&VM, Ref<Obj>, Value, Value) -> WResult>,
+    pub set_index_fn: Option<fn(&VM, Ref<Obj>, usize, Value) -> WResult>,
     /// Calculate object size.
     pub calc_size_fn: Option<fn(Ref<Obj>) -> usize>,
     /// Object destructor, this should be used only by "external" objects that might contain
