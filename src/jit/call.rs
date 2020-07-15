@@ -2,28 +2,6 @@ use super::*;
 use crate::interpreter::callframe::*;
 use crate::value::*;
 impl<'a> JIT<'a> {
-    pub fn compile_setup_frame(&mut self, ins: &Ins) {
-        let (argcount_including_this, register_offset) = match ins {
-            Ins::Call(_, _, argc, argv) => (*argc as i32, -(*argv as i32)),
-            _ => todo!(),
-        };
-
-        self.masm.add64_imm32(
-            register_offset * 8 + std::mem::size_of::<CallerFrameAndPc>() as i32,
-            BP,
-            SP,
-        );
-        self.masm.store32_imm(
-            argcount_including_this,
-            Mem::Base(
-                SP,
-                CallFrameSlot::ArgumentCountIncludingThis as i32 * 8
-                    + offset_of!(AsBits, payload) as i32
-                    - std::mem::size_of::<CallerFrameAndPc>() as i32,
-            ),
-        );
-    }
-
     pub fn compile_op_call(&mut self, ins: &Ins, call_link_info_idx: usize) {
         let callee = match ins {
             Ins::Call(callee, ..) => *callee,
@@ -39,16 +17,7 @@ impl<'a> JIT<'a> {
             - Caller initializes ReturnPC; CodeBlock.
             - Caller restores BP after return.
         */
-        self.compile_setup_frame(ins);
-
         self.emit_get_virtual_register(callee, T0);
-        self.masm.store64(
-            T0,
-            Mem::Base(
-                SP,
-                CallFrameSlot::Callee as i32 * 8 - std::mem::size_of::<CallerFrameAndPc>() as i32,
-            ),
-        );
         let mut label = DataLabelPtr::default();
         let slow_case =
             self.branch_ptr_with_patch(RelationalCondition::NotEqual, T0, &mut label, 0);
@@ -58,15 +27,6 @@ impl<'a> JIT<'a> {
             .push(CallCompilationInfo::default());
         self.call_compilation_info[call_link_info_idx].hot_path_begin = label;
         self.call_compilation_info[call_link_info_idx].hot_path_other = call;
-        self.masm.add64_imm32(
-            virtual_register::virtual_register_for_local(
-                jit_frame_register_count_for(self.code_block) as i32 - 1,
-            )
-            .offset()
-                * 8,
-            BP,
-            SP,
-        );
     }
 
     pub fn compile_op_call_slowcase(
@@ -80,11 +40,9 @@ impl<'a> JIT<'a> {
         //let x = self.call_compilation_info[call_link_info_idx as usize].call
         self.call_compilation_info[call_link_info_idx as usize].call_return_location =
             self.emit_naked_call(0 as *mut _);
-        self.masm
-            .add64_imm32(self.stack_pointer_offset_for(self.code_block) * 8, BP, SP);
         match ins {
             Ins::Call(_, dest, ..) => {
-                self.emit_put_virtual_register(*dest, RET0);
+                self.emit_put_virtual_register(*dest, RET0, T5);
             }
             _ => (),
         }

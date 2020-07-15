@@ -38,12 +38,6 @@ pub enum JITType {
     DFG,
 }
 
-pub fn jit_frame_register_count_for(c: &CodeBlock) -> usize {
-    return round_local_reg_count_for_frame_pointer_offset(
-        c.callee_locals as usize + MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL_IN_REGISTERS,
-    );
-}
-
 #[cfg(all(target_arch = "x86_64", windows))]
 pub const MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL: usize = 64; // 4 args in registers, but stack space needs to be allocated for all args.
 
@@ -86,91 +80,6 @@ pub struct CallCompilationInfo {
 }
 
 impl<'a> JIT<'a> {
-    pub fn prepare_for_tail_call_slow(&mut self, callee: Reg) {
-        let temp1 = if callee == T0 { T3 } else { T0 };
-        let temp2 = if callee == T1 { T3 } else { T1 };
-        let temp3 = if callee == T2 { T3 } else { T2 };
-        let new_frame_pointer = temp1;
-        let new_frame_size = temp2;
-        {
-            // The old frame size is its number of arguments (or number of
-            // parameters in case of arity fixup), plus the frame header size,
-            // aligned
-            let old_frame_size = temp2;
-            {
-                let argc = old_frame_size;
-                self.masm.load32(
-                    Mem::Base(
-                        BP,
-                        CallFrameSlot::ArgumentCountIncludingThis as i32 * 8
-                            + offset_of!(crate::value::AsBits, payload) as i32,
-                    ),
-                    argc,
-                );
-                {
-                    let num_parameters = temp1;
-                    {
-                        let code_block = num_parameters;
-                        self.masm.load64(
-                            Mem::Base(BP, CallFrameSlot::CodeBlock as i32 * 8),
-                            code_block,
-                        );
-                        self.masm.load32(
-                            Mem::Base(code_block, offset_of!(CodeBlock, num_params) as i32),
-                            num_parameters,
-                        );
-                    }
-                    let argc_was_not_fixed_up =
-                        self.masm
-                            .branch32(RelationalCondition::BelowOrEqual, num_parameters, argc);
-
-                    self.masm.move_rr(num_parameters, argc);
-                    argc_was_not_fixed_up.link(&mut self.masm);
-                }
-                self.masm.add32i(
-                    2 + CallFrameSlot::ArgumentCountIncludingThis as i32,
-                    argc,
-                    old_frame_size,
-                );
-                self.masm.and32_imm(2, old_frame_size, old_frame_size);
-                // We assume < 2^28 arguments
-                self.masm.mul32_imm(8, old_frame_size, old_frame_size);
-            }
-            self.masm.add64(BP, old_frame_size, new_frame_pointer);
-            self.masm.load32(
-                Mem::Base(
-                    SP,
-                    CallFrameSlot::ArgumentCountIncludingThis as i32 * 8
-                        + offset_of!(crate::value::AsBits, payload) as i32
-                        - 16,
-                ),
-                new_frame_size,
-            );
-            self.masm.add32i(
-                2 + CallFrameSlot::ArgumentCountIncludingThis as i32 - 1,
-                new_frame_pointer,
-                new_frame_size,
-            );
-            self.masm.and32_imm(-2, new_frame_size, new_frame_size);
-            self.masm.mul32_imm(8, new_frame_size, new_frame_size);
-        }
-        let temp = temp3;
-        self.masm.load64(Mem::Base(BP, 8), temp);
-        self.masm.push(temp);
-        self.masm.sub64_imm32(8, new_frame_size);
-        self.masm.sub64(new_frame_size, new_frame_pointer);
-        self.masm.load64(Mem::Base(BP, 0), BP);
-        let copy_loop = self.masm.label();
-        self.masm.sub64_imm32(8, new_frame_size);
-        self.masm.load64(Mem::Index(SP, new_frame_size, 0, 0), temp);
-        self.masm
-            .store64(temp, Mem::Index(new_frame_pointer, new_frame_size, 0, 0));
-        self.masm
-            .branch32_test_imm32(ResultCondition::NonZero, new_frame_size, 0)
-            .link_to(&mut self.masm, copy_loop);
-        // and finally we're ready for jump!
-        self.masm.move_rr(new_frame_pointer, SP);
-    }
     pub fn branch_ptr_with_patch(
         &mut self,
         cond: RelationalCondition,
@@ -189,23 +98,49 @@ impl<'a> JIT<'a> {
             let value = self.code_block.get_constant(src);
             self.masm.move_i64(unsafe { value.u.as_int64 }, dest);
         } else {
-            self.masm.load64(Self::address_for_vreg(src), dest);
+            if src.is_local() {
+                self.masm.load64(
+                    Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, regs) as i32),
+                    dest,
+                );
+                self.masm.load64(Mem::Base(dest, src.to_local() * 8), dest);
+            } else {
+                self.masm.load64(
+                    Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, args) as i32),
+                    dest,
+                );
+                self.masm
+                    .load64(Mem::Base(dest, src.to_argument() * 8), dest);
+            }
         }
     }
 
-    pub fn emit_put_virtual_register(&mut self, dst: virtual_register::VirtualRegister, from: Reg) {
-        self.masm.store64(from, Self::address_for_vreg(dst));
+    pub fn emit_put_virtual_register(
+        &mut self,
+        dst: virtual_register::VirtualRegister,
+        from: Reg,
+        scratch: Reg,
+    ) {
+        if dst.is_local() {
+            self.masm.load64(
+                Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, regs) as i32),
+                scratch,
+            );
+            self.masm
+                .store64(from, Mem::Base(scratch, dst.to_local() * 8));
+        } else {
+            self.masm.load64(
+                Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, args) as i32),
+                scratch,
+            );
+            self.masm
+                .store64(from, Mem::Base(scratch, dst.to_argument() * 8));
+        }
     }
 
     pub fn emit_function_prologue(&mut self) {
         self.masm.push(BP);
         self.masm.move_rr(SP, BP);
-    }
-    pub fn stack_pointer_offset_for(&self, code_block: &CodeBlock) -> i32 {
-        virtual_register::virtual_register_for_local(
-            jit_frame_register_count_for(code_block) as i32 - 1,
-        )
-        .offset()
     }
 
     pub fn materialize_tag_check_regs(&mut self) {
@@ -221,36 +156,17 @@ impl<'a> JIT<'a> {
     }
     pub fn compile_without_linking(&mut self) {
         self.emit_function_prologue();
-        self.masm.move_i64(self.code_block as *const _ as i64, T0);
-        self.masm.store64(
-            T0,
-            Mem::Base(
-                BP,
-                -virtual_register::virtual_register_for_local(1).offset() * 8,
-            ),
-        );
+        self.masm.move_rr(AGPR0, REG_CALLFRAME);
+
         self.labels = Vec::with_capacity(self.code_block.instructions.len());
         self.labels
             .resize(self.code_block.instructions.len(), Label::default());
-        let frame_top_offset = self.stack_pointer_offset_for(self.code_block) * 8;
-        // let max_frame_size = -frame_top_offset;
-        #[cfg(target_pointer_width = "64")]
-        {
-            self.masm.add64_imm32(frame_top_offset, BP, T1);
-        }
-        #[cfg(target_pointer_width = "32")]
-        {
-            self.masm.add32i(frame_top_offset, BP, T1);
-        }
-        let mut stack_overflow = JumpList::new();
-        // TODO: Check for stack overflow
-        self.masm.move_rr(T1, SP);
+
         self.materialize_tag_check_regs();
 
         self.private_compile_bytecode();
         self.private_compile_link_pass();
         self.private_compile_slow_cases();
-        stack_overflow.link(&mut self.masm);
 
         if MAX_FRAME_EXTENT_FOR_SLOW_PATH_CALL != 0 {
             #[cfg(target_pointer_width = "64")]
@@ -272,7 +188,7 @@ impl<'a> JIT<'a> {
             &crate::get_vm().top_call_frame as *const *mut _ as i64,
             SCRATCH_REG,
         );
-        self.masm.store64(BP, Mem::Base(SCRATCH_REG, 0));
+        self.masm.store64(REG_CALLFRAME, Mem::Base(SCRATCH_REG, 0));
     }
     /// Check if RET0 reg has exception pointer.
     pub fn check_exception(&mut self, force: bool) {
@@ -280,6 +196,7 @@ impl<'a> JIT<'a> {
             && self.bytecode_index < self.try_end as usize)
             || force
         {
+            assert!(crate::get_vm().exception_addr() != std::ptr::null());
             let br = self.masm.branch64_imm64(
                 RelationalCondition::Equal,
                 RET0,
@@ -329,7 +246,7 @@ impl<'a> JIT<'a> {
                     for jump in x {
                         jump.link(&mut self.masm);
                     }
-                    self.emit_put_virtual_register(*dest, RET0);
+                    self.emit_put_virtual_register(*dest, RET0, RET1);
                     self.try_start = prev_start;
                     self.try_end = prev_end;
                 }
@@ -338,17 +255,7 @@ impl<'a> JIT<'a> {
                     self.masm.function_epilogue();
                     self.masm.ret();
                 }
-                Ins::Enter => {
-                    let count = self.code_block.num_vars;
-                    for x in 0..count {
-                        self.masm.store64_imm64(
-                            unsafe { Value::undefined().u.as_int64 },
-                            Self::address_for_vreg(virtual_register::virtual_register_for_local(
-                                x as _,
-                            )),
-                        );
-                    }
-                }
+                Ins::Enter => {}
                 _ => todo!(),
             }
         }

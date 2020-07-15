@@ -23,7 +23,7 @@ impl<'a> JIT<'a> {
                 gen.end_jump_list
                     .iter()
                     .for_each(|item| item.link(&mut self.masm));
-                self.emit_put_virtual_register(*dest, result);
+                self.emit_put_virtual_register(*dest, result, scratch);
                 self.add_slow_cases(&gen.slow_path_jump_list);
             }
         }
@@ -48,6 +48,7 @@ impl<'a> JIT<'a> {
             }
             _ => op_unreachable!(),
         }
+        self.check_exception(false);
     }
 
     pub fn emit_slow_op_add(
@@ -213,7 +214,7 @@ impl<'a> JIT<'a> {
             .map(|item| {
                 item.slow_path_call = slow_path_call;
             });
-        self.emit_put_virtual_register(dest, result_reg);
+        self.emit_put_virtual_register(dest, result_reg, scratch_gpr);
         let state = self
             .ins_to_mathic_state
             .get_mut(&(ins as *const Ins))
@@ -278,6 +279,6 @@ impl<'a> JIT<'a> {
                 self.add_slow_case(*j);
             }
         }
-        self.emit_put_virtual_register(dest, result_reg);
+        self.emit_put_virtual_register(dest, result_reg, scratch_gpr);
     }
 }

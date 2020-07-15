@@ -113,13 +113,6 @@ impl CodeBlock {
     pub fn jit_data(&self) -> parking_lot::MutexGuard<'_, JITData> {
         self.jit_data.lock()
     }
-    pub fn frame_register_count(&self) -> usize {
-        match self.jit_type {
-            JITType::Interp => 0,
-            JITType::Baseline => crate::jit::jit_frame_register_count_for(self),
-            _ => todo!(),
-        }
-    }
 
     pub fn metadata(&self, op: u32) -> &OpcodeMetadata {
         &self.metadata[op as usize]
@@ -163,10 +156,6 @@ impl CodeBlock {
             .get(&profile)
             .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
             .unwrap()
-    }
-    pub fn stack_pointer_offset(&self) -> i32 {
-        virtual_register::virtual_register_for_local(self.frame_register_count() as i32 - 1)
-            .offset()
     }
 }
 

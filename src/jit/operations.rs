@@ -1,4 +1,5 @@
 use super::{add_generator::*, mathic::*, sub_generator::*, *};
+use crate::gc::*;
 use crate::value::*;
 use crate::*;
 use thunk_generator::*;
@@ -29,7 +30,7 @@ pub extern "C" fn operation_value_add_optimize(
         profile.observe_lhs_and_rhs(op1, op2);
     }
     add_ic.generate_out_of_line(
-        call_frame.code_block_ref().unwrap(),
+        &call_frame.code_block.unwrap(),
         operation_value_add as *const u8,
     );
     operation_value_add(vm, op1, op2)
@@ -61,7 +62,7 @@ pub extern "C" fn operation_value_sub_optimize(
         profile.observe_lhs_and_rhs(op1, op2);
     }
     sub_ic.generate_out_of_line(
-        call_frame.code_block_ref().unwrap(),
+        &call_frame.code_block.unwrap(),
         operation_value_sub as *const u8,
     );
     operation_value_sub(vm, op1, op2)
@@ -92,7 +93,7 @@ pub extern "C" fn operation_value_mul_optimize(
         profile.observe_lhs_and_rhs(op1, op2);
     }
     mul_ic.generate_out_of_line(
-        call_frame.code_block_ref().unwrap(),
+        &call_frame.code_block.unwrap(),
         operation_value_sub as *const u8,
     );
     operation_value_mul(vm, op1, op2)
@@ -102,9 +103,5 @@ pub unsafe extern "C" fn operation_link_call(
     callee_frame: *mut CallFrame,
     vm: &VM,
 ) -> SlowPathReturn {
-    let call_frame = (&*callee_frame).caller_frame();
-
-    let callee_as_value = (&*call_frame).value_callee();
-
     return SlowPathReturn::encode(0, 0);
 }

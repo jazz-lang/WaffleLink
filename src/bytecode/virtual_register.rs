@@ -1,5 +1,5 @@
 use crate::interpreter::callframe::*;
-use crate::interpreter::register::Register;
+
 /// Register numbers used in bytecode operations have different meaning according to their ranges:
 ///      0x80000000-0xFFFFFFFF  Negative indices from the CallFrame pointer are entries in the call frame.
 ///      0x00000000-0x3FFFFFFF  Forwards indices from the CallFrame pointer are local vars and temporaries with the function's callframe.
@@ -35,11 +35,11 @@ impl VirtualRegister {
     }
 
     const fn operand_to_argument(operand: i32) -> i32 {
-        operand - CallFrame::this_argument_offset()
+        operand
     }
 
     const fn argument_to_operand(arg: i32) -> i32 {
-        arg + CallFrame::this_argument_offset()
+        arg
     }
 
     pub const fn offset(self) -> i32 {
@@ -47,7 +47,7 @@ impl VirtualRegister {
     }
 
     pub const fn offset_in_bytes(self) -> i32 {
-        self.virtual_register * std::mem::size_of::<Register>() as i32
+        self.virtual_register * 8
     }
 
     pub const fn to_local(self) -> i32 {
@@ -60,6 +60,11 @@ impl VirtualRegister {
     pub const fn new_constant_index(i: i32) -> Self {
         Self {
             virtual_register: i + FIRST_CONSTANT_REGISTER_INDEX,
+        }
+    }
+    pub fn new_argument(i: i32) -> Self {
+        Self {
+            virtual_register: i,
         }
     }
     pub const fn to_constant_index(self) -> i32 {
@@ -76,10 +81,6 @@ impl VirtualRegister {
 
     pub const fn is_argument(self) -> bool {
         is_argument(self.virtual_register)
-    }
-
-    pub const fn is_header(self) -> bool {
-        (self.virtual_register >= 0) & (self.virtual_register < CallFrameSlot::ThisArgument as i32)
     }
 
     pub const fn is_constant(self) -> bool {
@@ -110,33 +111,6 @@ impl fmt::Display for VirtualRegister {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if !self.is_valid() {
             return write!(f, "<invalid>");
-        }
-        if self.is_header() {
-            if self.virtual_register == CallFrameSlot::CodeBlock as i32 {
-                write!(f, "codeBlock")?;
-                return Ok(());
-            } else if self.virtual_register == CallFrameSlot::Callee as i32 {
-                write!(f, "callee")?;
-                return Ok(());
-            } else {
-                #[cfg(target_pointer_width = "64")]
-                {
-                    if self.virtual_register == 0 {
-                        write!(f, "callerFrame")?;
-                        return Ok(());
-                    } else if self.virtual_register == 1 {
-                        write!(f, "returnPC")?;
-                        return Ok(());
-                    }
-                }
-                #[cfg(target_pointer_width = "32")]
-                {
-                    if self.virtual_register == 0 {
-                        write!(f, "callerFrameAndPc")?;
-                        return Ok(());
-                    }
-                }
-            }
         }
         if self.is_constant() {
             return write!(f, "const{}", self.to_constant_index());

@@ -2,8 +2,10 @@ use super::*;
 use crate::*;
 fn slow_path_for(jit: &mut JIT<'_>, vm: &crate::VM, slow_path_func: *const u8) {
     jit.emit_function_prologue();
-    jit.masm
-        .store64(BP, Mem::Absolute(&vm.top_call_frame as *const _ as _));
+    jit.masm.store64(
+        REG_CALLFRAME,
+        Mem::Absolute(&vm.top_call_frame as *const _ as _),
+    );
     #[cfg(all(windows, target_arch = "x86_64"))]
     {
         // windows calling convention is weird: we have to return SlowPathReturn on stack instead of using rax and rdx
@@ -46,7 +48,7 @@ fn slow_path_for(jit: &mut JIT<'_>, vm: &crate::VM, slow_path_func: *const u8) {
         .masm
         .branch64_test_imm64(ResultCondition::Zero, RET1, -1);
     jit.masm.pop(Reg::R10);
-    jit.prepare_for_tail_call_slow(RET0);
+    //jit.prepare_for_tail_call_slow(RET0);
     do_not_trash.link(&mut jit.masm);
     jit.masm.far_jump_r(RET0);
 }
