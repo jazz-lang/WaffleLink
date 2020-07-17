@@ -242,6 +242,11 @@ impl<T> Ref<T> {
     pub fn raw(&self) -> *const T {
         self.ptr
     }
+    pub fn offset(&self, x: isize) -> Self {
+        Self {
+            ptr: unsafe { self.ptr.offset(x) },
+        }
+    }
 
     pub fn address(&self) -> Address {
         Address::from_ptr(self.ptr)

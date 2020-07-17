@@ -53,6 +53,7 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
 
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
+    pub call_stack: Vec<interpreter::callframe::CallFrame>,
     pub exception: value::Value,
     pub stop_world: bool,
     pub opt_jit: bool,
@@ -63,6 +64,7 @@ impl VM {
         Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
+            call_stack: vec![],
             stop_world: false,
             #[cfg(feature = "opt-jit")]
             opt_jit: true,

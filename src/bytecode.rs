@@ -14,9 +14,6 @@ pub enum Ins {
     Enter,
     Move(VirtualRegister, VirtualRegister),
     Swap(VirtualRegister, VirtualRegister),
-    MoveInt(i32, VirtualRegister),
-    LoadArg(u32, VirtualRegister),
-    SetArg(VirtualRegister, u32),
     Load(VirtualRegister, VirtualRegister, VirtualRegister),
     Store(VirtualRegister, VirtualRegister, VirtualRegister),
     LoadId(u32, VirtualRegister, VirtualRegister),
@@ -46,6 +43,7 @@ pub enum Ins {
     JumpIfZero(VirtualRegister, i32),
     JumpIfNotZero(VirtualRegister, i32),
     Try(u32 /* code size */),
+    TryEnd,
     Catch(VirtualRegister),
     Call(
         VirtualRegister, /* function */

@@ -29,6 +29,7 @@ pub extern "C" fn operation_value_add_optimize(
     {
         profile.observe_lhs_and_rhs(op1, op2);
     }
+
     add_ic.generate_out_of_line(
         &call_frame.code_block.unwrap(),
         operation_value_add as *const u8,
