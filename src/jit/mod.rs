@@ -93,6 +93,17 @@ impl<'a> JIT<'a> {
     pub fn address_for_vreg(src: virtual_register::VirtualRegister) -> Mem {
         return Mem::Base(BP, src.offset() * std::mem::size_of::<u64>() as i32);
     }
+
+    pub fn emit_get_virtual_registers(
+        &mut self,
+        src1: virtual_register::VirtualRegister,
+        src2: virtual_register::VirtualRegister,
+        dest1: Reg,
+        dest2: Reg,
+    ) {
+        self.emit_get_virtual_register(src1, dest1);
+        self.emit_get_virtual_register(src2, dest2);
+    }
     pub fn emit_get_virtual_register(&mut self, src: virtual_register::VirtualRegister, dest: Reg) {
         if src.is_constant() {
             let value = self.code_block.get_constant(src);
@@ -189,6 +200,12 @@ impl<'a> JIT<'a> {
         );
         self.masm.store64(REG_CALLFRAME, Mem::Base(SCRATCH_REG, 0));
     }
+    pub fn add_jump(&mut self, jump: Jump, relative_offset: i32) {
+        self.jmptable.push(JumpTable {
+            from: jump,
+            to_bytecode_offset: (self.bytecode_index as i32 + relative_offset) as _,
+        })
+    }
     /// Check if RET0 reg has exception pointer.
     pub fn check_exception(&mut self, force: bool) {
         if (self.bytecode_index as u32 >= self.try_start
@@ -231,6 +248,10 @@ impl<'a> JIT<'a> {
             self.labels[i] = self.masm.label();
             let ins = &self.code_block.instructions[i];
             match ins {
+                Ins::JLess { .. } => self.emit_op_jless(ins),
+                Ins::JLessEq { .. } => self.emit_op_jlesseq(ins),
+                Ins::JGreater { .. } => self.emit_op_jnless(ins),
+                Ins::JGreaterEq { .. } => self.emit_op_jgreaterq(ins),
                 Ins::Sub { .. } => self.emit_op_sub(ins),
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
@@ -309,6 +330,10 @@ impl<'a> JIT<'a> {
             self.bytecode_index = case.to as _;
             let curr = &self.code_block.instructions[self.bytecode_index];
             match curr {
+                Ins::JLess { .. } => {
+                    self.emit_slow_op_jless(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
                 Ins::Add(_src1, _src2, _dest) => {
                     self.emit_slow_op_add(curr, &mut iter);
                     self.bytecode_index += 1;

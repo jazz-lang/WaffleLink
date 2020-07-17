@@ -1,8 +1,5 @@
 function foo(x, y, z) {
-   if (x + y == 182200) {
-      throw "Heeey!"
-   }
-   print(x + y);
+   return x < y;
    return x + y + z;
 }
 

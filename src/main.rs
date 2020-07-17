@@ -22,10 +22,10 @@ fn main() {
     cb.metadata = vec![{ OpcodeMetadata::new() }, OpcodeMetadata::new()];
     cb.instructions = vec![
         Ins::Try(2),
-        Ins::Add(
-            VirtualRegister::new_argument(1),
-            VirtualRegister::new_constant_index(0),
-            virtual_register_for_local(2),
+        Ins::JLess(
+            virtual_register_for_local(0),
+            virtual_register_for_local(1),
+            -1,
         ),
         Ins::Return(virtual_register_for_local(2)),
         Ins::Catch(virtual_register_for_local(0)),
@@ -36,7 +36,7 @@ fn main() {
     jit.compile_without_linking();
     jit.link();
     jit.disasm();
-    let mut cf = CallFrame::new(&[Value::new_int(4)], 3);
+    /*let mut cf = CallFrame::new(&[Value::new_int(4)], 3);
     cf.code_block = Some(Ref { ptr: &cb });
     let f: extern "C" fn(&mut CallFrame) -> WaffleResult =
         unsafe { std::mem::transmute(jit.link_buffer.code) };
@@ -47,5 +47,5 @@ fn main() {
         "Second time invoke result: {}",
         f(&mut cf).value().to_int32()
     );
-    //jit.disasm();
+    //jit.disasm();*/
 }

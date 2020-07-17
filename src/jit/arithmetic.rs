@@ -3,6 +3,212 @@ use add_generator::*;
 use mathic::*;
 
 impl<'a> JIT<'a> {
+    pub fn emit_op_jless(&mut self, op: &Ins) {
+        if let Ins::JLess(op1, op2, target) = op {
+            self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::LessThan);
+        }
+    }
+    pub fn emit_op_jlesseq(&mut self, op: &Ins) {
+        if let Ins::JLessEq(op1, op2, target) = op {
+            self.emit_compare_and_jump(
+                *op1,
+                *op2,
+                *target as _,
+                RelationalCondition::LessThanOrEqual,
+            );
+        }
+    }
+    pub fn emit_op_jgreater(&mut self, op: &Ins) {
+        if let Ins::JGreater(op1, op2, target) = op {
+            self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::GreaterThan);
+        }
+    }
+    pub fn emit_op_jgreaterq(&mut self, op: &Ins) {
+        if let Ins::JGreaterEq(op1, op2, target) = op {
+            self.emit_compare_and_jump(
+                *op1,
+                *op2,
+                *target as _,
+                RelationalCondition::GreaterThanOrEqual,
+            );
+        }
+    }
+    pub fn emit_op_jnless(&mut self, op: &Ins) {
+        if let Ins::JNLess(op1, op2, target) = op {
+            self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::GreaterThan);
+        }
+    }
+    pub fn emit_op_jnlesseq(&mut self, op: &Ins) {
+        if let Ins::JNLessEq(op1, op2, target) = op {
+            self.emit_compare_and_jump(
+                *op1,
+                *op2,
+                *target as _,
+                RelationalCondition::GreaterThanOrEqual,
+            );
+        }
+    }
+    pub fn emit_op_jngreater(&mut self, op: &Ins) {
+        if let Ins::JNGreater(op1, op2, target) = op {
+            self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::LessThan);
+        }
+    }
+    pub fn emit_op_jngreaterq(&mut self, op: &Ins) {
+        if let Ins::JNGreaterEq(op1, op2, target) = op {
+            self.emit_compare_and_jump(
+                *op1,
+                *op2,
+                *target as _,
+                RelationalCondition::LessThanOrEqual,
+            );
+        }
+    }
+
+    pub fn emit_slow_op_jless(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JLess(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                0,
+                FpCondition::LessThanAndOrdered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jlesseq(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JLessEq(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::LessThanOrEqualAndOrdered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jgreater(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JGreater(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::GreaterThanAndOrdered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jgreaterq(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JGreaterEq(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::GreaterThanOrEqualAndOrdered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jnless(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JNLess(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::GreaterThanOrUnordered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jnlesseq(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JNLessEq(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::GreaterThanOrEqualOrUnordered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jngreater(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JNGreater(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                1,
+                FpCondition::LessThanOrUnordered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+    pub fn emit_slow_op_jngreaterq(
+        &mut self,
+        op: &Ins,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        if let Ins::JNGreaterEq(op1, op2, target) = op {
+            self.emit_compare_and_jump_slow(
+                *op1,
+                *op2,
+                *target as _,
+                0,
+                FpCondition::LessThanOrEqualOrUnordered,
+                std::ptr::null_mut(),
+                false,
+                slow_cases,
+            );
+        }
+    }
+
     pub fn emit_op_div(&mut self, op: &Ins) {
         if let Ins::Div(op1, op2, dest) = op {
             let left = T0;
@@ -280,5 +486,64 @@ impl<'a> JIT<'a> {
             }
         }
         self.emit_put_virtual_register(dest, result_reg, scratch_gpr);
+    }
+
+    pub fn emit_compare_and_jump(
+        &mut self,
+        op1: virtual_register::VirtualRegister,
+        op2: virtual_register::VirtualRegister,
+        target: u32,
+        cond: RelationalCondition,
+    ) {
+        self.emit_get_virtual_registers(op1, op2, T0, T1);
+        let br = self.branch_if_not_int32(T0, true);
+        self.add_slow_case(br);
+        let br = self.branch_if_not_int32(T1, true);
+        self.add_slow_case(br);
+        let j = self.masm.branch32(cond, T0, T1);
+        self.add_jump(j, target as _);
+    }
+
+    pub fn emit_compare_and_jump_slow(
+        &mut self,
+        _op1: virtual_register::VirtualRegister,
+        _op2: virtual_register::VirtualRegister,
+        target: u32,
+        ins_size: i32,
+        double_cond: FpCondition,
+        operation: *const u8,
+        invert: bool,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        self.link_all_slow_cases(slow_cases); // lhs is not int
+        let fail1 = self.branch_if_not_number(T0, true);
+        let fail2 = self.branch_if_not_number(T1, true);
+        let fail3 = self.branch_if_int32(T1, true);
+        self.masm.add64(NUMBER_TAG_REGISTER, T0, T0);
+        self.masm.add64(NUMBER_TAG_REGISTER, T1, T1);
+        self.masm.move_gp_to_fp(T0, FT0);
+        self.masm.move_gp_to_fp(T1, FT1);
+        let j = self.masm.branch_double(double_cond, FT0, FT1);
+        self.emit_jump_slow_to_hot(j, target as _);
+        let j = self.masm.jump();
+        self.emit_jump_slow_to_hot(j, 1);
+        fail1.link(&mut self.masm);
+        fail2.link(&mut self.masm);
+        fail3.link(&mut self.masm);
+
+        self.link_all_slow_cases(slow_cases);
+        self.masm.prepare_call_with_arg_count(3);
+        self.masm.pass_reg_as_arg(T0, 1);
+        self.masm.pass_reg_as_arg(T1, 2);
+        self.masm
+            .pass_ptr_as_arg(crate::get_vm() as *const _ as _, 0);
+        self.masm.call_ptr_argc(operation, 3);
+        let c = if invert {
+            ResultCondition::Zero
+        } else {
+            ResultCondition::NonZero
+        };
+        let j = self.masm.branch32_test(c, RET0, RET0);
+        self.emit_jump_slow_to_hot(j, target as _);
     }
 }
