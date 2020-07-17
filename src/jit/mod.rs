@@ -139,8 +139,7 @@ impl<'a> JIT<'a> {
     }
 
     pub fn emit_function_prologue(&mut self) {
-        self.masm.push(BP);
-        self.masm.move_rr(SP, BP);
+        self.function_prologue(0);
     }
 
     pub fn materialize_tag_check_regs(&mut self) {
@@ -204,7 +203,16 @@ impl<'a> JIT<'a> {
             );
             self.exception_check.last_mut().unwrap().0.push(br);
         } else {
-            self.function_epilogue();
+            self.function_epilogue(AGPR0);
+            if cfg!(windows) {
+                self.masm
+                    .store64_imm32(1, Mem::Base(AGPR0, offset_of!(crate::WaffleResult, a) as _));
+                self.masm.store64(
+                    RET0,
+                    Mem::Base(AGPR0, offset_of!(crate::WaffleResult, b) as _),
+                );
+                self.masm.move_rr(AGPR0, RET0);
+            }
             self.masm.ret();
         }
     }
@@ -251,8 +259,20 @@ impl<'a> JIT<'a> {
                     self.try_end = prev_end;
                 }
                 Ins::Return(val) => {
-                    self.emit_get_virtual_register(*val, RET0);
-                    self.masm.function_epilogue();
+                    assert_ne!(RET0, T1);
+                    self.emit_get_virtual_register(*val, T1);
+                    self.function_epilogue(RET0);
+                    if cfg!(windows) {
+                        self.masm.store64_imm32(
+                            0,
+                            Mem::Base(RET0, offset_of!(crate::WaffleResult, a) as _),
+                        );
+                        self.masm
+                            .store64(T1, Mem::Base(RET0, offset_of!(crate::WaffleResult, b) as _));
+                    } else {
+                        self.masm.move_rr(T1, RET1);
+                        self.masm.move_i64(0, RET0);
+                    }
                     self.masm.ret();
                 }
                 Ins::Enter => {}

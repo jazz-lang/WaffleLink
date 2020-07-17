@@ -13,7 +13,7 @@ pub struct JIT<'a> {
     pub addr_loads: Vec<(i32, DataLabelPtr)>,
     pub code_block: &'a CodeBlock,
     pub masm: MacroAssemblerX86,
-    pub slow_paths: Vec<Box<dyn FnOnce(&mut Self)>>,
+    // pub slow_paths: Vec<Box<dyn FnOnce(&mut Self)>>,
     pub labels: Vec<Label>,
     pub jmptable: Vec<JumpTable>,
     pub slow_cases: Vec<SlowCaseEntry>,
@@ -30,7 +30,6 @@ pub struct JIT<'a> {
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
         Self {
-            slow_paths: vec![],
             try_end: 0,
             try_start: 0,
             ins_to_lbl: HashMap::new(),
@@ -114,12 +113,54 @@ impl<'a> JIT<'a> {
         }
     }
     pub fn function_prologue(&mut self, _regc: u32) {
-        // this basically does push rbp;mov rbp,rsp
-        self.masm.function_prologue(0); // value size is always equal to 8 bytes
+        #[cfg(all(unix, target_arch = "x86_64"))]
+        {
+            use RegisterID::*;
+            self.masm.push(EBP);
+            //self.masm.move_rr(SP, BP);
+            self.masm.sub64_imm32(5 * 8, SP);
+            self.masm.push(R15);
+            self.masm.push(R14);
+            self.masm.push(R13);
+            self.masm.push(R12);
+            self.masm.push(EBX);
+            //self.masm.move_rr(SP, BP);
+            /*self.masm.push(Reg::EBX);
+            self.masm.push(Reg::R12);
+            self.masm.push(Reg::R13);
+            self.masm.push(Reg::R14);
+            self.masm.push(Reg::R15);*/
+        }
+        #[cfg(windows)]
+        {
+            self.masm.push(EBP);
+            self.masm.sub64_imm32(8, SP);
+            self.masm.push(AGPR0);
+            self.masm.move_rr(AGPR1, AGPR0);
+        }
     }
 
-    pub fn function_epilogue(&mut self) {
-        self.masm.function_epilogue();
+    pub fn function_epilogue(&mut self, ret_addr: Reg) {
+        #[cfg(all(unix, target_arch = "x86_64"))]
+        {
+            use RegisterID::*;
+            self.masm.pop(EBX);
+            self.masm.pop(R12);
+            self.masm.pop(R13);
+            self.masm.pop(R14);
+            self.masm.pop(R15);
+            self.masm.add64_imm32(8 * 5, SP, SP);
+            //self.masm.move_rr(BP, SP);
+            self.masm.pop(EBP);
+            let _ = ret_addr;
+        }
+        #[cfg(windows)]
+        {
+            //self.masm.move_rr(BP, SP);
+            self.masm.pop(ret_addr);
+            self.masm.add64_imm32(8, SP, SP);
+            self.masm.pop(RegisterID::EBP);
+        }
     }
 
     pub fn call(&mut self) -> masm::Call {

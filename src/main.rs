@@ -38,11 +38,14 @@ fn main() {
     jit.disasm();
     let mut cf = CallFrame::new(&[Value::new_int(4)], 3);
     cf.code_block = Some(Ref { ptr: &cb });
-    let f: extern "C" fn(&mut CallFrame) -> Value =
+    let f: extern "C" fn(&mut CallFrame) -> WaffleResult =
         unsafe { std::mem::transmute(jit.link_buffer.code) };
     println!("Invoking for first time, should generate IC snippet");
-    let res = f(&mut cf).to_int32();
+    let res = f(&mut cf).value().to_int32();
     println!("Result: {}", res);
-    println!("Second time invoke result: {}", f(&mut cf).to_int32());
+    println!(
+        "Second time invoke result: {}",
+        f(&mut cf).value().to_int32()
+    );
     //jit.disasm();
 }

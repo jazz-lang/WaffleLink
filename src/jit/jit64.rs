@@ -6,22 +6,6 @@ impl<'a> JIT<'a> {
         let data = self.masm.move_with_patch_ptr(0, to);
         self.addr_loads.push((label, data));
     }
-    pub fn compile_bytecode(&mut self) {
-        self.function_prologue(0);
-        let frame_top_offset = self.code_block.num_vars as i32 * 8;
-        self.masm.add64_imm32(-frame_top_offset, BP, T1);
-        self.masm.move_rr(T1, SP);
-        self.private_compile_bytecode();
-
-        self.function_epilogue();
-        self.masm.ret();
-        /*for slow_path in self.slow_paths.iter().cloned() {
-            slow_path(self);
-        }*/
-        while let Some(slow) = self.slow_paths.pop() {
-            slow(self);
-        }
-    }
 
     pub fn box_double(&mut self, src: FPReg, dest: Reg, has_nr: bool) -> Reg {
         self.masm.move_fp_to_gp(src, dest);

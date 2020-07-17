@@ -89,3 +89,36 @@ pub fn set_vm(vm: *const VM) {
 pub fn get_vm() -> &'static mut VM {
     unsafe { &mut *VM_PTR }
 }
+
+#[repr(C)]
+pub struct WaffleResult {
+    pub(crate) a: u64,
+    pub(crate) b: u64,
+}
+impl WaffleResult {
+    pub fn is_error(&self) -> bool {
+        self.a == 1
+    }
+
+    pub fn is_okay(&self) -> bool {
+        self.a == 0
+    }
+
+    pub fn value(&self) -> value::Value {
+        unsafe { std::mem::transmute(self.b) }
+    }
+
+    pub fn okay(v: value::Value) -> Self {
+        Self {
+            a: 0,
+            b: unsafe { std::mem::transmute(v) },
+        }
+    }
+    pub fn error(v: value::Value) -> Self {
+        Self {
+            a: 1,
+            b: unsafe { std::mem::transmute(v) },
+        }
+    }
+}
+pub type WaffleInternalFn = extern "C" fn(&mut interpreter::callframe::CallFrame) -> WaffleResult;
