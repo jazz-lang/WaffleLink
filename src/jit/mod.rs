@@ -243,6 +243,27 @@ impl<'a> JIT<'a> {
                     let j = self.masm.branch64_imm32(RelationalCondition::Equal, 1, T0);
                     self.add_slow_case(j);
                 }
+                Ins::LoopHint => {
+                    #[cfg(feature = "opt-jit")]
+                    {
+                        if crate::get_vm().opt_jit {
+                            self.masm.move_i64(self.code_block as *const _ as i64, T1);
+                            self.masm.load32(
+                                Mem::Base(T1, offset_of!(CodeBlock, exc_counter) as i32),
+                                T0,
+                            );
+                            self.masm.add64_imm32(1, T0, T0);
+                            self.masm.store32(
+                                T0,
+                                Mem::Base(T1, offset_of!(CodeBlock, exc_counter) as i32),
+                            );
+                            let jump =
+                                self.masm
+                                    .branch32_imm(RelationalCondition::Equal, 10_000_0, T0);
+                            self.osr_upgrade.push(jump);
+                        }
+                    };
+                }
                 Ins::Try(off) => {
                     self.try_start = self.bytecode_index as _;
                     self.try_end = self.bytecode_index as u32 + *off;

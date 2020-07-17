@@ -13,7 +13,6 @@ pub struct JIT<'a> {
     pub addr_loads: Vec<(i32, DataLabelPtr)>,
     pub code_block: &'a CodeBlock,
     pub masm: MacroAssemblerX86,
-    // pub slow_paths: Vec<Box<dyn FnOnce(&mut Self)>>,
     pub labels: Vec<Label>,
     pub jmptable: Vec<JumpTable>,
     pub slow_cases: Vec<SlowCaseEntry>,
@@ -26,6 +25,7 @@ pub struct JIT<'a> {
     pub try_start: u32,
     pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
     pub ins_to_mathic: HashMap<*const Ins, *mut u8>,
+    pub osr_upgrade: Vec<Jump>,
 }
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
@@ -46,6 +46,7 @@ impl<'a> JIT<'a> {
             call_compilation_info: vec![],
             exception_check: vec![],
             bytecode_index: 0,
+            osr_upgrade: vec![],
             link_buffer: LinkBuffer::new(0 as *mut _),
         }
     }
@@ -118,7 +119,7 @@ impl<'a> JIT<'a> {
             use RegisterID::*;
             self.masm.push(EBP);
             //self.masm.move_rr(SP, BP);
-            self.masm.sub64_imm32(5 * 8, SP);
+            self.masm.sub64_imm32(6 * 8, SP);
             self.masm.push(R15);
             self.masm.push(R14);
             self.masm.push(R13);

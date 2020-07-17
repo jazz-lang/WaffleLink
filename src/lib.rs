@@ -55,6 +55,7 @@ pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
     pub exception: value::Value,
     pub stop_world: bool,
+    pub opt_jit: bool,
 }
 
 impl VM {
@@ -63,6 +64,10 @@ impl VM {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
             stop_world: false,
+            #[cfg(feature = "opt-jit")]
+            opt_jit: true,
+            #[cfg(not(feature = "opt-jit"))]
+            opt_jit: false,
         }
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {

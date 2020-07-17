@@ -67,6 +67,7 @@ pub enum Ins {
 pub struct CodeBlock {
     pub header: Header,
     pub num_vars: u32,
+    pub exc_counter: u32,
     pub num_args: u32,
     pub num_params: u32,
     pub callee_locals: i32,
@@ -92,6 +93,7 @@ impl CodeBlock {
             num_vars: 0,
             instructions: vec![],
             num_args: 0,
+            exc_counter: 0,
             constants: vec![],
             callee_locals: 0,
             jit_type: JITType::Baseline,
