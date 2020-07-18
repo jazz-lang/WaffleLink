@@ -282,7 +282,7 @@ impl ArithProfile {
                 Int32Overflow as u16 | NonNegZeroDouble as u16 | NegZeroDouble as u16;
         }
         if !val.is_empty()
-            && val.as_cell().header().vtblptr().to_usize()
+            && val.as_cell().vtable as *const _ as usize
                 == &crate::bigint::BIGINT_VTBL as *const _ as usize
         {
             *self.bits_ref_mut() |= HeapBigInt as u16;

@@ -26,6 +26,7 @@ fn destroy_bigint(x: Ref<Obj>) {
 #[repr(C)]
 pub struct BigIntObject {
     pub header: Header,
+    pub vtable: &'static VTable,
     pub bigint: num_bigint::BigInt,
 }
 
@@ -37,7 +38,7 @@ impl BigIntObject {
         let mut this: Ref<BigIntObject> = Ref {
             ptr: mem.to_mut_ptr(),
         };
-        this.header.init_vtbl(&BIGINT_VTBL);
+        this.vtable = &BIGINT_VTBL;
         this.bigint = num_bigint::BigInt::new(sign, digits);
         this
     }

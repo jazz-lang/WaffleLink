@@ -27,26 +27,26 @@ impl HeapBlock {
                     all_free = false;
                 } else {
                     this.unmark(cell_addr);
-                    if let Some(destroy_fn) = cell.header().vtbl().destroy_fn {
+                    if let Some(destroy_fn) = cell.vtable.destroy_fn {
                         destroy_fn(cell);
                     }
                     std::ptr::write_bytes(cell_addr.to_mut_ptr::<u8>(), 0, this.cell_size);
                     if free_list.is_null() {
-                        log::debug!("Initialize free list with {:p}", cell.raw());
+                        log!("Initialize free list with {:p}", cell.raw());
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = std::ptr::null_mut();
                     } else {
                         let next = free_list;
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = next as *mut _;
-                        log::debug!("Sweep {:p} to free list {:p}", cell.raw(), next);
+                        log!("Sweep {:p} to free list {:p}", cell.raw(), next);
                     }
                 }
             } else {
                 let next = free_list;
                 free_list = cell_addr.to_mut_ptr();
                 (&mut *free_list).next = next as *mut _;
-                //log::debug!("Add {:p} to free list {:p}", cell_addr.to_ptr::<()>(), next);
+                //log!("Add {:p} to free list {:p}", cell_addr.to_ptr::<()>(), next);
             }
         });
         self.free_list = free_list;
@@ -60,7 +60,7 @@ impl HeapBlock {
         {
             let c = self.cursor;
             self.cursor = self.cursor.offset(self.cell_size);
-            log::debug!(
+            log!(
                 "Bump allocate {:p}->{:p}",
                 c.to_ptr::<()>(),
                 self.cursor.to_ptr::<()>()
@@ -73,7 +73,7 @@ impl HeapBlock {
                 unsafe {
                     let x = self.free_list;
                     self.free_list = (&*x).next.cast();
-                    log::debug!(
+                    log!(
                         "Allocate {:p} from free list,next free list cell: {:p} ",
                         x,
                         self.free_list
@@ -95,7 +95,7 @@ impl HeapBlock {
             ))
             .cast::<Self>()
         };
-        log::debug!("Allocate HeapBlock with cell size {} bytes", cell_size);
+        log!("Allocate HeapBlock with cell size {} bytes", cell_size);
         const FORCE_FREELIST: bool = true;
 
         unsafe {
@@ -112,7 +112,7 @@ impl HeapBlock {
             if !FORCE_FREELIST {
                 this.cursor = Address::from_ptr(&this.storage);
             } else {
-                log::debug!("Force initialize freelist");
+                log!("Force initialize freelist");
                 this.cursor = this
                     .storage()
                     .offset(Self::BLOCK_SIZE - std::mem::size_of::<Self>());

@@ -45,7 +45,7 @@ impl MathICGenerator for MulGenerator {
             rhs = profile.rhs_observed_type();
         }
         if lhs.is_only_non_number() && rhs.is_only_non_number() {
-            log::debug!("Non number operation, do not generate code");
+            log!("Non number operation, do not generate code");
             return MathICResult::DontGenerate;
         }
 

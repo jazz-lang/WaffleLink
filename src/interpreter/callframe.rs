@@ -5,7 +5,9 @@ pub struct CallFrame {
     pub regs: Box<[Value]>,
     pub code_block: Option<Ref<CodeBlock>>,
     pub args: Ref<Value>,
+    pub argc: u32,
     pub handlers: Vec<u32>,
+    pub this: Value,
     pub pc: u32,
 }
 
@@ -13,9 +15,11 @@ impl CallFrame {
     pub fn new(args: &[Value], regc: u32) -> Self {
         Self {
             regs: vec![Value::undefined(); regc as usize].into_boxed_slice(),
+            argc: args.len() as u32,
             args: Ref { ptr: args.as_ptr() },
             code_block: None,
             handlers: vec![],
+            this: Value::undefined(),
             pc: 0,
         }
     }

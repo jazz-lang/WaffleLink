@@ -42,6 +42,8 @@ pub enum Ins {
     Jmp(i32),
     JmpIfZero(VirtualRegister, i32),
     JmpIfNotZero(VirtualRegister, i32),
+    JEq(VirtualRegister, VirtualRegister, i32),
+    JNEq(VirtualRegister, VirtualRegister, i32),
     JLess(VirtualRegister, VirtualRegister, i32),
     JLessEq(VirtualRegister, VirtualRegister, i32),
     JGreater(VirtualRegister, VirtualRegister, i32),
@@ -52,6 +54,7 @@ pub enum Ins {
     JNLess(VirtualRegister, VirtualRegister, i32),
     Try(u32 /* code size */),
     TryEnd,
+    Throw(VirtualRegister),
     Catch(VirtualRegister),
     Call(
         VirtualRegister, /* function */

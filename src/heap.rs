@@ -2,12 +2,12 @@ use crate::gc::*;
 use crate::object::*;
 pub mod block;
 
-pub const SIZE_CLASS_1: usize = 16;
-pub const SIZE_CLASS_2: usize = 32;
-pub const SIZE_CLASS_3: usize = 48;
-pub const SIZE_CLASS_4: usize = 64;
-pub const SIZE_CLASS_5: usize = 128;
-pub const SIZE_CLASS_6: usize = 512;
+pub const SIZE_CLASS_1: usize = 32;
+pub const SIZE_CLASS_2: usize = 48;
+pub const SIZE_CLASS_3: usize = 64;
+pub const SIZE_CLASS_4: usize = 128;
+pub const SIZE_CLASS_5: usize = 512;
+pub const SIZE_CLASS_6: usize = 1024;
 pub const LARGE_SIZE: usize = 7;
 pub const SIZE_CLASSES: usize = 6;
 
@@ -59,7 +59,7 @@ impl Heap {
             println!("{}", size);
             todo!("Large classes is not yet supported")
         }
-        log::trace!("Allocate {} bytes in size class #{}", size, sc);
+        log!("Allocate {} bytes in size class #{}", size, sc);
         unsafe {
             for block in self.size_classes[sc].iter_mut() {
                 let mem = (&mut **block).allocate();
@@ -76,8 +76,9 @@ impl Heap {
         let off = object.to_usize() % block::HeapBlock::BLOCK_SIZE;
         (object.to_usize() as isize + (-(off as isize))) as *mut _
     }
-
-    pub fn collect(&mut self, sp: Address) {
+    #[inline(never)]
+    fn collect_roots(&mut self, sp: Address) -> Vec<Address> {
+        let sp = Address::from_ptr(&sp);
         let filter = |frame_addr: Address| unsafe {
             if frame_addr.is_non_null() {
                 let value_pointer = *frame_addr.to_mut_ptr::<*mut u8>();
@@ -113,13 +114,12 @@ impl Heap {
             if end.to_usize() % 8 != 0 {
                 end = Address::from(end.to_usize() + 8 - end.to_usize() % 8);
             }
-            log::debug!(
+            log!(
                 "Scan for conservative roots in range {:p}..{:p}",
                 start.to_ptr::<u8>(),
                 end.to_ptr::<u8>()
             );
             while start < end {
-                //println!("{:p}", start.to_mut_ptr::<u8>());
                 unsafe {
                     let frame = start;
                     if filter(frame) {
@@ -129,7 +129,7 @@ impl Heap {
                             let mut cell: Ref<Obj> = Ref {
                                 ptr: (*start.to_mut_ptr::<Address>()).to_mut_ptr(),
                             };
-                            log::trace!(
+                            log!(
                                 "Found GC pointer {:p} at {:p}",
                                 (*start.to_mut_ptr::<Address>()).to_ptr::<u8>(),
                                 start.to_ptr::<u8>(),
@@ -144,6 +144,31 @@ impl Heap {
                 start = start.add_ptr(1);
             }
         }
+        // precise roots
+        {
+            let vm = crate::get_vm();
+            for frame in vm.call_stack.iter() {
+                for reg in frame.regs.iter() {
+                    if reg.is_cell() {
+                        mark_stack.push(Address::from_ptr(reg.as_cell().ptr));
+                    }
+                }
+
+                for i in 0..frame.argc {
+                    let value = frame.args.offset(i as _);
+                    if value.is_cell() {
+                        mark_stack.push(Address::from_ptr(value.as_cell().ptr));
+                    }
+                }
+                if frame.this.is_cell() {
+                    mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr));
+                }
+            }
+        }
+        mark_stack
+    }
+    pub fn collect(&mut self, sp: Address) {
+        let mut mark_stack = self.collect_roots(sp);
         // marking
         {
             while let Some(cell_addr) = mark_stack.pop() {
@@ -152,8 +177,7 @@ impl Heap {
                 };
 
                 cell.header_mut().mark_non_atomic();
-                debug_assert!(cell.header().vtblptr().is_non_null());
-                if let Some(trace) = cell.header().vtbl().trace_fn {
+                if let Some(trace) = cell.vtable.trace_fn {
                     trace(cell, &mut |mut object| {
                         if object.header().is_marked_non_atomic() {
                             return;

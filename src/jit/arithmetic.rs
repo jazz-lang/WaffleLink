@@ -254,7 +254,6 @@ impl<'a> JIT<'a> {
             }
             _ => op_unreachable!(),
         }
-        self.check_exception(false);
     }
 
     pub fn emit_slow_op_add(
@@ -378,7 +377,7 @@ impl<'a> JIT<'a> {
         _profiled_fn: *const u8, // TODO: Type info
         repatch_fn: *const u8,
     ) {
-        log::debug!("[JIT Arithmetic] Emit slow MathIC case");
+        log!("[JIT Arithmetic] Emit slow MathIC case");
         let label = self.masm.label();
         self.ins_to_mathic_state
             .get_mut(&(ins as *const Ins))
@@ -442,7 +441,7 @@ impl<'a> JIT<'a> {
         _profiled_fn: *const u8, // TODO: Type info
         non_profiled_fn: *const u8,
     ) {
-        log::debug!("[JIT Arithmetic] Emit fast MathIC case");
+        log!("[JIT Arithmetic] Emit fast MathIC case");
         let left_reg = T1;
         let right_reg = T2;
         let result_reg = T0;

@@ -16,16 +16,16 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let val = callframe.get_register(value);
                 return WaffleResult::okay(val);
             }
-            Ins::Jump(off) => {
+            Ins::Jmp(off) => {
                 pc = (pc as i32 + off) as u32;
             }
-            Ins::JumpIfNotZero(x, off) => {
+            Ins::JmpIfNotZero(x, off) => {
                 let val = callframe.get_register(x);
                 if val.to_boolean() {
                     pc = (pc as i32 + off) as u32;
                 }
             }
-            Ins::JumpIfZero(x, off) => {
+            Ins::JmpIfZero(x, off) => {
                 let val = callframe.get_register(x);
                 if !val.to_boolean() {
                     pc = (pc as i32 + off) as u32;

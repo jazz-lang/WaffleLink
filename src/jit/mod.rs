@@ -12,6 +12,8 @@ pub use jit_x86::*;
 pub mod add_generator;
 pub mod arithmetic;
 pub mod call;
+use crate::object::*;
+use crate::vtable::VTable;
 pub mod div_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
@@ -22,12 +24,11 @@ pub mod sub_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod tail_call64;
 pub mod thunk_generator;
-use crate::builtins::WResult;
 use crate::bytecode::*;
 use crate::interpreter::callframe::*;
-use crate::interpreter::stack_alignment::*;
-pub type JITFunction = extern "C" fn(&mut CallFrame) -> WResult;
-pub type JITTrampoline = extern "C" fn(&mut CallFrame, usize) -> WResult;
+use crate::*;
+pub type JITFunction = extern "C" fn(&mut CallFrame) -> WaffleResult;
+pub type JITTrampoline = extern "C" fn(&mut CallFrame, usize) -> WaffleResult;
 
 pub extern "C" fn safepoint_slow_path(_sp: *mut u8) {}
 
@@ -206,31 +207,33 @@ impl<'a> JIT<'a> {
             to_bytecode_offset: (self.bytecode_index as i32 + relative_offset) as _,
         })
     }
-    /// Check if RET0 reg has exception pointer.
+    /// This function assumes RET0 is `WaffleResult.a` and `RET1` is `WaffleResult.b` or exception value.
     pub fn check_exception(&mut self, force: bool) {
         if (self.bytecode_index as u32 >= self.try_start
             && self.bytecode_index < self.try_end as usize)
             || force
         {
             assert!(crate::get_vm().exception_addr() != std::ptr::null());
-            let br = self.masm.branch64_imm64(
-                RelationalCondition::Equal,
-                RET0,
-                crate::get_vm().exception_addr() as _,
-            );
+            let br = self
+                .masm
+                .branch64_imm32(RelationalCondition::Equal, 1, RET0);
             self.exception_check.last_mut().unwrap().0.push(br);
         } else {
+            let br = self
+                .masm
+                .branch64_imm64(RelationalCondition::NotEqual, RET0, 1);
             self.function_epilogue(AGPR0);
             if cfg!(windows) {
                 self.masm
                     .store64_imm32(1, Mem::Base(AGPR0, offset_of!(crate::WaffleResult, a) as _));
                 self.masm.store64(
-                    RET0,
+                    RET1,
                     Mem::Base(AGPR0, offset_of!(crate::WaffleResult, b) as _),
                 );
                 self.masm.move_rr(AGPR0, RET0);
             }
             self.masm.ret();
+            br.link(&mut self.masm);
         }
     }
     fn private_compile_link_pass(&mut self) {
@@ -247,7 +250,55 @@ impl<'a> JIT<'a> {
             self.bytecode_index = i as _;
             self.labels[i] = self.masm.label();
             let ins = &self.code_block.instructions[i];
+            self.add_comment(&format!("[{:04}] {:?}", self.bytecode_index, ins));
             match ins {
+                Ins::JEq(lhs, rhs, offset) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
+                    self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
+                    let jump = self.masm.branch32(RelationalCondition::Equal, T0, T1);
+                    self.add_jump(jump, *offset);
+                }
+                Ins::JNEq(lhs, rhs, offset) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
+                    self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
+                    let jump = self.masm.branch32(RelationalCondition::NotEqual, T0, T1);
+                    self.add_jump(jump, *offset);
+                }
+                Ins::Equal(lhs, rhs, dst) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
+                    self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
+                    self.masm.compare32(RelationalCondition::Equal, T0, T1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
+                }
+                Ins::NotEqual(lhs, rhs, dst) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
+                    self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
+                    self.masm
+                        .compare32(RelationalCondition::NotEqual, T0, T1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
+                }
+                Ins::JmpIfZero(value_v, off) => {
+                    let value = T0;
+                    let s1 = T1;
+                    let s2 = T2;
+                    self.emit_get_virtual_register(*value_v, value);
+                    let j = self.branch_if_falsey(value, s1, s2, FT0, FT1, false);
+                    for j in j.jumps {
+                        self.add_jump(j, *off);
+                    }
+                }
+                Ins::JmpIfNotZero(value_v, off) => {
+                    let value = T0;
+                    let s1 = T1;
+                    let s2 = T2;
+                    self.emit_get_virtual_register(*value_v, value);
+                    let j = self.branch_if_truthy(value, s1, s2, FT0, FT1, false);
+                    for j in j.jumps {
+                        self.add_jump(j, *off);
+                    }
+                }
                 Ins::JLess { .. } => self.emit_op_jless(ins),
                 Ins::JLessEq { .. } => self.emit_op_jlesseq(ins),
                 Ins::JGreater { .. } => self.emit_op_jnless(ins),
@@ -256,6 +307,7 @@ impl<'a> JIT<'a> {
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Div { .. } => self.emit_op_div(ins),
+
                 Ins::Safepoint => {
                     self.masm.load64(
                         Mem::Absolute(&crate::get_vm().stop_world as *const bool as usize),
@@ -296,23 +348,44 @@ impl<'a> JIT<'a> {
                     for jump in x {
                         jump.link(&mut self.masm);
                     }
-                    self.emit_put_virtual_register(*dest, RET0, RET1);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
                     self.try_start = prev_start;
                     self.try_end = prev_end;
                 }
+                Ins::Throw(reg) => {
+                    self.emit_get_virtual_register(*reg, NON_CALLEE_SAVE_T0);
+                    if cfg!(not(windows)) {
+                        self.masm.move_i32(1, RET0);
+                        self.masm.move_rr(NON_CALLEE_SAVE_T0, RET1);
+                    }
+                    self.function_epilogue(AGPR0);
+                    if cfg!(windows) {
+                        self.masm.store64_imm32(
+                            1,
+                            Mem::Base(AGPR0, offset_of!(crate::WaffleResult, a) as _),
+                        );
+                        self.masm.store64(
+                            NON_CALLEE_SAVE_T0,
+                            Mem::Base(AGPR0, offset_of!(crate::WaffleResult, b) as _),
+                        );
+                        self.masm.move_rr(AGPR0, RET0);
+                    }
+                    self.masm.ret();
+                }
                 Ins::Return(val) => {
-                    assert_ne!(RET0, T1);
-                    self.emit_get_virtual_register(*val, T1);
+                    self.emit_get_virtual_register(*val, NON_CALLEE_SAVE_T0);
                     self.function_epilogue(RET0);
                     if cfg!(windows) {
                         self.masm.store64_imm32(
                             0,
                             Mem::Base(RET0, offset_of!(crate::WaffleResult, a) as _),
                         );
-                        self.masm
-                            .store64(T1, Mem::Base(RET0, offset_of!(crate::WaffleResult, b) as _));
+                        self.masm.store64(
+                            NON_CALLEE_SAVE_T0,
+                            Mem::Base(RET0, offset_of!(crate::WaffleResult, b) as _),
+                        );
                     } else {
-                        self.masm.move_rr(T1, RET1);
+                        self.masm.move_rr(NON_CALLEE_SAVE_T0, RET1);
                         self.masm.move_i64(0, RET0);
                     }
                     self.masm.ret();
@@ -323,13 +396,42 @@ impl<'a> JIT<'a> {
         }
     }
     fn private_compile_slow_cases(&mut self) {
+        if self.slow_cases.is_empty() {
+            return;
+        }
+        self.add_comment("Start slow path section");
         // SAFE: we do not mutate slow_cases when generating slow paths.
         let slow_cases = unsafe { &*(&self.slow_cases as *const Vec<SlowCaseEntry>) };
         let mut iter = slow_cases.iter().peekable();
         while let Some(case) = iter.peek() {
             self.bytecode_index = case.to as _;
             let curr = &self.code_block.instructions[self.bytecode_index];
+            self.add_comment(&format!("S [{:04}] {:?}", self.bytecode_index, curr));
             match curr {
+                Ins::JEq(_, _, off) => {
+                    self.link_all_slow_cases(&mut iter);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm.pass_reg_as_arg(T0, 0);
+                    self.masm.pass_reg_as_arg(T1, 1);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_eq as _, 2);
+                    let j = self
+                        .masm
+                        .branch32_test(ResultCondition::NonZero, RET0, RET0);
+                    self.emit_jump_slow_to_hot(j, *off);
+                }
+                Ins::JNEq(_, _, off) => {
+                    self.link_all_slow_cases(&mut iter);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm.pass_reg_as_arg(T0, 0);
+                    self.masm.pass_reg_as_arg(T1, 1);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_neq as _, 2);
+                    let j = self
+                        .masm
+                        .branch32_test(ResultCondition::NonZero, RET0, RET0);
+                    self.emit_jump_slow_to_hot(j, *off);
+                }
                 Ins::JLess { .. } => {
                     self.emit_slow_op_jless(curr, &mut iter);
                     self.bytecode_index += 1;
@@ -365,6 +467,7 @@ impl<'a> JIT<'a> {
             let jump = self.masm.jump();
             self.emit_jump_slow_to_hot(jump, 0);
         }
+        self.add_comment("End slow path section");
     }
     pub fn emit_jump_slow_to_hot(&mut self, j: Jump, relative_offset: i32) {
         let label = self.labels[(self.bytecode_index as i32 as i32 + relative_offset) as usize];
@@ -444,7 +547,10 @@ impl<'a> JIT<'a> {
             .expect("Failed to create Capstone object");
         let asm = cs.disasm_all(code_slice, code as _).unwrap();
         for i in asm.iter() {
-            println!("{}", i);
+            if let Some(c) = self.get_comment_for((i.address() - code as u64) as u32) {
+                println!("{}", c);
+            }
+            println!("\t{}", i);
         }
     }
 
@@ -462,9 +568,174 @@ impl<'a> JIT<'a> {
             });
         }
     }
+    pub fn branch_if_type(&mut self, value: Reg, vtable: &VTable) -> Jump {
+        self.masm.branch64_imm64_mem(
+            RelationalCondition::Equal,
+            vtable as *const _ as i64,
+            Mem::Base(value, offset_of!(Obj, vtable) as i32),
+        )
+    }
+    pub fn branch_if_not_type(&mut self, value: Reg, vtable: &VTable) -> Jump {
+        self.masm.branch64_imm64_mem(
+            RelationalCondition::NotEqual,
+            vtable as *const _ as i64,
+            Mem::Base(value, offset_of!(Obj, vtable) as i32),
+        )
+    }
+
+    pub fn branch_if_string(&mut self, value: Reg) -> Jump {
+        self.branch_if_type(value, &crate::builtins::STRING_VTBL)
+    }
+    pub fn branch_if_not_string(&mut self, value: Reg) -> Jump {
+        self.branch_if_not_type(value, &crate::builtins::STRING_VTBL)
+    }
+    pub fn branch_if_heap_bigint(&mut self, value: Reg) -> Jump {
+        self.branch_if_type(value, &crate::bigint::BIGINT_VTBL)
+    }
+    pub fn branch_if_value(
+        &mut self,
+        value: Reg,
+        scratch: Reg,
+        scratch2: Reg,
+        value_as_fpr: FPReg,
+        temp_fpr: FPReg,
+        should_check_masquerades_as_undefined: bool,
+        invert: bool,
+    ) -> JumpList {
+        // Implements the following control flow structure:
+        // if (value is cell) {
+        //     if (value is string or value is HeapBigInt)
+        //         result = !value->length
+        //     else {
+        //         do evil things for masquerades-as-undefined
+        //         result = true
+        //     }
+        // } else if (value is int32) {
+        //     result = !unboxInt32(value)
+        // } else if (value is number) {
+        //     result = !unboxDouble(value)
+        // } else if (value is BigInt32) {
+        //     result = !unboxBigInt32(value)
+        // } else {
+        //     result = value == jsTrue
+        // }
+        let mut done = JumpList::new();
+        let mut truthy = JumpList::new();
+        let not_cell = self.branch_if_not_cell(value, true);
+        let is_string = self.branch_if_string(value);
+        if should_check_masquerades_as_undefined {
+            todo!();
+        } else {
+            if invert {
+                truthy.push(self.masm.jump());
+            } else {
+                done.push(self.masm.jump());
+            }
+        }
+        is_string.link(&mut self.masm);
+        let j = self.masm.branch64_imm64(
+            if invert {
+                RelationalCondition::Equal
+            } else {
+                RelationalCondition::NotEqual
+            },
+            value,
+            unsafe { crate::get_vm().empty_string.u.as_int64 },
+        );
+        truthy.push(j);
+        done.push(self.masm.jump());
+
+        not_cell.link(&mut self.masm);
+        let not_int32 = self.branch_if_not_int32(value, true);
+        truthy.push(self.masm.branch32_test(
+            if invert {
+                ResultCondition::Zero
+            } else {
+                ResultCondition::NonZero
+            },
+            value,
+            value,
+        ));
+        done.push(self.masm.jump());
+        not_int32.link(&mut self.masm);
+        let not_double = self.branch_if_not_double_known_not_int32(value, true);
+        self.unbox_double_without_assertions(value, scratch, value_as_fpr);
+        if invert {
+            truthy.push(self.masm.branch_double_zero_or_nan(value_as_fpr, temp_fpr));
+            done.push(self.masm.jump());
+        } else {
+            done.push(self.masm.branch_double_zero_or_nan(value_as_fpr, temp_fpr));
+            truthy.push(self.masm.jump());
+        }
+
+        not_double.link(&mut self.masm);
+
+        truthy.push(self.masm.branch64_imm64(
+            if invert {
+                RelationalCondition::NotEqual
+            } else {
+                RelationalCondition::Equal
+            },
+            value,
+            unsafe { Value::true_().u.as_int64 },
+        ));
+
+        done.link(&mut self.masm);
+        truthy
+    }
+
+    pub fn branch_if_truthy(
+        &mut self,
+        value: Reg,
+        scratch: Reg,
+        scratch2: Reg,
+        scratch_fp0: FPReg,
+        scratch_fp1: FPReg,
+        should_check_masquerades_as_undefined: bool,
+    ) -> JumpList {
+        self.branch_if_value(
+            value,
+            scratch,
+            scratch2,
+            scratch_fp0,
+            scratch_fp1,
+            should_check_masquerades_as_undefined,
+            false,
+        )
+    }
+    pub fn branch_if_falsey(
+        &mut self,
+        value: Reg,
+        scratch: Reg,
+        scratch2: Reg,
+        scratch_fp0: FPReg,
+        scratch_fp1: FPReg,
+        should_check_masquerades_as_undefined: bool,
+    ) -> JumpList {
+        self.branch_if_value(
+            value,
+            scratch,
+            scratch2,
+            scratch_fp0,
+            scratch_fp1,
+            should_check_masquerades_as_undefined,
+            true,
+        )
+    }
+
+    pub fn emit_jump_if_not_int(&mut self, reg1: Reg, reg2: Reg, scratch: Reg) -> Jump {
+        self.masm.move_rr(reg1, scratch);
+        self.masm.and64(reg2, scratch, scratch);
+        self.branch_if_not_int32(scratch, true)
+    }
+
+    pub fn emit_jump_slow_case_if_not_ints(&mut self, reg1: Reg, reg2: Reg, scratch: Reg) {
+        let j = self.emit_jump_if_not_int(reg1, reg2, scratch);
+        self.add_slow_case(j)
+    }
 }
 
-pub fn disasm_code(code: *const u8, len: usize) {
+pub fn disasm_code(comments: Option<&HashMap<u32, String>>, code: *const u8, len: usize) {
     let code_slice = unsafe { std::slice::from_raw_parts(code, len) };
     use capstone::prelude::*;
 
@@ -477,6 +748,11 @@ pub fn disasm_code(code: *const u8, len: usize) {
         .expect("Failed to create Capstone object");
     let asm = cs.disasm_all(code_slice, code as _).unwrap();
     for i in asm.iter() {
-        println!("{}", i);
+        if let Some(comments) = comments {
+            if let Some(c) = comments.get(&((i.address() - code as u64) as u32)) {
+                println!("{}", c);
+            }
+        }
+        println!("\t{}", i);
     }
 }

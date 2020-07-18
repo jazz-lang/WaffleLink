@@ -30,6 +30,10 @@ impl<'a> JIT<'a> {
     pub fn unbox_double_non_destructive(&mut self, reg: Reg, dest_fpr: FPReg, result: Reg) {
         self.unbox_double_without_assertions(reg, result, dest_fpr);
     }
+    pub fn box_boolean(&mut self, bool_gpr: Reg, boxed: Reg) {
+        self.box_boolean_payload(bool_gpr, boxed);
+    }
+
     pub fn box_boolean_payload(&mut self, bool_gpr: Reg, payload: Reg) {
         self.masm
             .add32i(crate::value::Value::VALUE_FALSE as _, bool_gpr, payload);

@@ -117,11 +117,7 @@ impl fmt::Display for VirtualRegister {
         }
 
         if self.is_argument() {
-            if self.to_argument() == 0 {
-                return write!(f, "this");
-            } else {
-                return write!(f, "arg{}", self.to_argument());
-            }
+            return write!(f, "arg{}", self.to_argument());
         }
 
         write!(f, "loc{}", self.to_local())

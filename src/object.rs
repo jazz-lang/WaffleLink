@@ -8,19 +8,15 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[repr(transparent)]
 pub struct Header {
-    vtable: AtomicUsize,
+    fwdptr: AtomicUsize,
 }
 const MARK_BITS: usize = 2;
 const MARK_MASK: usize = (2 << MARK_BITS) - 1;
 const FWD_MASK: usize = !0 & !MARK_MASK;
 impl Header {
-    pub fn init_vtbl(&mut self, vtbl: &'static VTable) {
-        self.vtable
-            .store(vtbl as *const _ as usize, Ordering::Relaxed);
-    }
     pub const fn new() -> Header {
         Header {
-            vtable: AtomicUsize::new(0),
+            fwdptr: AtomicUsize::new(0),
         }
     }
 
@@ -28,136 +24,8 @@ impl Header {
     pub const fn size() -> i32 {
         std::mem::size_of::<Header>() as i32
     }
-    #[inline(always)]
-    pub fn vtbl(&self) -> &mut VTable {
-        unsafe { &mut *self.vtblptr().to_mut_ptr::<VTable>() }
-    }
 
     #[inline(always)]
-    pub fn vtblptr(&self) -> Address {
-        (self.vtable.load(Ordering::Relaxed) & FWD_MASK).into()
-    }
-
-    #[inline(always)]
-    pub fn set_vtblptr(&mut self, addr: Address) {
-        self.vtable.store(addr.to_usize(), Ordering::Relaxed);
-    }
-
-    #[inline(always)]
-    pub fn vtblptr_forward(&mut self, address: Address) {
-        self.vtable.store(address.to_usize() | 1, Ordering::Relaxed);
-    }
-
-    #[inline(always)]
-    pub fn vtblptr_forwarded(&self) -> Option<Address> {
-        let addr = self.vtable.load(Ordering::Relaxed);
-
-        if (addr & 1) == 1 {
-            Some((addr & !1).into())
-        } else {
-            None
-        }
-    }
-
-    pub fn vtblptr_repair(&mut self) {
-        let addr = self.vtable.load(Ordering::Relaxed);
-
-        if (addr & 3) == 3 {
-            // forwarding failed
-            let vtblptr = (addr & !3).into();
-            self.set_vtblptr(vtblptr);
-        } else if (addr & 1) == 1 {
-            // object was forwarded
-            let fwd: Address = (addr & !1).into();
-            let fwd = unsafe { &*fwd.to_mut_ptr::<Obj>() };
-            let vtblptr = fwd.header().vtblptr();
-
-            self.set_vtblptr(vtblptr);
-        } else {
-            // nothing to do
-        }
-    }
-
-    #[inline(always)]
-    pub fn vtblptr_forwarded_atomic(&self) -> Result<Address, Address> {
-        let addr = self.vtable.load(Ordering::Relaxed);
-
-        if (addr & 3) == 3 {
-            Ok(Address::from_ptr(self as *const _))
-        } else if (addr & 1) == 1 {
-            Ok((addr & !1).into())
-        } else {
-            Err(addr.into())
-        }
-    }
-
-    #[inline(always)]
-    pub fn vtblptr_forward_atomic(
-        &mut self,
-        expected_vtblptr: Address,
-        new_address: Address,
-    ) -> Result<(), Address> {
-        let fwd = new_address.to_usize() | 1;
-        let result =
-            self.vtable
-                .compare_and_swap(expected_vtblptr.to_usize(), fwd, Ordering::SeqCst);
-
-        if result == expected_vtblptr.to_usize() {
-            Ok(())
-        } else {
-            // If update fails, this needs to be a forwarding pointer
-            debug_assert!((result | 1) != 0);
-
-            if (result & 3) == 3 {
-                Err(Address::from_ptr(self as *const _))
-            } else {
-                Err((result & !1).into())
-            }
-        }
-    }
-
-    #[inline(always)]
-    pub fn vtblptr_forward_failure_atomic(
-        &mut self,
-        expected_vtblptr: Address,
-    ) -> Result<(), Address> {
-        let fwd = expected_vtblptr.to_usize() | 3;
-        let result =
-            self.vtable
-                .compare_and_swap(expected_vtblptr.to_usize(), fwd, Ordering::SeqCst);
-
-        if result == expected_vtblptr.to_usize() {
-            Ok(())
-        } else {
-            // If update fails, this needs to be a forwarding pointer
-            debug_assert!((result | 1) != 0);
-
-            if (result & 3) == 3 {
-                Err(Address::from_ptr(self as *const _))
-            } else {
-                Err((result & !1).into())
-            }
-        }
-    }
-    #[inline(always)]
-    pub fn mark_non_atomic(&mut self) {
-        let fwdptr = self.vtable.load(Ordering::Relaxed);
-        self.vtable.store(fwdptr | 1, Ordering::Relaxed);
-    }
-
-    #[inline(always)]
-    pub fn unmark_non_atomic(&mut self) {
-        let fwdptr = self.vtable.load(Ordering::Relaxed);
-        self.vtable.store(fwdptr & FWD_MASK, Ordering::Relaxed);
-    }
-
-    #[inline(always)]
-    pub fn is_marked_non_atomic(&self) -> bool {
-        let fwdptr = self.vtable.load(Ordering::Relaxed);
-        (fwdptr & MARK_MASK) != 0
-    }
-
-    /*#[inline(always)]
     pub fn clear_fwdptr(&self) {
         self.fwdptr.store(0, Ordering::Relaxed);
     }
@@ -212,12 +80,13 @@ impl Header {
         self.fwdptr
             .compare_exchange(old, old | 1, Ordering::SeqCst, Ordering::Relaxed)
             .is_ok()
-    }*/
+    }
 }
 
 #[repr(C)]
 pub struct Obj {
     header: Header,
+    pub vtable: &'static VTable,
 }
 
 #[repr(C)]
@@ -313,7 +182,11 @@ impl Obj {
     }
 
     pub fn is_array_ref(&self) -> bool {
-        self.header().vtbl().is_array_ref()
+        self.vtable.is_array_ref()
+    }
+
+    pub fn is_string(&self) -> bool {
+        self.vtable as *const _ == &crate::builtins::STRING_VTBL as *const _
     }
 
     pub fn size_for_vtblptr(&self, vtblptr: Address) -> usize {
@@ -337,7 +210,7 @@ impl Obj {
     }
 
     pub fn size(&self) -> usize {
-        self.size_for_vtblptr(self.header().vtblptr())
+        self.size_for_vtblptr(Address::from_ptr(self.vtable))
     }
 
     /*pub fn visit_reference_fields<F>(&mut self, f: F)
@@ -384,6 +257,7 @@ fn determine_array_size(obj: &Obj) -> usize {
 #[repr(C)]
 pub struct Array {
     header: Header,
+    pub vtable: &'static VTable,
     length: usize,
     data: Value,
 }
@@ -397,7 +271,7 @@ impl Array {
         };
         this.header = Header::new();
         this.length = size;
-        this.header_mut().init_vtbl(&crate::builtins::ARRAY_VTBL);
+        this.vtable = &crate::builtins::ARRAY_VTBL;
         for i in 0..size {
             this.set_at(i, init);
         }
@@ -432,6 +306,50 @@ impl Array {
     }
 
     pub fn set_at(&mut self, idx: usize, val: Value) {
+        unsafe {
+            *self.data_mut().offset(idx as isize) = val;
+        }
+    }
+}
+
+#[repr(C)]
+pub struct WaffleString {
+    pub header: Header,
+    pub vtable: &'static VTable,
+    pub length: usize,
+    pub data: char,
+}
+
+impl WaffleString {
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    pub fn header_mut(&mut self) -> &mut Header {
+        &mut self.header
+    }
+
+    pub fn len(&self) -> usize {
+        self.length
+    }
+
+    pub fn data(&self) -> *const char {
+        &self.data as *const char
+    }
+
+    pub fn data_address(&self) -> Address {
+        Address::from_ptr(self.data())
+    }
+
+    pub fn data_mut(&mut self) -> *mut char {
+        &self.data as *const char as *mut char
+    }
+
+    pub fn get_at(&self, idx: usize) -> char {
+        unsafe { *self.data().offset(idx as isize) }
+    }
+
+    pub fn set_at(&mut self, idx: usize, val: char) {
         unsafe {
             *self.data_mut().offset(idx as isize) = val;
         }

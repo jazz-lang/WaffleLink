@@ -27,11 +27,11 @@ impl MathICGenerator for AddGenerator {
         }
 
         if lhs.is_only_non_number() && rhs.is_only_non_number() {
-            log::debug!("Non number operation, do not generate code");
+            log!("Non number operation, do not generate code");
             return MathICResult::DontGenerate;
         }
         if lhs.is_only_int32() && rhs.is_only_int32() {
-            log::debug!("Generating code for int32 operation");
+            log!("Generating code for int32 operation");
             state
                 .slow_path_jumps
                 .push(jit.branch_if_not_int32(self.left, true));
@@ -63,7 +63,7 @@ impl MathICGenerator for AddGenerator {
     ) -> bool {
         if false {
         } else {
-            log::debug!("Emit call to patchable 'add' function");
+            log!("Emit call to patchable 'add' function");
             let left_not_int = jit.branch_if_not_int32(self.left, true);
             let right_not_int = jit.branch_if_not_int32(self.right, true);
             let mut scratch = self.scratch_gpr;

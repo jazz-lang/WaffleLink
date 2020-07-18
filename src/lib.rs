@@ -1,6 +1,17 @@
 #![allow(dead_code)]
 use std::sync::atomic::AtomicU8;
-
+#[macro_export]
+macro_rules! log {
+    ($($arg: tt)*) => {
+        if crate::get_vm().log {
+            let lock = std::io::stdout();
+            let lock = lock.lock();
+            print!("LOG: ");
+            println!($($arg)*);
+            drop(lock);
+        }
+    };
+}
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {
         unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
@@ -55,21 +66,27 @@ pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
     pub call_stack: Vec<interpreter::callframe::CallFrame>,
     pub exception: value::Value,
+    pub empty_string: value::Value,
     pub stop_world: bool,
     pub opt_jit: bool,
+    pub log: bool,
+    pub heap: heap::Heap,
 }
 
 impl VM {
-    pub fn new() -> Self {
+    pub fn new(stack_start: *const bool) -> Self {
         Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
             call_stack: vec![],
             stop_world: false,
+            log: true,
             #[cfg(feature = "opt-jit")]
             opt_jit: true,
             #[cfg(not(feature = "opt-jit"))]
             opt_jit: false,
+            empty_string: value::Value::undefined(),
+            heap: heap::Heap::new(stack_start),
         }
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {

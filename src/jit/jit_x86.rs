@@ -26,6 +26,7 @@ pub struct JIT<'a> {
     pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
     pub ins_to_mathic: HashMap<*const Ins, *mut u8>,
     pub osr_upgrade: Vec<Jump>,
+    pub comments: HashMap<u32, String>,
 }
 impl<'a> JIT<'a> {
     pub fn new(code: &'a CodeBlock) -> Self {
@@ -38,6 +39,7 @@ impl<'a> JIT<'a> {
             ins_to_mathic_state: HashMap::new(),
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
             addr_loads: vec![],
+            comments: HashMap::new(),
             labels: vec![],
             jmptable: vec![],
             calls: vec![],
@@ -49,6 +51,17 @@ impl<'a> JIT<'a> {
             osr_upgrade: vec![],
             link_buffer: LinkBuffer::new(0 as *mut _),
         }
+    }
+    pub fn add_comment(&mut self, c: &str) {
+        let off = self.masm.asm.data().len();
+        if let Some(c) = self.comments.get_mut(&(off as u32)) {
+            c.push_str(&format!("\n{}", c));
+        }
+        self.comments.insert(off as _, c.to_owned());
+    }
+
+    pub fn get_comment_for(&self, off: u32) -> Option<&String> {
+        self.comments.get(&off)
     }
     pub fn finalize(mut self, mem: &mut Memory, dism: bool) -> (*mut u8, usize) {
         use capstone::prelude::*;
@@ -117,14 +130,14 @@ impl<'a> JIT<'a> {
         #[cfg(all(unix, target_arch = "x86_64"))]
         {
             use RegisterID::*;
-            self.masm.push(EBP);
             //self.masm.move_rr(SP, BP);
-            self.masm.sub64_imm32(6 * 8, SP);
+            self.masm.push(EBP);
             self.masm.push(R15);
             self.masm.push(R14);
             self.masm.push(R13);
             self.masm.push(R12);
             self.masm.push(EBX);
+            self.masm.sub64_imm32(7 * 8, SP);
             //self.masm.move_rr(SP, BP);
             /*self.masm.push(Reg::EBX);
             self.masm.push(Reg::R12);
@@ -145,14 +158,14 @@ impl<'a> JIT<'a> {
         #[cfg(all(unix, target_arch = "x86_64"))]
         {
             use RegisterID::*;
+            self.masm.add64_imm32(8 * 7, SP, SP);
             self.masm.pop(EBX);
             self.masm.pop(R12);
             self.masm.pop(R13);
             self.masm.pop(R14);
             self.masm.pop(R15);
-            self.masm.add64_imm32(8 * 5, SP, SP);
-            //self.masm.move_rr(BP, SP);
             self.masm.pop(EBP);
+            //self.masm.move_rr(BP, SP);
             let _ = ret_addr;
         }
         #[cfg(windows)]
@@ -226,7 +239,8 @@ pub const T5: Reg = RegisterID::R10;
 pub const T6: Reg = RegisterID::EDI;
 #[cfg(all(not(windows), target_arch = "x86_64"))]
 pub const T7: Reg = RegisterID::R9;
-
+#[cfg(all(not(windows), target_arch = "x86_64"))]
+pub const NON_CALLEE_SAVE_T0: Reg = T1;
 #[cfg(all(windows, target_arch = "x86_64"))]
 pub const T1: Reg = RegisterID::EDX;
 #[cfg(all(windows, target_arch = "x86_64"))]
@@ -237,6 +251,8 @@ pub const T3: Reg = RegisterID::R9;
 pub const T4: Reg = RegisterID::R10;
 #[cfg(all(windows, target_arch = "x86_64"))]
 pub const T5: Reg = RegisterID::ECX;
+#[cfg(all(windows, target_arch = "x86_64"))]
+pub const NON_CALLEE_SAVE_T0: Reg = T5;
 pub const FT0: FPReg = FPReg::XMM0;
 pub const FT1: FPReg = FPReg::XMM1;
 pub const FT2: FPReg = FPReg::XMM2;
