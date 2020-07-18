@@ -1,5 +1,7 @@
 function foo(x, y, z) {
-   return x < y;
+   if (x < y) {
+      print("Hi!");
+   }
    return x + y + z;
 }
 

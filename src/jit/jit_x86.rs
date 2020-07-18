@@ -52,12 +52,13 @@ impl<'a> JIT<'a> {
             link_buffer: LinkBuffer::new(0 as *mut _),
         }
     }
-    pub fn add_comment(&mut self, c: &str) {
+    pub fn add_comment(&mut self, s: &str) {
         let off = self.masm.asm.data().len();
         if let Some(c) = self.comments.get_mut(&(off as u32)) {
-            c.push_str(&format!("\n{}", c));
+            *c = format!("{}\n{}", c, s);
+        } else {
+            self.comments.insert(off as _, s.to_owned());
         }
-        self.comments.insert(off as _, c.to_owned());
     }
 
     pub fn get_comment_for(&self, off: u32) -> Option<&String> {

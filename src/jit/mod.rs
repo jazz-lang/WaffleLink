@@ -394,19 +394,19 @@ impl<'a> JIT<'a> {
                 _ => todo!(),
             }
         }
+        self.add_comment("\t(End of main path)");
     }
     fn private_compile_slow_cases(&mut self) {
         if self.slow_cases.is_empty() {
             return;
         }
-        self.add_comment("Start slow path section");
         // SAFE: we do not mutate slow_cases when generating slow paths.
         let slow_cases = unsafe { &*(&self.slow_cases as *const Vec<SlowCaseEntry>) };
         let mut iter = slow_cases.iter().peekable();
         while let Some(case) = iter.peek() {
             self.bytecode_index = case.to as _;
             let curr = &self.code_block.instructions[self.bytecode_index];
-            self.add_comment(&format!("S [{:04}] {:?}", self.bytecode_index, curr));
+            self.add_comment(&format!("(S) [{:04}] {:?}", self.bytecode_index, curr));
             match curr {
                 Ins::JEq(_, _, off) => {
                     self.link_all_slow_cases(&mut iter);
@@ -467,7 +467,7 @@ impl<'a> JIT<'a> {
             let jump = self.masm.jump();
             self.emit_jump_slow_to_hot(jump, 0);
         }
-        self.add_comment("End slow path section");
+        self.add_comment("\t(End of Slow Path)");
     }
     pub fn emit_jump_slow_to_hot(&mut self, j: Jump, relative_offset: i32) {
         let label = self.labels[(self.bytecode_index as i32 as i32 + relative_offset) as usize];
