@@ -133,18 +133,15 @@ impl<'a> JIT<'a> {
             use RegisterID::*;
             //self.masm.move_rr(SP, BP);
             self.masm.push(EBP);
-            self.masm.push(R15);
+            /*self.masm.push(R15);
             self.masm.push(R14);
             self.masm.push(R13);
             self.masm.push(R12);
-            self.masm.push(EBX);
+            self.masm.push(EBX);*/
+            CALLEE_SAVES.iter().for_each(|r| {
+                self.masm.push(*r);
+            });
             self.masm.sub64_imm32(7 * 8, SP);
-            //self.masm.move_rr(SP, BP);
-            /*self.masm.push(Reg::EBX);
-            self.masm.push(Reg::R12);
-            self.masm.push(Reg::R13);
-            self.masm.push(Reg::R14);
-            self.masm.push(Reg::R15);*/
         }
         #[cfg(windows)]
         {
@@ -160,11 +157,14 @@ impl<'a> JIT<'a> {
         {
             use RegisterID::*;
             self.masm.add64_imm32(8 * 7, SP, SP);
-            self.masm.pop(EBX);
+            /*self.masm.pop(EBX);
             self.masm.pop(R12);
             self.masm.pop(R13);
             self.masm.pop(R14);
-            self.masm.pop(R15);
+            self.masm.pop(R15);*/
+            CALLEE_SAVES.iter().rev().for_each(|r| {
+                self.masm.pop(*r);
+            });
             self.masm.pop(EBP);
             //self.masm.move_rr(BP, SP);
             let _ = ret_addr;
@@ -260,7 +260,8 @@ pub const FT2: FPReg = FPReg::XMM2;
 pub const FT3: FPReg = FPReg::XMM3;
 pub const FT4: FPReg = FPReg::XMM4;
 pub const FT5: FPReg = FPReg::XMM5;
-
+#[cfg(windows)]
+pub const CALLEE_SAVES: [Reg; 0] = [];
 pub const REG_CALLFRAME: RegisterID = RegisterID::R12;
 pub const NUMBER_TAG_REGISTER: RegisterID = RegisterID::R14;
 pub const NOT_CELL_MASK_REGISTER: RegisterID = RegisterID::R15;
@@ -286,6 +287,9 @@ pub mod args {
     pub const AGPR3: Reg = Reg::ECX;
     pub const AGPR4: Reg = Reg::R8;
     pub const AGPR5: Reg = Reg::R9;
+
+    pub const CALLEE_SAVES: [Reg; 5] = [Reg::EBX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
 }
+
 #[cfg(all(not(windows), target_arch = "x86_64"))]
 pub use args::*;
