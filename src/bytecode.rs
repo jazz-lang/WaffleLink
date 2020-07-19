@@ -36,7 +36,7 @@ pub enum Ins {
     Greater(VirtualRegister, VirtualRegister, VirtualRegister),
     GreaterOrEqual(VirtualRegister, VirtualRegister, VirtualRegister),
     Less(VirtualRegister, VirtualRegister, VirtualRegister),
-    LessOrEqul(VirtualRegister, VirtualRegister, VirtualRegister),
+    LessOrEqual(VirtualRegister, VirtualRegister, VirtualRegister),
     Safepoint,
     LoopHint,
     Jmp(i32),

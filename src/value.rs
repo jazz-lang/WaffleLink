@@ -525,7 +525,15 @@ impl Value {
             false
         }
     }
-
+    #[inline]
+    pub fn new_bool(x: bool) -> Self {
+        if x {
+            Self::true_()
+        } else {
+            Self::false_()
+        }
+    }
+    #[inline]
     pub fn number(x: f64) -> Self {
         if x as i32 as f64 == x {
             Self::new_int(x as i32)

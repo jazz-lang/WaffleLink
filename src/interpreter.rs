@@ -66,7 +66,30 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let val = callframe.get_register(value);
                 return WaffleResult::okay(val);
             }
-            Ins::Equal(dst, x, y) => {}
+            Ins::Equal(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_eq,==);
+                callframe.put_register(dst, Value::new_bool(res));
+            }
+            Ins::NotEqual(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_neq,!=);
+                callframe.put_register(dst, Value::new_bool(res));
+            }
+            Ins::Less(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_less,<);
+                callframe.put_register(dst, Value::new_bool(res));
+            }
+            Ins::LessOrEqual(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_lesseq,<=);
+                callframe.put_register(dst, Value::new_bool(res));
+            }
             Ins::Jmp(off) => {
                 pc = (pc as i32 + off) as u32;
             }
