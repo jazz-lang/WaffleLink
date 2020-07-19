@@ -96,7 +96,7 @@ impl HeapBlock {
             .cast::<Self>()
         };
         log!("Allocate HeapBlock with cell size {} bytes", cell_size);
-        const FORCE_FREELIST: bool = true;
+        const FORCE_FREELIST: bool = false;
 
         unsafe {
             mem.write(Self {

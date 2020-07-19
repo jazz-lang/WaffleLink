@@ -57,10 +57,10 @@ pub enum Ins {
     Throw(VirtualRegister),
     Catch(VirtualRegister),
     Call(
-        VirtualRegister, /* function */
         VirtualRegister, /* dest */
+        VirtualRegister, /* this */
+        VirtualRegister, /* callee */
         u32,             /* argc */
-        u32,             /* argv */
     ),
     TailCall(VirtualRegister /* function */, u32 /* argc */),
     New(
@@ -92,6 +92,7 @@ pub struct JITData {
     pub sub_ics: HashMap<*const ArithProfile, mathic::MathIC<sub_generator::SubGenerator>>,
     pub mul_ics: HashMap<*const ArithProfile, mathic::MathIC<mul_generator::MulGenerator>>,
     pub code_map: std::collections::HashMap<u32, *mut u8>,
+    pub executable_addr: usize,
 }
 
 impl CodeBlock {

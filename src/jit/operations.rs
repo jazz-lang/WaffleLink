@@ -3,6 +3,7 @@ use crate::gc::*;
 use crate::value::*;
 use crate::*;
 use thunk_generator::*;
+use virtual_register::*;
 pub extern "C" fn operation_value_add(_vm: &VM, op1: Value, op2: Value) -> Value {
     if op1.is_number() && op2.is_number() {
         let result = op1.to_number() + op2.to_number();
@@ -140,4 +141,89 @@ pub extern "C" fn operation_compare_eq(x: Value, y: Value) -> bool {
 }
 pub extern "C" fn operation_compare_neq(x: Value, y: Value) -> bool {
     !operation_compare_eq(x, y)
+}
+
+pub extern "C" fn operation_call_func(
+    cf: &mut CallFrame,
+    callee: Value,
+    argc: u32,
+    this: Value,
+) -> WaffleResult {
+    let mut args = vec![];
+    {
+        for i in 0..argc {
+            args.push(cf.get_register(VirtualRegister::new_argument(i as _)));
+        }
+    }
+
+    if let Some((addr, argc, vars, cb)) = get_executable_address_for(callee) {
+        if args.len() < argc as usize {
+            while args.len() < argc as usize {
+                args.push(Value::undefined());
+            }
+        }
+        let mut call_frame = CallFrame::new(&args, vars);
+        call_frame.this = this;
+        call_frame.callee = callee;
+        call_frame.code_block = cb;
+        let vm = crate::get_vm();
+        vm.call_stack.push(call_frame);
+        let result = addr(&mut vm.call_stack.last_mut().unwrap());
+        vm.call_stack.pop().unwrap();
+        return result;
+    }
+    WaffleResult::okay(Value::undefined())
+}
+
+pub fn get_executable_address_for(
+    v: Value,
+) -> Option<(
+    extern "C" fn(cf: &mut CallFrame) -> WaffleResult,
+    u32,
+    u32,
+    Option<Ref<CodeBlock>>,
+)> {
+    if v.is_cell() && v.as_cell().is_function() {
+        let cell = v.as_cell();
+        let mut cell = cell.cast::<function::Function>();
+        if cell.native {
+            return Some(unsafe { (std::mem::transmute(cell.native_code), 0, 0, None) });
+        }
+        cell.code_block.exc_counter += 50;
+        let args = cell.code_block.num_args;
+        let vars = cell.code_block.num_vars;
+        let cb = cell.code_block;
+        let lock = cb.jit_data();
+        if lock.executable_addr != 0 {
+            let addr = lock.executable_addr;
+            drop(lock);
+            return unsafe { Some((std::mem::transmute(addr), args, vars, Some(cell.code_block))) };
+        } else if cell.code_block.exc_counter >= crate::get_vm().jit_threshold {
+            drop(lock);
+            log!(
+                "Trying to compile function code block at {:p}",
+                cell.code_block.raw()
+            );
+            let mut jit = JIT::new(&cell.code_block);
+            jit.compile_without_linking();
+            jit.link();
+            if crate::get_vm().disasm {
+                jit.disasm();
+            }
+            let lock = cb.jit_data();
+            if lock.executable_addr != 0 {
+                let addr = lock.executable_addr;
+                drop(lock);
+                return unsafe {
+                    Some((std::mem::transmute(addr), args, vars, Some(cell.code_block)))
+                };
+            } else {
+                // woops! JIT somehow managed to fail.
+                return Some((interpreter::interp_loop, args, vars, Some(cell.code_block)));
+            }
+        } else {
+            return Some((interpreter::interp_loop, args, vars, Some(cell.code_block)));
+        }
+    }
+    None
 }

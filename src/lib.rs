@@ -68,7 +68,9 @@ pub struct VM {
     pub exception: value::Value,
     pub empty_string: value::Value,
     pub stop_world: bool,
+    pub disasm: bool,
     pub opt_jit: bool,
+    pub jit_threshold: u32,
     pub log: bool,
     pub heap: heap::Heap,
 }
@@ -79,6 +81,8 @@ impl VM {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
             call_stack: vec![],
+            jit_threshold: 500,
+            disasm: false,
             stop_world: false,
             log: true,
             #[cfg(feature = "opt-jit")]

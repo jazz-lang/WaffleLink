@@ -8,6 +8,7 @@ pub struct CallFrame {
     pub argc: u32,
     pub handlers: Vec<u32>,
     pub this: Value,
+    pub callee: Value,
     pub pc: u32,
 }
 
@@ -19,6 +20,7 @@ impl CallFrame {
             args: Ref { ptr: args.as_ptr() },
             code_block: None,
             handlers: vec![],
+            callee: Value::undefined(),
             this: Value::undefined(),
             pc: 0,
         }

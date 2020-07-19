@@ -252,6 +252,10 @@ impl<'a> JIT<'a> {
             let ins = &self.code_block.instructions[i];
             self.add_comment(&format!("[{:04}] {:?}", self.bytecode_index, ins));
             match ins {
+                Ins::Move(dst, src) => {
+                    self.emit_get_virtual_register(*src, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
+                }
                 Ins::JEq(lhs, rhs, offset) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
                     self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
@@ -307,7 +311,18 @@ impl<'a> JIT<'a> {
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Div { .. } => self.emit_op_div(ins),
-
+                Ins::Call(dest, this, callee, argc) => {
+                    // TODO: Use code patching and fast path/slow path codegen for calls
+                    self.masm.prepare_call_with_arg_count(3);
+                    self.emit_get_virtual_register(*callee, AGPR1);
+                    self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
+                    self.masm.pass_int32_as_arg(*argc as _, 2);
+                    self.emit_get_virtual_register(*this, AGPR3);
+                    self.masm
+                        .call_ptr_argc(operations::operation_call_func as *const _, 3);
+                    self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
+                }
                 Ins::Safepoint => {
                     self.masm.load64(
                         Mem::Absolute(&crate::get_vm().stop_world as *const bool as usize),
@@ -530,6 +545,8 @@ impl<'a> JIT<'a> {
             }
         }
         self.link_buffer.perform_finalization();
+        self.code_block.jit_data().code_map = code_map;
+        self.code_block.jit_data().executable_addr = self.link_buffer.code as usize;
     }
 
     pub fn disasm(&mut self) {

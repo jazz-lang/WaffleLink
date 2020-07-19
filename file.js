@@ -1,6 +1,6 @@
 function foo(x, y, z) {
    if (x < y) {
-      print("Hi!");
+      print("Hi!", "bie", "xx");
    }
    return x + y + z;
 }

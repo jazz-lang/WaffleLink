@@ -189,6 +189,10 @@ impl Obj {
         self.vtable as *const _ == &crate::builtins::STRING_VTBL as *const _
     }
 
+    pub fn is_function(&self) -> bool {
+        self.vtable as *const _ == &crate::function::FUNCTION_VTBL as *const _
+    }
+
     pub fn size_for_vtblptr(&self, vtblptr: Address) -> usize {
         let vtbl = unsafe { &*vtblptr.to_mut_ptr::<VTable>() };
         let instance_size = vtbl.instance_size;
