@@ -268,14 +268,14 @@ impl<'a> JIT<'a> {
                     let jump = self.masm.branch32(RelationalCondition::NotEqual, T0, T1);
                     self.add_jump(jump, *offset);
                 }
-                Ins::Equal(lhs, rhs, dst) => {
+                Ins::Equal(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
                     self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
                     self.masm.compare32(RelationalCondition::Equal, T0, T1, T0);
                     self.box_boolean(T0, T0);
                     self.emit_put_virtual_register(*dst, T0, T1);
                 }
-                Ins::NotEqual(lhs, rhs, dst) => {
+                Ins::NotEqual(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
                     self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
                     self.masm

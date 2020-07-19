@@ -76,7 +76,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 0,
                 FpCondition::LessThanAndOrdered,
-                std::ptr::null_mut(),
+                operations::operation_compare_less as *const _,
                 false,
                 slow_cases,
             );
@@ -94,7 +94,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::LessThanOrEqualAndOrdered,
-                std::ptr::null_mut(),
+                operations::operation_compare_lesseq as *const _,
                 false,
                 slow_cases,
             );
@@ -112,7 +112,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanAndOrdered,
-                std::ptr::null_mut(),
+                operations::operation_compare_greater as *const _,
                 false,
                 slow_cases,
             );
@@ -130,7 +130,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanOrEqualAndOrdered,
-                std::ptr::null_mut(),
+                operations::operation_compare_greaterq as *const _,
                 false,
                 slow_cases,
             );
@@ -148,7 +148,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanOrUnordered,
-                std::ptr::null_mut(),
+                operations::operation_compare_greater as _,
                 false,
                 slow_cases,
             );
@@ -166,7 +166,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanOrEqualOrUnordered,
-                std::ptr::null_mut(),
+                operations::operation_compare_greaterq as _,
                 false,
                 slow_cases,
             );
@@ -184,7 +184,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::LessThanOrUnordered,
-                std::ptr::null_mut(),
+                operations::operation_compare_less as _,
                 false,
                 slow_cases,
             );
@@ -202,7 +202,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 0,
                 FpCondition::LessThanOrEqualOrUnordered,
-                std::ptr::null_mut(),
+                operations::operation_compare_lesseq as _,
                 false,
                 slow_cases,
             );
@@ -210,7 +210,7 @@ impl<'a> JIT<'a> {
     }
 
     pub fn emit_op_div(&mut self, op: &Ins) {
-        if let Ins::Div(op1, op2, dest) = op {
+        if let Ins::Div(dest, op1, op2) = op {
             let left = T0;
             let right = T1;
             let result = left;
@@ -237,7 +237,7 @@ impl<'a> JIT<'a> {
 
     pub fn emit_op_add(&mut self, op: &Ins) {
         match op {
-            Ins::Add(src1, src2, dest) => {
+            Ins::Add(dest, src1, src2) => {
                 let meta = self.code_block.metadata(self.bytecode_index as _);
                 let math_ic = self.code_block.add_jit_addic(&meta.arith_profile);
                 self.ins_to_mathic
@@ -263,7 +263,7 @@ impl<'a> JIT<'a> {
     ) {
         self.link_all_slow_cases(slow_cases);
         match op {
-            Ins::Add(src1, src2, dest) => {
+            Ins::Add(dest, src1, src2) => {
                 let ic = *self.ins_to_mathic.get(&(op as *const Ins)).unwrap();
                 let math_ic = unsafe { &mut *(ic as *mut MathIC<AddGenerator>) };
                 self.emit_mathic_slow_bin(
@@ -281,7 +281,7 @@ impl<'a> JIT<'a> {
     }
     pub fn emit_op_sub(&mut self, op: &Ins) {
         match op {
-            Ins::Sub(src1, src2, dest) => {
+            Ins::Sub(dest, src1, src2) => {
                 let meta = self.code_block.metadata(self.bytecode_index as _);
                 let math_ic = self.code_block.add_jit_subic(&meta.arith_profile);
                 self.ins_to_mathic
@@ -307,7 +307,7 @@ impl<'a> JIT<'a> {
     ) {
         self.link_all_slow_cases(slow_cases);
         match op {
-            Ins::Sub(src1, src2, dest) => {
+            Ins::Sub(dest, src1, src2) => {
                 let ic = *self.ins_to_mathic.get(&(op as *const Ins)).unwrap();
                 let math_ic = unsafe { &mut *(ic as *mut MathIC<sub_generator::SubGenerator>) };
                 self.emit_mathic_slow_bin(
@@ -325,7 +325,7 @@ impl<'a> JIT<'a> {
     }
     pub fn emit_op_mul(&mut self, op: &Ins) {
         match op {
-            Ins::Mul(src1, src2, dest) => {
+            Ins::Mul(dest, src1, src2) => {
                 let meta = self.code_block.metadata(self.bytecode_index as _);
                 let math_ic = self.code_block.add_jit_mulic(&meta.arith_profile);
                 self.ins_to_mathic
@@ -351,7 +351,7 @@ impl<'a> JIT<'a> {
     ) {
         self.link_all_slow_cases(slow_cases);
         match op {
-            Ins::Mul(src1, src2, dest) => {
+            Ins::Mul(dest, src1, src2) => {
                 let ic = *self.ins_to_mathic.get(&(op as *const Ins)).unwrap();
                 let math_ic = unsafe { &mut *(ic as *mut MathIC<mul_generator::MulGenerator>) };
                 self.emit_mathic_slow_bin(

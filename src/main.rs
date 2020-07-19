@@ -26,15 +26,7 @@ fn main() {
     cb.constants.push(Value::from(func.cast()));
     cb.num_vars = 1;
     cb.callee_locals = 7;
-    cb.metadata = vec![
-        {
-            let mut meta = OpcodeMetadata::new();
-            // meta.arith_profile.observe_lhs(Value::new_int(0));
-            // meta.arith_profile.observe_rhs(Value::new_int(0));
-            meta
-        },
-        OpcodeMetadata::new(),
-    ];
+
     cb.instructions = vec![
         Ins::Call(
             virtual_register_for_local(0),

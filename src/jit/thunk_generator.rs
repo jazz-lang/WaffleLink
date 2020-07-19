@@ -92,3 +92,22 @@ impl SlowPathReturn {
         Self { a: x, b: y }
     }
 }
+
+pub fn osr_from_interpreter_to_jit_generator() -> *const u8 {
+    let cb = CodeBlock::new();
+    let mut jit = JIT::new(&cb);
+    jit.emit_function_prologue();
+    jit.masm.move_rr(AGPR0, REG_CALLFRAME);
+    let addr;
+    #[cfg(windows)]
+    {
+        // AGPR1 is used to store callframe on windows
+        addr = AGPR2;
+    }
+    #[cfg(not(windows))]
+    {
+        addr = AGPR1;
+    }
+    jit.masm.far_jump_r(addr);
+    jit.link_buffer.code
+}

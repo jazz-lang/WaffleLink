@@ -139,6 +139,78 @@ pub extern "C" fn operation_compare_eq(x: Value, y: Value) -> bool {
     }
     x.ptr == y.ptr
 }
+
+pub extern "C" fn operation_compare_less(x: Value, y: Value) -> bool {
+    if x.is_number() && y.is_number() {
+        return x.to_number() < y.to_number();
+    }
+    if x.is_cell() && y.is_cell() {
+        let x = x.as_cell();
+        let y = y.as_cell();
+        if x.is_string() && y.is_string() {
+            return x.cast::<WaffleString>().length < y.cast::<WaffleString>().length;
+        } else if x.is_array_ref() && y.is_array_ref() {
+            return x.cast::<Array>().len() < y.cast::<Array>().len();
+        }
+    }
+
+    false
+}
+pub extern "C" fn operation_compare_greater(x: Value, y: Value) -> bool {
+    if x.is_number() && y.is_number() {
+        return x.to_number() > y.to_number();
+    }
+    if x.is_cell() && y.is_cell() {
+        let x = x.as_cell();
+        let y = y.as_cell();
+        if x.is_string() && y.is_string() {
+            return x.cast::<WaffleString>().length > y.cast::<WaffleString>().length;
+        } else if x.is_array_ref() && y.is_array_ref() {
+            return x.cast::<Array>().len() > y.cast::<Array>().len();
+        }
+    }
+
+    false
+}
+pub extern "C" fn operation_compare_lesseq(x: Value, y: Value) -> bool {
+    let xv = x;
+    let yv = y;
+    if x.is_number() && y.is_number() {
+        return x.to_number() <= y.to_number();
+    }
+    if x.is_cell() && y.is_cell() {
+        let x = x.as_cell();
+        let y = y.as_cell();
+        if x.is_string() && y.is_string() {
+            return (x.cast::<WaffleString>().length < y.cast::<WaffleString>().length)
+                || operation_compare_eq(xv, yv);
+        } else if x.is_array_ref() && y.is_array_ref() {
+            return (x.cast::<Array>().len() < y.cast::<Array>().len()) || x.raw() == y.raw();
+        }
+    }
+
+    x == y
+}
+pub extern "C" fn operation_compare_greaterq(x: Value, y: Value) -> bool {
+    let xv = x;
+    let yv = y;
+    if x.is_number() && y.is_number() {
+        return x.to_number() >= y.to_number();
+    }
+    if x.is_cell() && y.is_cell() {
+        let x = x.as_cell();
+        let y = y.as_cell();
+        if x.is_string() && y.is_string() {
+            return (x.cast::<WaffleString>().length > y.cast::<WaffleString>().length)
+                || operation_compare_eq(xv, yv);
+        } else if x.is_array_ref() && y.is_array_ref() {
+            return (x.cast::<Array>().len() > y.cast::<Array>().len()) || x.raw() == y.raw();
+        }
+    }
+
+    x == y
+}
+
 pub extern "C" fn operation_compare_neq(x: Value, y: Value) -> bool {
     !operation_compare_eq(x, y)
 }
@@ -157,6 +229,7 @@ pub extern "C" fn operation_call_func(
     }
 
     if let Some((addr, argc, vars, cb)) = get_executable_address_for(callee) {
+        let passed = args.len();
         if args.len() < argc as usize {
             while args.len() < argc as usize {
                 args.push(Value::undefined());
@@ -165,6 +238,7 @@ pub extern "C" fn operation_call_func(
         let mut call_frame = CallFrame::new(&args, vars);
         call_frame.this = this;
         call_frame.callee = callee;
+        call_frame.passed_argc = passed as u32;
         call_frame.code_block = cb;
         let vm = crate::get_vm();
         vm.call_stack.push(call_frame);

@@ -73,6 +73,29 @@ pub struct VM {
     pub jit_threshold: u32,
     pub log: bool,
     pub heap: heap::Heap,
+    pub stubs: JITStubs,
+}
+
+pub struct JITStubs {
+    thunks: parking_lot::Mutex<std::collections::HashMap<fn() -> *const u8, *const u8>>,
+}
+
+impl JITStubs {
+    pub fn new() -> Self {
+        Self {
+            thunks: parking_lot::Mutex::new(Default::default()),
+        }
+    }
+    pub fn get_stub(&self, f: fn() -> *const u8) -> *const u8 {
+        let mut thunks = self.thunks.lock();
+        if let Some(x) = thunks.get(&f) {
+            return *x;
+        } else {
+            let addr = f();
+            thunks.insert(f, addr);
+            addr
+        }
+    }
 }
 
 impl VM {
@@ -83,6 +106,7 @@ impl VM {
             call_stack: vec![],
             jit_threshold: 500,
             disasm: false,
+            stubs: JITStubs::new(),
             stop_world: false,
             log: true,
             #[cfg(feature = "opt-jit")]
