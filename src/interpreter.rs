@@ -26,6 +26,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
     let mut cb = callframe.code_block.unwrap();
     let code: &Vec<Ins> = unsafe { &*(&cb.instructions as *const _) };
     let mut pc = callframe.pc;
+    let vm = crate::get_vm();
     macro_rules! catch {
         ($val: expr) => {
             if let Some(handler) = callframe.handlers.pop() {
@@ -33,6 +34,26 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 crate::get_vm().exception = $val;
             } else {
                 return WaffleResult::error($val);
+            }
+        };
+    }
+    macro_rules! binop {
+        ($x: expr,$y: expr,$slow: expr,$int_op: ident,$op: tt) => {
+            if $x.is_int32() && $y.is_int32() {
+                let xi = $x.to_int32();
+                let yi = $y.to_int32();
+
+                let res = xy.$int_op(yi);
+                if res.1 {
+                    Value::new_double(xi as f64 $op yi as f64)
+                } else {
+                    Value::new_int(res.0)
+                }
+            } else if $x.is_number() && $y.is_number() {
+                Value::new_double($x.to_number() $op $y.to_number())
+            } else {
+                let slow = $slow;
+                slow(vm,$x,$y)
             }
         };
     }
@@ -66,6 +87,14 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let val = callframe.get_register(value);
                 return WaffleResult::okay(val);
             }
+
+            Ins::Add(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                let res = binop!(lhs,rhs,operation_value_add,overflowing_add,+);
+                callframe.put_register(dest, res);
+            }
+
             Ins::Equal(dst, x, y) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
