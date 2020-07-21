@@ -76,6 +76,8 @@ impl Heap {
         let off = object.to_usize() % block::HeapBlock::BLOCK_SIZE;
         (object.to_usize() as isize + (-(off as isize))) as *mut _
     }
+
+
     #[inline(never)]
     fn collect_roots(&mut self, sp: Address) -> Vec<Address> {
         let sp = Address::from_ptr(&sp);
@@ -129,6 +131,10 @@ impl Heap {
                             let mut cell: Ref<Obj> = Ref {
                                 ptr: (*start.to_mut_ptr::<Address>()).to_mut_ptr(),
                             };
+                            if cell.header().is_marked_non_atomic() {
+                                start = start.add_ptr(1);
+                                continue;
+                            }
                             log!(
                                 "Found GC pointer {:p} at {:p}",
                                 (*start.to_mut_ptr::<Address>()).to_ptr::<u8>(),
@@ -150,18 +156,24 @@ impl Heap {
             for frame in vm.call_stack.iter() {
                 for reg in frame.regs.iter() {
                     if reg.is_cell() {
-                        mark_stack.push(Address::from_ptr(reg.as_cell().ptr));
+                        if !reg.as_cell().header().is_marked_non_atomic() {
+                            mark_stack.push(Address::from_ptr(reg.as_cell().ptr));
+                        }
                     }
                 }
 
                 for i in 0..frame.argc {
                     let value = frame.args.offset(i as _);
                     if value.is_cell() {
-                        mark_stack.push(Address::from_ptr(value.as_cell().ptr));
+                        if !value.as_cell().header().is_marked_non_atomic() {
+                            mark_stack.push(Address::from_ptr(value.as_cell().ptr));
+                        }
                     }
                 }
                 if frame.this.is_cell() {
-                    mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr));
+                    if !frame.this.as_cell().header().is_marked_non_atomic() {
+                        mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr));
+                    }
                 }
             }
         }
