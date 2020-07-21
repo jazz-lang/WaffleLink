@@ -4,6 +4,7 @@ pub mod stack_alignment;
 use crate::*;
 use bytecode::*;
 use jit::operations::*;
+use object::*;
 use value::*;
 
 macro_rules! cmp {
@@ -43,7 +44,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let xi = $x.to_int32();
                 let yi = $y.to_int32();
 
-                let res = xy.$int_op(yi);
+                let res = xi.$int_op(yi);
                 if res.1 {
                     Value::new_double(xi as f64 $op yi as f64)
                 } else {
@@ -94,7 +95,169 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let res = binop!(lhs,rhs,operation_value_add,overflowing_add,+);
                 callframe.put_register(dest, res);
             }
-
+            Ins::Sub(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                let res = binop!(lhs,rhs,operation_value_sub,overflowing_sub,-);
+                callframe.put_register(dest, res);
+            }
+            Ins::Mul(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                let res = binop!(lhs,rhs,operation_value_mul,overflowing_mul,*);
+                callframe.put_register(dest, res);
+            }
+            Ins::Div(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                fn div(x: Value, y: Value) -> Value {
+                    if x.is_number() && y.is_number() {
+                        let res = x.to_number() / y.to_number();
+                        if res as i32 as f64 == res {
+                            return Value::new_int(res as _);
+                        } else {
+                            return Value::new_double(res);
+                        }
+                    }
+                    Value::new_double(std::f64::NAN)
+                }
+                callframe.put_register(dest, div(lhs, rhs));
+            }
+            Ins::LShift(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe
+                            .put_register(dest, Value::new_int(lhs.to_int32() << rhs.to_int32()));
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                (lhs.to_number().trunc() as i32) << rhs.to_number().trunc() as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::RShift(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe
+                            .put_register(dest, Value::new_int(lhs.to_int32() >> rhs.to_int32()));
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                (lhs.to_number().trunc() as i32) >> rhs.to_number().trunc() as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::URShift(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int((lhs.to_uint32() >> rhs.to_uint32()) as i32),
+                        );
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                ((lhs.to_number().trunc() as i32 as u32)
+                                    >> rhs.to_number().trunc() as i32 as u32)
+                                    as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::BitAnd(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int((lhs.to_uint32() & rhs.to_uint32()) as i32),
+                        );
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                ((lhs.to_number().trunc() as i32 as u32)
+                                    & rhs.to_number().trunc() as i32 as u32)
+                                    as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::BitOr(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int((lhs.to_uint32() ^ rhs.to_uint32()) as i32),
+                        );
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                ((lhs.to_number().trunc() as i32 as u32)
+                                    ^ rhs.to_number().trunc() as i32 as u32)
+                                    as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::BitXor(dest, lhs, rhs) => {
+                let lhs = callframe.get_register(lhs);
+                let rhs = callframe.get_register(rhs);
+                if lhs.is_number() && rhs.is_number() {
+                    if lhs.is_int32() && rhs.is_int32() {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int((lhs.to_uint32() ^ rhs.to_uint32()) as i32),
+                        );
+                    } else {
+                        callframe.put_register(
+                            dest,
+                            Value::new_int(
+                                ((lhs.to_number().trunc() as i32 as u32)
+                                    ^ rhs.to_number().trunc() as i32 as u32)
+                                    as i32,
+                            ),
+                        );
+                    }
+                } else {
+                    callframe.put_register(dest, Value::undefined());
+                }
+            }
+            Ins::ToBoolean(dest, source) => {
+                let src = callframe.get_register(source);
+                let boolean = src.to_boolean();
+                callframe.put_register(dest, Value::new_bool(boolean));
+            }
             Ins::Equal(dst, x, y) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
@@ -237,6 +400,56 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                     callframe.put_register(dest, result.value());
                 } else {
                     catch!(result.value());
+                }
+            }
+            Ins::NewObject(dst) => {
+                let object = object::RegularObj::new(&mut vm.heap, Value::undefined());
+                callframe.put_register(dst, Value::from(object.cast::<Obj>()));
+            }
+            Ins::New(dest, callee, argc) => {
+                let callee = callframe.get_register(callee);
+                if callee.is_cell() {
+                    if let Some(lookup) = callee.as_cell().vtable.lookup_fn {
+                        let ctor = lookup(vm, callee.as_cell(), vm.constructor);
+                        let proto = lookup(vm, callee.as_cell(), vm.prototype);
+                        if proto.is_error() {
+                            catch!(ctor.value());
+                        }
+                        let proto = if proto.value().is_cell() {
+                            proto.value()
+                        } else {
+                            Value::undefined()
+                        };
+                        if ctor.is_error() {
+                            catch!(ctor.value());
+                        } else if ctor.value().is_cell() && ctor.value().as_cell().is_function() {
+                            let this = RegularObj::new(&mut vm.heap, proto);
+                            let result = crate::jit::operations::operation_call_func(
+                                callframe,
+                                callee,
+                                argc,
+                                Value::from(this.cast()),
+                            );
+                            if result.is_okay() {
+                                callframe.put_register(dest, Value::from(this.cast()));
+                            } else {
+                                catch!(result.value());
+                            }
+                        } else {
+                            catch!(Value::from(
+                                WaffleString::new(&mut vm.heap, "constructor is not a function!")
+                                    .cast()
+                            ));
+                        }
+                    } else {
+                        catch!(Value::from(
+                            WaffleString::new(&mut vm.heap, "Can't find constructor").cast()
+                        ));
+                    }
+                } else {
+                    catch!(Value::from(
+                        WaffleString::new(&mut vm.heap, "callee is not an object/function!").cast()
+                    ));
                 }
             }
             _ => todo!(),

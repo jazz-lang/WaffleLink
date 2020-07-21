@@ -608,3 +608,35 @@ impl Hash for Value {
         }
     }}
 }*/
+use std::hash::{Hash, Hasher};
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        unsafe {
+            if self.is_number() {
+                if self.is_int32() {
+                    state.write_i32(self.as_int32());
+                } else {
+                    state.write_u64(self.as_number().to_bits())
+                }
+            } else if self.is_boolean() {
+                state.write_u8(self.to_boolean() as u8);
+            } else if self.is_undefined_or_null() {
+                state.write_u8(0);
+            } else if self.is_cell() {
+                let cell = self.as_cell();
+                if cell.is_string() {
+                    let s = cell.cast::<crate::object::WaffleString>();
+                    state.write_usize(s.len());
+                    for i in 0..s.len() {
+                        let c = s.get_at(i);
+                        state.write_u32(c as u32);
+                    }
+                } else {
+                    state.write_usize(cell.ptr as usize);
+                }
+            } else {
+                unreachable!()
+            }
+        }
+    }
+}

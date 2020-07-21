@@ -82,11 +82,86 @@ impl Header {
             .is_ok()
     }
 }
-
+use std::collections::HashMap;
 #[repr(C)]
 pub struct Obj {
     header: Header,
     pub vtable: &'static VTable,
+}
+
+pub static OBJECT_VTBL: VTable = VTable {
+    element_size: 0,
+    instance_size: std::mem::size_of::<RegularObj>(),
+    parent: None,
+    lookup_fn: None,
+    index_fn: None,
+    calc_size_fn: None,
+    apply_fn: None,
+    destroy_fn: None,
+    set_fn: None,
+    trace_fn: Some(trace_obj),
+    set_index_fn: None,
+};
+use super::*;
+
+fn obj_lookup(vm: &crate::VM, this: Ref<Obj>, key: Value) -> WaffleResult {
+    let this = this.cast::<RegularObj>();
+    WaffleResult::okay(this.fields.get(&key).copied().unwrap_or_else(|| {
+        if this.prototype.is_cell() && !this.prototype.is_empty() {
+            if let Some(fun) = this.prototype.as_cell().vtable.lookup_fn {
+                let res = fun(vm, this.prototype.as_cell(), key);
+                if res.is_okay() {
+                    res.value()
+                } else {
+                    Value::undefined()
+                }
+            } else {
+                Value::undefined()
+            }
+        } else {
+            Value::undefined()
+        }
+    }))
+}
+
+fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleResult {
+    let mut this = this.cast::<RegularObj>();
+    this.fields.insert(key, value);
+    WaffleResult::okay(Value::new_bool(true))
+}
+
+fn trace_obj(x: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
+    let x = x.cast::<RegularObj>();
+    for (key, val) in x.fields.iter() {
+        if key.is_cell() {
+            trace(key.as_cell());
+        }
+        if val.is_cell() {
+            trace(val.as_cell());
+        }
+    }
+}
+#[repr(C)]
+pub struct RegularObj {
+    header: Header,
+    pub vtable: &'static VTable,
+    pub prototype: Value,
+    pub fields: HashMap<Value, Value>,
+}
+
+impl RegularObj {
+    pub fn new(heap: &mut crate::heap::Heap, proto: Value) -> Ref<Self> {
+        let mem = heap.allocate(std::mem::size_of::<Self>());
+        unsafe {
+            mem.to_mut_ptr::<Self>().write(Self {
+                header: Header::new(),
+                vtable: &OBJECT_VTBL,
+                prototype: proto,
+                fields: HashMap::new(),
+            });
+            Ref { ptr: mem.to_ptr() }
+        }
+    }
 }
 
 #[repr(C)]
@@ -325,6 +400,29 @@ pub struct WaffleString {
 }
 
 impl WaffleString {
+    pub fn new(heap: &mut crate::heap::Heap, s: impl AsRef<str>) -> Ref<Self> {
+        let mem = heap.allocate(
+            Header::size() as usize
+                + std::mem::size_of::<usize>()
+                + std::mem::size_of::<usize>()
+                + std::mem::size_of::<char>() * s.as_ref().len(),
+        );
+        unsafe {
+            mem.to_mut_ptr::<Self>().write(Self {
+                header: Header::new(),
+                vtable: &crate::builtins::STRING_VTBL,
+                length: s.as_ref().len(),
+                data: '\0',
+            });
+        }
+        let mut this = Ref {
+            ptr: mem.to_ptr::<Self>(),
+        };
+        for (i, c) in s.as_ref().chars().enumerate() {
+            this.set_at(i, c);
+        }
+        this
+    }
     pub fn header(&self) -> &Header {
         &self.header
     }

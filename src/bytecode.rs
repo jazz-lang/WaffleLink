@@ -28,9 +28,14 @@ pub enum Ins {
     Mul(VirtualRegister, VirtualRegister, VirtualRegister),
     Div(VirtualRegister, VirtualRegister, VirtualRegister),
     Rem(VirtualRegister, VirtualRegister, VirtualRegister),
+    Mod(VirtualRegister, VirtualRegister, VirtualRegister),
     LShift(VirtualRegister, VirtualRegister, VirtualRegister),
     RShift(VirtualRegister, VirtualRegister, VirtualRegister),
     URShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    BitAnd(VirtualRegister, VirtualRegister, VirtualRegister),
+    BitOr(VirtualRegister, VirtualRegister, VirtualRegister),
+    BitXor(VirtualRegister, VirtualRegister, VirtualRegister),
+    ToBoolean(VirtualRegister, VirtualRegister),
     Equal(VirtualRegister, VirtualRegister, VirtualRegister),
     NotEqual(VirtualRegister, VirtualRegister, VirtualRegister),
     Greater(VirtualRegister, VirtualRegister, VirtualRegister),
@@ -64,10 +69,12 @@ pub enum Ins {
     ),
     TailCall(VirtualRegister /* function */, u32 /* argc */),
     New(
-        VirtualRegister, /* constructor or object */
         VirtualRegister, /* dest */
+        VirtualRegister, /* constructor or object */
         u32,             /* argc */
     ),
+    /// Initializes new empty object.
+    NewObject(VirtualRegister),
 
     Return(VirtualRegister),
 }

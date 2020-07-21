@@ -67,6 +67,9 @@ pub struct VM {
     pub call_stack: Vec<interpreter::callframe::CallFrame>,
     pub exception: value::Value,
     pub empty_string: value::Value,
+    pub constructor: value::Value,
+    pub length: value::Value,
+    pub prototype: value::Value,
     pub stop_world: bool,
     pub disasm: bool,
     pub opt_jit: bool,
@@ -100,7 +103,7 @@ impl JITStubs {
 
 impl VM {
     pub fn new(stack_start: *const bool) -> Self {
-        Self {
+        let mut this = Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
             call_stack: vec![],
@@ -115,7 +118,19 @@ impl VM {
             opt_jit: false,
             empty_string: value::Value::undefined(),
             heap: heap::Heap::new(stack_start),
-        }
+            length: value::Value::undefined(),
+            constructor: value::Value::undefined(),
+            prototype: value::Value::undefined(),
+        };
+        this.length =
+            value::Value::from(object::WaffleString::new(&mut this.heap, "length").cast());
+        this.constructor =
+            value::Value::from(object::WaffleString::new(&mut this.heap, "constructor").cast());
+        this.empty_string =
+            value::Value::from(object::WaffleString::new(&mut this.heap, "").cast());
+        this.prototype =
+            value::Value::from(object::WaffleString::new(&mut this.heap, "prototype").cast());
+        this
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {
         if self.top_call_frame.is_null() {
