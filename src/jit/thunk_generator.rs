@@ -64,13 +64,13 @@ pub fn link_call_thunk_generator(vm: &VM) -> *const u8 {
 }
 
 pub fn prepare_call_frame_for_call(cf: &mut CallFrame, argc: u32, argv: u32) -> Box<CallFrame> {
-    let args = Ref {
+    let _args = Ref {
         ptr: cf.regs[argv as usize..argv as usize + argc as usize].as_ptr(),
     };
     todo!();
 }
 
-pub fn call_trampoline_generator(vm: &VM) -> *const u8 {
+pub fn call_trampoline_generator(_vm: &VM) -> *const u8 {
     let cb = CodeBlock::new();
     let mut jit = JIT::new(&cb);
     jit.masm.prepare_call_with_arg_count(3);

@@ -1,7 +1,5 @@
 use super::*;
 use crate::gc::Address;
-use crate::object::*;
-use bitset_core::BitSet;
 use std::collections::HashSet;
 pub struct HeapBlock {
     cell_size: usize,
@@ -95,7 +93,7 @@ impl HeapBlock {
             ))
             .cast::<Self>()
         };
-        log!("Allocate HeapBlock with cell size {} bytes", cell_size);
+        //log!("Allocate HeapBlock with cell size {} bytes", cell_size);
         const FORCE_FREELIST: bool = false;
 
         unsafe {

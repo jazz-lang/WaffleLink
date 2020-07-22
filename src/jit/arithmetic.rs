@@ -508,7 +508,7 @@ impl<'a> JIT<'a> {
         _op1: virtual_register::VirtualRegister,
         _op2: virtual_register::VirtualRegister,
         target: u32,
-        ins_size: i32,
+        _ins_size: i32,
         double_cond: FpCondition,
         operation: *const u8,
         invert: bool,

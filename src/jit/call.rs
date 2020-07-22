@@ -1,6 +1,5 @@
 use super::*;
-use crate::interpreter::callframe::*;
-use crate::value::*;
+
 impl<'a> JIT<'a> {
     pub fn compile_op_call(&mut self, ins: &Ins, call_link_info_idx: usize) {
         let callee = match ins {

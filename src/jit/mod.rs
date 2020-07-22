@@ -21,8 +21,6 @@ pub mod mathic;
 pub mod mul_generator;
 pub mod operations;
 pub mod sub_generator;
-#[cfg(target_pointer_width = "64")]
-pub mod tail_call64;
 pub mod thunk_generator;
 use crate::bytecode::*;
 use crate::interpreter::callframe::*;
@@ -469,7 +467,7 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Safepoint => {
                     self.link_all_slow_cases(&mut iter);
-                    extern "C" fn safepoint(vm: &crate::VM, stack_top: *const u8) {}
+                    extern "C" fn safepoint(_vm: &crate::VM, _stack_top: *const u8) {}
                     self.masm.prepare_call_with_arg_count(2);
                     self.masm
                         .pass_ptr_as_arg(crate::get_vm() as *const _ as usize, 0);
@@ -613,7 +611,7 @@ impl<'a> JIT<'a> {
         &mut self,
         value: Reg,
         scratch: Reg,
-        scratch2: Reg,
+        _scratch2: Reg,
         value_as_fpr: FPReg,
         temp_fpr: FPReg,
         should_check_masquerades_as_undefined: bool,

@@ -114,7 +114,6 @@ impl Class {
     }
 }
 
-use super::value::*;
 #[repr(C)]
 pub enum TableEnum {
     Fast(Ref<Class>, Vec<Value>),
@@ -241,10 +240,29 @@ impl TableEnum {
 pub struct Table {
     header: Header,
     vtable: &'static vtable::VTable,
-    table: TableEnum,
+    pub table: TableEnum,
 }
 
 impl Table {
+    pub fn new(class: Option<Ref<Class>>) -> Self {
+        let table = if let Some(cls) = class {
+            if cls.kind == ClassKind::Slow {
+                TableEnum::Slow(cls, IndexMap::new())
+            } else {
+                TableEnum::Fast(cls, vec![Value::undefined(); 12])
+            }
+        } else {
+            TableEnum::Fast(
+                get_vm().allocate(Class::new(ClassKind::Fast)),
+                vec![Value::undefined(); 12],
+            )
+        };
+        Self {
+            header: Header::new(),
+            vtable: &TABLE_VTBL,
+            table: table,
+        }
+    }
     pub fn cls(&self) -> Ref<Class> {
         match self.table {
             TableEnum::Fast(cls, ..) => cls,

@@ -1,10 +1,7 @@
-use bigint::*;
 use bytecode::*;
-use gc::*;
 use heap::*;
 use interpreter::callframe::*;
 use jit::*;
-use num_bigint::*;
 use object::*;
 use value::*;
 use virtual_register::*;
@@ -16,8 +13,8 @@ pub extern "C" fn foo(cf: &mut CallFrame) -> WaffleResult {
 fn main() {
     simple_logger::init().unwrap();
     let x = false;
-    let mut vm = VM::new(&x);
-    vm.log = true;
+    let vm = VM::new(&x);
+    //vm.log = true;
     set_vm(&vm);
     let mut heap = Heap::new(&x);
     let func = function::Function::new_native(&mut heap, foo);
@@ -26,13 +23,17 @@ fn main() {
     cb.constants.push(Value::from(func.cast()));
     cb.num_vars = 1;
     cb.callee_locals = 7;
-
+    cb.metadata = vec![{
+        let mut meta = OpcodeMetadata::new();
+        meta.arith_profile.lhs_saw_int32();
+        meta.arith_profile.rhs_saw_int32();
+        meta
+    }];
     cb.instructions = vec![
-        Ins::Call(
+        Ins::Add(
             virtual_register_for_local(0),
             VirtualRegister::new_constant_index(0),
-            VirtualRegister::new_constant_index(1),
-            0,
+            VirtualRegister::new_argument(0),
         ),
         Ins::Return(virtual_register_for_local(0)),
     ];

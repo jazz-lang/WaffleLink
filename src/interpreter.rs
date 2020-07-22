@@ -403,7 +403,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 }
             }
             Ins::NewObject(dst) => {
-                let object = object::RegularObj::new(&mut vm.heap, Value::undefined());
+                let object = object::RegularObj::new(&mut vm.heap, Value::undefined(), None);
                 callframe.put_register(dst, Value::from(object.cast::<Obj>()));
             }
             Ins::New(dest, callee, argc) => {
@@ -423,7 +423,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                         if ctor.is_error() {
                             catch!(ctor.value());
                         } else if ctor.value().is_cell() && ctor.value().as_cell().is_function() {
-                            let this = RegularObj::new(&mut vm.heap, proto);
+                            let this = RegularObj::new(&mut vm.heap, proto, None);
                             let result = crate::jit::operations::operation_call_func(
                                 callframe,
                                 callee,

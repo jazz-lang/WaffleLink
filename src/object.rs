@@ -82,7 +82,6 @@ impl Header {
             .is_ok()
     }
 }
-use std::collections::HashMap;
 #[repr(C)]
 pub struct Obj {
     header: Header,
@@ -106,10 +105,17 @@ use super::*;
 
 fn obj_lookup(vm: &crate::VM, this: Ref<Obj>, key: Value) -> WaffleResult {
     let this = this.cast::<RegularObj>();
-    WaffleResult::okay(this.fields.get(&key).copied().unwrap_or_else(|| {
+    let keyv = key;
+    let key = key_from_val(key);
+    if key.is_none() {
+        return WaffleResult::error(Value::from(
+            WaffleString::new(&mut get_vm().heap, "Property name is not a string").cast(),
+        ));
+    }
+    WaffleResult::okay(this.table.table.load(key.unwrap()).unwrap_or_else(|| {
         if this.prototype.is_cell() && !this.prototype.is_empty() {
             if let Some(fun) = this.prototype.as_cell().vtable.lookup_fn {
-                let res = fun(vm, this.prototype.as_cell(), key);
+                let res = fun(vm, this.prototype.as_cell(), keyv);
                 if res.is_okay() {
                     res.value()
                 } else {
@@ -124,21 +130,33 @@ fn obj_lookup(vm: &crate::VM, this: Ref<Obj>, key: Value) -> WaffleResult {
     }))
 }
 
+fn key_from_val(key: Value) -> Option<Ref<WaffleString>> {
+    if key.is_cell() {
+        if key.as_cell().is_string() {
+            return Some(key.as_cell().cast());
+        }
+    }
+    None
+}
+
 fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleResult {
     let mut this = this.cast::<RegularObj>();
-    this.fields.insert(key, value);
-    WaffleResult::okay(Value::new_bool(true))
+    let key = key_from_val(key);
+    if let Some(key) = key {
+        this.table.table.set(key, value);
+        WaffleResult::okay(Value::new_bool(true))
+    } else {
+        WaffleResult::error(Value::from(
+            WaffleString::new(&mut get_vm().heap, "Property name is not a string").cast(),
+        ))
+    }
 }
 
 fn trace_obj(x: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
     let x = x.cast::<RegularObj>();
-    for (key, val) in x.fields.iter() {
-        if key.is_cell() {
-            trace(key.as_cell());
-        }
-        if val.is_cell() {
-            trace(val.as_cell());
-        }
+    trace(x.table.cast());
+    if x.prototype.is_cell() {
+        trace(x.prototype.as_cell());
     }
 }
 #[repr(C)]
@@ -146,18 +164,22 @@ pub struct RegularObj {
     header: Header,
     pub vtable: &'static VTable,
     pub prototype: Value,
-    pub fields: HashMap<Value, Value>,
+    pub table: Ref<table::Table>,
 }
 
 impl RegularObj {
-    pub fn new(heap: &mut crate::heap::Heap, proto: Value) -> Ref<Self> {
+    pub fn new(
+        heap: &mut crate::heap::Heap,
+        proto: Value,
+        class: Option<Ref<table::Class>>,
+    ) -> Ref<Self> {
         let mem = heap.allocate(std::mem::size_of::<Self>());
         unsafe {
             mem.to_mut_ptr::<Self>().write(Self {
                 header: Header::new(),
                 vtable: &OBJECT_VTBL,
                 prototype: proto,
-                fields: HashMap::new(),
+                table: get_vm().allocate(table::Table::new(class)),
             });
             Ref { ptr: mem.to_ptr() }
         }
@@ -413,7 +435,7 @@ impl WaffleString {
                 string: s.as_ref().to_owned(),
             });
         }
-        let mut this = Ref {
+        let this = Ref {
             ptr: mem.to_ptr::<Self>(),
         };
 
@@ -435,7 +457,7 @@ impl WaffleString {
         self.string.chars().nth(idx).unwrap()
     }
 
-    pub fn set_at(&mut self, idx: usize, val: char) {
+    pub fn set_at(&mut self, _idx: usize, _val: char) {
         todo!()
     }
 

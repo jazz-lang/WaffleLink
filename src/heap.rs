@@ -59,7 +59,7 @@ impl Heap {
             println!("{}", size);
             todo!("Large classes is not yet supported")
         }
-        log!("Allocate {} bytes in size class #{}", size, sc);
+        //log!("Allocate {} bytes in size class #{}", size, sc);
         unsafe {
             for block in self.size_classes[sc].iter_mut() {
                 let mem = (&mut **block).allocate();
@@ -76,7 +76,6 @@ impl Heap {
         let off = object.to_usize() % block::HeapBlock::BLOCK_SIZE;
         (object.to_usize() as isize + (-(off as isize))) as *mut _
     }
-
 
     #[inline(never)]
     fn collect_roots(&mut self, sp: Address) -> Vec<Address> {

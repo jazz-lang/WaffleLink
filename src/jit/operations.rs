@@ -1,5 +1,4 @@
 use super::{add_generator::*, mathic::*, sub_generator::*, *};
-use crate::gc::*;
 use crate::value::*;
 use crate::*;
 use thunk_generator::*;
@@ -103,8 +102,8 @@ pub extern "C" fn operation_value_mul_optimize(
 }
 
 pub unsafe extern "C" fn operation_link_call(
-    callee_frame: *mut CallFrame,
-    vm: &VM,
+    _callee_frame: *mut CallFrame,
+    _vm: &VM,
 ) -> SlowPathReturn {
     return SlowPathReturn::encode(0, 0);
 }

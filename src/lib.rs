@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicU8;
 #[macro_export]
 macro_rules! log {
     ($($arg: tt)*) => {
-        if crate::get_vm().log {
+        if crate::LOG.load(std::sync::atomic::Ordering::Relaxed) {
             let lock = std::io::stdout();
             let lock = lock.lock();
             print!("LOG: ");
@@ -101,7 +101,7 @@ impl JITStubs {
         }
     }
 }
-
+static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 impl VM {
     pub fn new(stack_start: *const bool) -> Self {
         let mut this = Self {
