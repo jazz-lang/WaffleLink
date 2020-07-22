@@ -148,7 +148,7 @@ pub extern "C" fn operation_compare_less(x: Value, y: Value) -> bool {
         let x = x.as_cell();
         let y = y.as_cell();
         if x.is_string() && y.is_string() {
-            return x.cast::<WaffleString>().length < y.cast::<WaffleString>().length;
+            return x.cast::<WaffleString>().len() < y.cast::<WaffleString>().len();
         } else if x.is_array_ref() && y.is_array_ref() {
             return x.cast::<Array>().len() < y.cast::<Array>().len();
         }
@@ -164,7 +164,7 @@ pub extern "C" fn operation_compare_greater(x: Value, y: Value) -> bool {
         let x = x.as_cell();
         let y = y.as_cell();
         if x.is_string() && y.is_string() {
-            return x.cast::<WaffleString>().length > y.cast::<WaffleString>().length;
+            return x.cast::<WaffleString>().len() > y.cast::<WaffleString>().len();
         } else if x.is_array_ref() && y.is_array_ref() {
             return x.cast::<Array>().len() > y.cast::<Array>().len();
         }
@@ -182,7 +182,7 @@ pub extern "C" fn operation_compare_lesseq(x: Value, y: Value) -> bool {
         let x = x.as_cell();
         let y = y.as_cell();
         if x.is_string() && y.is_string() {
-            return (x.cast::<WaffleString>().length < y.cast::<WaffleString>().length)
+            return (x.cast::<WaffleString>().len() < y.cast::<WaffleString>().len())
                 || operation_compare_eq(xv, yv);
         } else if x.is_array_ref() && y.is_array_ref() {
             return (x.cast::<Array>().len() < y.cast::<Array>().len()) || x.raw() == y.raw();
@@ -201,7 +201,7 @@ pub extern "C" fn operation_compare_greaterq(x: Value, y: Value) -> bool {
         let x = x.as_cell();
         let y = y.as_cell();
         if x.is_string() && y.is_string() {
-            return (x.cast::<WaffleString>().length > y.cast::<WaffleString>().length)
+            return (x.cast::<WaffleString>().len() > y.cast::<WaffleString>().len())
                 || operation_compare_eq(xv, yv);
         } else if x.is_array_ref() && y.is_array_ref() {
             return (x.cast::<Array>().len() > y.cast::<Array>().len()) || x.raw() == y.raw();
@@ -246,7 +246,7 @@ pub extern "C" fn operation_call_func(
         vm.call_stack.pop().unwrap();
         return result;
     }
-    WaffleResult::okay(Value::undefined())
+    get_vm().throw_exception_str("callee is not a function")
 }
 
 pub fn get_executable_address_for(

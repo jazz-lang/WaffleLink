@@ -395,8 +395,7 @@ impl Array {
 pub struct WaffleString {
     pub header: Header,
     pub vtable: &'static VTable,
-    pub length: usize,
-    pub data: char,
+    pub string: String,
 }
 
 impl WaffleString {
@@ -411,16 +410,13 @@ impl WaffleString {
             mem.to_mut_ptr::<Self>().write(Self {
                 header: Header::new(),
                 vtable: &crate::builtins::STRING_VTBL,
-                length: s.as_ref().len(),
-                data: '\0',
+                string: s.as_ref().to_owned(),
             });
         }
         let mut this = Ref {
             ptr: mem.to_ptr::<Self>(),
         };
-        for (i, c) in s.as_ref().chars().enumerate() {
-            this.set_at(i, c);
-        }
+
         this
     }
     pub fn header(&self) -> &Header {
@@ -432,28 +428,38 @@ impl WaffleString {
     }
 
     pub fn len(&self) -> usize {
-        self.length
-    }
-
-    pub fn data(&self) -> *const char {
-        &self.data as *const char
-    }
-
-    pub fn data_address(&self) -> Address {
-        Address::from_ptr(self.data())
-    }
-
-    pub fn data_mut(&mut self) -> *mut char {
-        &self.data as *const char as *mut char
+        self.string.len()
     }
 
     pub fn get_at(&self, idx: usize) -> char {
-        unsafe { *self.data().offset(idx as isize) }
+        self.string.chars().nth(idx).unwrap()
     }
 
     pub fn set_at(&mut self, idx: usize, val: char) {
-        unsafe {
-            *self.data_mut().offset(idx as isize) = val;
-        }
+        todo!()
+    }
+
+    pub fn str(&self) -> &str {
+        &self.string
+    }
+}
+
+use std::hash::{Hash, Hasher};
+
+impl PartialEq for Ref<WaffleString> {
+    fn eq(&self, other: &Self) -> bool {
+        self.string == other.string
+    }
+}
+
+impl Eq for Ref<WaffleString> {}
+impl Hash for WaffleString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.string.hash(state);
+    }
+}
+impl<T: Hash> Hash for Ref<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (**self).hash(state);
     }
 }

@@ -98,6 +98,7 @@ pub fn osr_from_interpreter_to_jit_generator() -> *const u8 {
     let mut jit = JIT::new(&cb);
     jit.emit_function_prologue();
     jit.masm.move_rr(AGPR0, REG_CALLFRAME);
+    jit.materialize_tag_check_regs();
     let addr;
     #[cfg(windows)]
     {

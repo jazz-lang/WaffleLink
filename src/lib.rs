@@ -36,6 +36,7 @@ pub mod interpreter;
 pub mod jit;
 pub mod object;
 pub mod pure_nan;
+pub mod table;
 pub mod value;
 pub mod vtable;
 pub struct MutatingVecIter<'a, T>(&'a mut Vec<T>, usize);
@@ -142,6 +143,20 @@ impl VM {
 
     pub fn exception_addr(&self) -> *const value::Value {
         &self.exception
+    }
+
+    pub fn throw_exception_str(&mut self, s: impl AsRef<str>) -> WaffleResult {
+        let val = object::WaffleString::new(&mut self.heap, s);
+        self.exception = value::Value::from(val.cast());
+        WaffleResult::error(self.exception)
+    }
+
+    pub fn allocate<T>(&mut self, val: T) -> object::Ref<T> {
+        unsafe {
+            let mem = self.heap.allocate(std::mem::size_of::<T>());
+            mem.to_mut_ptr::<T>().write(val);
+            std::mem::transmute(mem)
+        }
     }
 }
 
