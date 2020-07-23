@@ -190,7 +190,7 @@ pub extern "C" fn operation_compare_lesseq(x: Value, y: Value) -> bool {
 
     x == y
 }
-pub extern "C" fn operation_compare_greaterq(x: Value, y: Value) -> bool {
+pub extern "C" fn operation_compare_greatereq(x: Value, y: Value) -> bool {
     let xv = x;
     let yv = y;
     if x.is_number() && y.is_number() {
@@ -217,24 +217,16 @@ pub extern "C" fn operation_compare_neq(x: Value, y: Value) -> bool {
 pub extern "C" fn operation_call_func(
     cf: &mut CallFrame,
     callee: Value,
+    callee_r: VirtualRegister,
     argc: u32,
     this: Value,
 ) -> WaffleResult {
-    let mut args = vec![];
-    {
-        for i in 0..argc {
-            args.push(cf.get_register(VirtualRegister::new_argument(i as _)));
-        }
-    }
+    let args = &cf.regs
+        [callee_r.to_local() as usize + 1..callee_r.to_local() as usize + argc as usize + 1];
 
-    if let Some((addr, argc, vars, cb)) = get_executable_address_for(callee) {
-        let passed = args.len();
-        if args.len() < argc as usize {
-            while args.len() < argc as usize {
-                args.push(Value::undefined());
-            }
-        }
-        let mut call_frame = CallFrame::new(&args, vars);
+    let passed = argc;
+    if let Some((addr, _argc, vars, cb)) = get_executable_address_for(callee) {
+        let mut call_frame = CallFrame::new(args, vars);
         call_frame.this = this;
         call_frame.callee = callee;
         call_frame.passed_argc = passed as u32;
@@ -299,4 +291,30 @@ pub fn get_executable_address_for(
         }
     }
     None
+}
+
+pub fn operation_get_by(vm: &VM, object: Value, key: Value) -> WaffleResult {
+    if object.is_cell() {
+        let obj = object.as_cell();
+        if let Some(fun) = obj.vtable.lookup_fn {
+            return fun(vm, obj, key);
+        }
+    }
+    WaffleResult::okay(Value::undefined())
+}
+
+pub fn operation_put_by(vm: &VM, object: Value, key: Value, value: Value) -> WaffleResult {
+    if object.is_cell() {
+        let obj = object.as_cell();
+        if let Some(fun) = obj.vtable.set_fn {
+            return fun(vm, obj, key, value);
+        }
+    }
+    WaffleResult::error(Value::from(
+        WaffleString::new(
+            &mut get_vm().heap,
+            "cannot set property on value that is not an object",
+        )
+        .cast(),
+    ))
 }

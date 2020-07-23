@@ -2,7 +2,7 @@ use crate::bytecode::*;
 use crate::object::Ref;
 use crate::value::*;
 pub struct CallFrame {
-    pub regs: Box<[Value]>,
+    pub regs: Vec<Value>,
     pub code_block: Option<Ref<CodeBlock>>,
     pub args: Ref<Value>,
     pub argc: u32,
@@ -16,7 +16,7 @@ pub struct CallFrame {
 impl CallFrame {
     pub fn new(args: &[Value], regc: u32) -> Self {
         Self {
-            regs: vec![Value::undefined(); regc as usize].into_boxed_slice(),
+            regs: vec![Value::undefined(); regc as usize + 1],
             argc: args.len() as u32,
             args: Ref { ptr: args.as_ptr() },
             code_block: None,
@@ -38,7 +38,7 @@ impl CallFrame {
                 .copied()
                 .unwrap_or(Value::undefined());
         } else if r.is_argument() {
-            if r.to_argument() < self.passed_argc as _ {
+            if r.to_argument() >= self.passed_argc as _ {
                 return Value::undefined();
             }
             return *self.args.offset(r.to_argument() as _);

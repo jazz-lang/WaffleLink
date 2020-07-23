@@ -78,6 +78,7 @@ pub struct VM {
     pub log: bool,
     pub heap: heap::Heap,
     pub stubs: JITStubs,
+    pub globals: std::collections::HashMap<object::Ref<object::WaffleString>, value::Value>,
 }
 
 pub struct JITStubs {
@@ -122,6 +123,7 @@ impl VM {
             length: value::Value::undefined(),
             constructor: value::Value::undefined(),
             prototype: value::Value::undefined(),
+            globals: Default::default(),
         };
         this.length =
             value::Value::from(object::WaffleString::new(&mut this.heap, "length").cast());

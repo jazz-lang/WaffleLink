@@ -8,6 +8,10 @@ use virtual_register::*;
 use wafflelink::*;
 pub extern "C" fn foo(cf: &mut CallFrame) -> WaffleResult {
     assert!(cf.this.is_int32());
+    let arg = cf.get_register(VirtualRegister::new_argument(0));
+    if cf.this != arg {
+        panic!();
+    }
     WaffleResult::okay(Value::new_int(322))
 }
 fn main() {
@@ -30,10 +34,23 @@ fn main() {
         meta
     }];
     cb.instructions = vec![
-        Ins::Add(
+        Ins::Move(
             virtual_register_for_local(0),
-            VirtualRegister::new_constant_index(0),
-            VirtualRegister::new_argument(0),
+            VirtualRegister::new_constant_index(0), // int32 2 as 'this' value
+        ),
+        Ins::Move(
+            virtual_register_for_local(1),
+            VirtualRegister::new_constant_index(1), // function
+        ),
+        Ins::Move(
+            virtual_register_for_local(2),
+            VirtualRegister::new_constant_index(0), // int32 2 as argument
+        ),
+        Ins::Call(
+            virtual_register_for_local(0), //dest
+            virtual_register_for_local(0), // this
+            virtual_register_for_local(1), // callee
+            1,                             // argc
         ),
         Ins::Return(virtual_register_for_local(0)),
     ];
@@ -42,8 +59,8 @@ fn main() {
     jit.compile_without_linking();
     jit.link();
     jit.disasm();
-    let mut cf = Box::new(CallFrame::new(&[Value::new_int(4)], 3));
-    cf.regs = vec![Value::new_int(42)].into_boxed_slice();
+    let mut cf = Box::new(CallFrame::new(&[Value::new_int(4)], 4));
+
     cf.code_block = Some(Ref { ptr: &*cb });
     let f: extern "C" fn(&mut CallFrame) -> WaffleResult =
         unsafe { std::mem::transmute(jit.link_buffer.code) };

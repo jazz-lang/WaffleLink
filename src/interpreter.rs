@@ -324,7 +324,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
             Ins::JGreaterEq(x, y, target) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
-                let res = cmp!(x,y,operation_compare_greaterq,>=);
+                let res = cmp!(x,y,operation_compare_greatereq,>=);
                 if res {
                     update_pc(&mut pc, target);
                 }
@@ -340,7 +340,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
             Ins::JNLessEq(x, y, target) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
-                let res = cmp!(x,y,operation_compare_greaterq,>=);
+                let res = cmp!(x,y,operation_compare_greatereq,>=);
                 if res {
                     update_pc(&mut pc, target);
                 }
@@ -391,11 +391,12 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let r = callframe.get_register(src);
                 callframe.put_register(dst, r);
             }
-            Ins::Call(dest, this, callee, argc) => {
+            Ins::Call(dest, this, callee_r, argc) => {
                 let this = callframe.get_register(this);
-                let callee = callframe.get_register(callee);
-                let result =
-                    crate::jit::operations::operation_call_func(callframe, callee, argc, this);
+                let callee = callframe.get_register(callee_r);
+                let result = crate::jit::operations::operation_call_func(
+                    callframe, callee, callee_r, argc, this,
+                );
                 if result.is_okay() {
                     callframe.put_register(dest, result.value());
                 } else {
@@ -406,8 +407,8 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let object = object::RegularObj::new(&mut vm.heap, Value::undefined(), None);
                 callframe.put_register(dst, Value::from(object.cast::<Obj>()));
             }
-            Ins::New(dest, callee, argc) => {
-                let callee = callframe.get_register(callee);
+            Ins::New(dest, callee_r, argc) => {
+                let callee = callframe.get_register(callee_r);
                 if callee.is_cell() {
                     if let Some(lookup) = callee.as_cell().vtable.lookup_fn {
                         let ctor = lookup(vm, callee.as_cell(), vm.constructor);
@@ -426,7 +427,8 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                             let this = RegularObj::new(&mut vm.heap, proto, None);
                             let result = crate::jit::operations::operation_call_func(
                                 callframe,
-                                callee,
+                                ctor.value(),
+                                callee_r,
                                 argc,
                                 Value::from(this.cast()),
                             );

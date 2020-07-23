@@ -26,6 +26,7 @@ pub struct JIT<'a> {
     pub ins_to_mathic_state: HashMap<*const Ins, mathic::MathICGenerationState>,
     pub ins_to_mathic: HashMap<*const Ins, *mut u8>,
     pub osr_upgrade: Vec<Jump>,
+    pub exception_sink: Vec<Jump>,
     pub comments: HashMap<u32, String>,
 }
 impl<'a> JIT<'a> {
@@ -35,6 +36,7 @@ impl<'a> JIT<'a> {
             try_start: 0,
             ins_to_lbl: HashMap::new(),
             jumps_to_finalize: vec![],
+            exception_sink: vec![],
             code_block: code,
             ins_to_mathic_state: HashMap::new(),
             masm: MacroAssemblerX86::new(cfg!(target_pointer_width = "64")),
@@ -287,7 +289,8 @@ pub mod args {
     pub const AGPR3: Reg = Reg::ECX;
     pub const AGPR4: Reg = Reg::R8;
     pub const AGPR5: Reg = Reg::R9;
-
+    pub const NON_ARG_T0: Reg = T0;
+    pub const NON_ARG_T1: Reg = T5;
     pub const CALLEE_SAVES: [Reg; 5] = [Reg::EBX, Reg::R12, Reg::R13, Reg::R14, Reg::R15];
 }
 

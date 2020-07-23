@@ -23,7 +23,7 @@ impl<'a> JIT<'a> {
             self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::GreaterThan);
         }
     }
-    pub fn emit_op_jgreaterq(&mut self, op: &Ins) {
+    pub fn emit_op_jgreatereq(&mut self, op: &Ins) {
         if let Ins::JGreaterEq(op1, op2, target) = op {
             self.emit_compare_and_jump(
                 *op1,
@@ -53,7 +53,7 @@ impl<'a> JIT<'a> {
             self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::LessThan);
         }
     }
-    pub fn emit_op_jngreaterq(&mut self, op: &Ins) {
+    pub fn emit_op_jngreatereq(&mut self, op: &Ins) {
         if let Ins::JNGreaterEq(op1, op2, target) = op {
             self.emit_compare_and_jump(
                 *op1,
@@ -118,7 +118,7 @@ impl<'a> JIT<'a> {
             );
         }
     }
-    pub fn emit_slow_op_jgreaterq(
+    pub fn emit_slow_op_jgreatereq(
         &mut self,
         op: &Ins,
         slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
@@ -130,7 +130,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanOrEqualAndOrdered,
-                operations::operation_compare_greaterq as *const _,
+                operations::operation_compare_greatereq as *const _,
                 false,
                 slow_cases,
             );
@@ -166,7 +166,7 @@ impl<'a> JIT<'a> {
                 *target as _,
                 1,
                 FpCondition::GreaterThanOrEqualOrUnordered,
-                operations::operation_compare_greaterq as _,
+                operations::operation_compare_greatereq as _,
                 false,
                 slow_cases,
             );
@@ -190,7 +190,7 @@ impl<'a> JIT<'a> {
             );
         }
     }
-    pub fn emit_slow_op_jngreaterq(
+    pub fn emit_slow_op_jngreatereq(
         &mut self,
         op: &Ins,
         slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,

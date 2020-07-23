@@ -219,22 +219,27 @@ impl<'a> JIT<'a> {
         } else {
             let br = self
                 .masm
-                .branch64_imm64(RelationalCondition::NotEqual, RET0, 1);
-            self.function_epilogue(AGPR0);
-            if cfg!(windows) {
-                self.masm
-                    .store64_imm32(1, Mem::Base(AGPR0, offset_of!(crate::WaffleResult, a) as _));
-                self.masm.store64(
-                    RET1,
-                    Mem::Base(AGPR0, offset_of!(crate::WaffleResult, b) as _),
-                );
-                self.masm.move_rr(AGPR0, RET0);
-            }
-            self.masm.ret();
-            br.link(&mut self.masm);
+                .branch64_imm64(RelationalCondition::Equal, RET0, 1);
+            self.exception_sink.push(br);
         }
     }
     fn private_compile_link_pass(&mut self) {
+        for s in self.exception_sink.iter() {
+            s.link(&mut self.masm);
+        }
+        self.add_comment("\t(Exception sink start)");
+        self.function_epilogue(AGPR0);
+        if cfg!(windows) {
+            self.masm
+                .store64_imm32(1, Mem::Base(AGPR0, offset_of!(crate::WaffleResult, a) as _));
+            self.masm.store64(
+                RET1,
+                Mem::Base(AGPR0, offset_of!(crate::WaffleResult, b) as _),
+            );
+            self.masm.move_rr(AGPR0, RET0);
+        }
+        self.masm.ret();
+        self.add_comment("\t(Exception sink end)");
         for i in 0..self.jmptable.len() {
             self.jmptable[i].from.link_to(
                 &mut self.masm,
@@ -304,7 +309,7 @@ impl<'a> JIT<'a> {
                 Ins::JLess { .. } => self.emit_op_jless(ins),
                 Ins::JLessEq { .. } => self.emit_op_jlesseq(ins),
                 Ins::JGreater { .. } => self.emit_op_jnless(ins),
-                Ins::JGreaterEq { .. } => self.emit_op_jgreaterq(ins),
+                Ins::JGreaterEq { .. } => self.emit_op_jgreatereq(ins),
                 Ins::Sub { .. } => self.emit_op_sub(ins),
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
@@ -312,10 +317,13 @@ impl<'a> JIT<'a> {
                 Ins::Call(dest, this, callee, argc) => {
                     // TODO: Use code patching and fast path/slow path codegen for calls
                     self.masm.prepare_call_with_arg_count(3);
-                    self.emit_get_virtual_register(*callee, AGPR1);
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
-                    self.masm.pass_int32_as_arg(*argc as _, 2);
-                    self.emit_get_virtual_register(*this, AGPR3);
+                    self.emit_get_virtual_register(*callee, AGPR1);
+                    self.masm
+                        .pass_int32_as_arg(unsafe { std::mem::transmute(*callee) }, 2);
+                    self.masm.pass_int32_as_arg(*argc as _, 3);
+                    self.emit_get_virtual_register(*this, T0);
+                    self.masm.pass_reg_as_arg(T0, 4);
                     self.masm
                         .call_ptr_argc(operations::operation_call_func as *const _, 3);
                     self.check_exception(false);
@@ -403,6 +411,56 @@ impl<'a> JIT<'a> {
                     }
                     self.masm.ret();
                 }
+                Ins::Load(dest, object, key) => {
+                    self.masm.prepare_call_with_arg_count(3);
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0);
+                    self.emit_get_virtual_register(*object, AGPR1);
+                    self.emit_get_virtual_register(*key, AGPR2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_get_by as _, 3);
+                    self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
+                }
+                Ins::Store(object, key, value) => {
+                    self.masm.prepare_call_with_arg_count(4);
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0);
+                    self.emit_get_virtual_register(*object, AGPR1);
+                    self.emit_get_virtual_register(*key, AGPR2);
+                    self.emit_get_virtual_register(*value, AGPR3);
+                    self.masm
+                        .call_ptr_argc(operations::operation_get_by as _, 4);
+                    self.check_exception(false);
+                }
+                Ins::LoadId(dest, object, key) => {
+                    self.masm.prepare_call_with_arg_count(3);
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0);
+                    self.emit_get_virtual_register(*object, AGPR1);
+                    self.masm.move_i64(
+                        unsafe { self.code_block.constants[*key as usize].u.as_int64 },
+                        AGPR2,
+                    );
+                    self.masm
+                        .call_ptr_argc(operations::operation_get_by as _, 3);
+                    self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
+                }
+                Ins::StoreId(object, key, value) => {
+                    self.masm.prepare_call_with_arg_count(4);
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *mut _ as usize, 0);
+                    self.emit_get_virtual_register(*object, AGPR1);
+                    self.masm.move_i64(
+                        unsafe { self.code_block.constants[*key as usize].u.as_int64 },
+                        AGPR2,
+                    );
+                    self.emit_get_virtual_register(*value, AGPR3);
+                    self.masm
+                        .call_ptr_argc(operations::operation_get_by as _, 4);
+                    self.check_exception(false);
+                }
                 Ins::Enter => {}
                 _ => todo!(),
             }
@@ -445,8 +503,28 @@ impl<'a> JIT<'a> {
                         .branch32_test(ResultCondition::NonZero, RET0, RET0);
                     self.emit_jump_slow_to_hot(j, *off);
                 }
+                Ins::JLessEq { .. } => {
+                    self.emit_slow_op_jlesseq(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
                 Ins::JLess { .. } => {
                     self.emit_slow_op_jless(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::JNGreaterEq { .. } => {
+                    self.emit_slow_op_jlesseq(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::JNGreater { .. } => {
+                    self.emit_slow_op_jless(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::JGreaterEq { .. } => {
+                    self.emit_slow_op_jgreatereq(curr, &mut iter);
+                    self.bytecode_index += 1;
+                }
+                Ins::JGreater { .. } => {
+                    self.emit_slow_op_jgreater(curr, &mut iter);
                     self.bytecode_index += 1;
                 }
                 Ins::Add(_src1, _src2, _dest) => {

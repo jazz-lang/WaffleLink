@@ -13,14 +13,12 @@ use virtual_register::VirtualRegister;
 pub enum Ins {
     Enter,
     Move(VirtualRegister, VirtualRegister),
-    Swap(VirtualRegister, VirtualRegister),
     Load(VirtualRegister, VirtualRegister, VirtualRegister),
     Store(VirtualRegister, VirtualRegister, VirtualRegister),
-    LoadId(u32, VirtualRegister, VirtualRegister),
+    LoadId(VirtualRegister, VirtualRegister, u32),
     StoreId(VirtualRegister, u32, VirtualRegister),
-    LoadConst(u32, VirtualRegister),
 
-    LoadGlobal(u32 /* id constant */, VirtualRegister),
+    LoadGlobal(VirtualRegister, u32 /* id constant */),
     StoreGlobal(VirtualRegister, u32 /* id constant */),
 
     Add(VirtualRegister, VirtualRegister, VirtualRegister),
