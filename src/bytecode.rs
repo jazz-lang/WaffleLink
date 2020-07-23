@@ -65,7 +65,6 @@ pub enum Ins {
         VirtualRegister, /* callee */
         u32,             /* argc */
     ),
-    TailCall(VirtualRegister /* function */, u32 /* argc */),
     New(
         VirtualRegister, /* dest */
         VirtualRegister, /* constructor or object */

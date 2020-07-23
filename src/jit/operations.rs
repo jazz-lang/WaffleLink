@@ -3,6 +3,11 @@ use crate::value::*;
 use crate::*;
 use thunk_generator::*;
 use virtual_register::*;
+macro_rules! catch {
+    ($v: expr) => {
+        return WaffleResult::error($v);
+    };
+}
 pub extern "C" fn operation_value_add(_vm: &VM, op1: Value, op2: Value) -> Value {
     if op1.is_number() && op2.is_number() {
         let result = op1.to_number() + op2.to_number();
@@ -238,6 +243,58 @@ pub extern "C" fn operation_call_func(
         return result;
     }
     get_vm().throw_exception_str("callee is not a function")
+}
+
+pub extern "C" fn operation_new(
+    cf: &mut CallFrame,
+    callee: Value,
+    callee_r: VirtualRegister,
+    argc: u32,
+) -> WaffleResult {
+    let vm = get_vm();
+    if callee.is_cell() {
+        if let Some(lookup) = callee.as_cell().vtable.lookup_fn {
+            let ctor = lookup(vm, callee.as_cell(), vm.constructor);
+            let proto = lookup(vm, callee.as_cell(), vm.prototype);
+            if proto.is_error() {
+                catch!(ctor.value());
+            }
+            let proto = if proto.value().is_cell() {
+                proto.value()
+            } else {
+                Value::undefined()
+            };
+            if ctor.is_error() {
+                catch!(ctor.value());
+            } else if ctor.value().is_cell() && ctor.value().as_cell().is_function() {
+                let this = RegularObj::new(&mut vm.heap, proto, None);
+                let result = crate::jit::operations::operation_call_func(
+                    cf,
+                    ctor.value(),
+                    callee_r,
+                    argc,
+                    Value::from(this.cast()),
+                );
+                if result.is_okay() {
+                    return WaffleResult::okay(Value::from(this.cast()));
+                } else {
+                    catch!(result.value());
+                }
+            } else {
+                catch!(Value::from(
+                    WaffleString::new(&mut vm.heap, "constructor is not a function!").cast()
+                ));
+            }
+        } else {
+            catch!(Value::from(
+                WaffleString::new(&mut vm.heap, "Can't find constructor").cast()
+            ));
+        }
+    } else {
+        catch!(Value::from(
+            WaffleString::new(&mut vm.heap, "callee is not an object/function!").cast()
+        ));
+    }
 }
 
 pub fn get_executable_address_for(

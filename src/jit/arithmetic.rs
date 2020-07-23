@@ -1,8 +1,63 @@
 use super::*;
 use add_generator::*;
+use bitop_generator::*;
 use mathic::*;
-
 impl<'a> JIT<'a> {
+    pub fn emit_op_bitand(&mut self, op: &Ins) {
+        if let Ins::BitAnd(dest, op1, op2) = op {
+            let left_reg = T1;
+            let right_reg = T2;
+            let result_reg = T0;
+            let scratch_gpr = T3;
+            let mut gen = BitAndGenerator {
+                scratch: scratch_gpr,
+                left: left_reg,
+                right: right_reg,
+                result: result_reg,
+                slow_path_jump_list: vec![],
+            };
+            self.emit_get_virtual_register(*op1, left_reg);
+            self.emit_get_virtual_register(*op2, right_reg);
+            gen.generate_fast_path(self);
+            self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+        }
+    }
+    pub fn emit_op_bitor(&mut self, op: &Ins) {
+        if let Ins::BitOr(dest, op1, op2) = op {
+            let left_reg = T1;
+            let right_reg = T2;
+            let result_reg = T0;
+            let scratch_gpr = T3;
+            let mut gen = BitOrGenerator {
+                left: left_reg,
+                right: right_reg,
+                result: result_reg,
+                slow_path_jump_list: vec![],
+            };
+            self.emit_get_virtual_register(*op1, left_reg);
+            self.emit_get_virtual_register(*op2, right_reg);
+            gen.generate_fast_path(self);
+            self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+        }
+    }
+    pub fn emit_op_bitxor(&mut self, op: &Ins) {
+        if let Ins::BitOr(dest, op1, op2) = op {
+            let left_reg = T1;
+            let right_reg = T2;
+            let result_reg = T0;
+            let scratch_gpr = T3;
+            let mut gen = BitXorGenerator {
+                left: left_reg,
+                right: right_reg,
+                result: result_reg,
+                slow_path_jump_list: vec![],
+            };
+            self.emit_get_virtual_register(*op1, left_reg);
+            self.emit_get_virtual_register(*op2, right_reg);
+            gen.generate_fast_path(self);
+            self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+        }
+    }
     pub fn emit_op_jless(&mut self, op: &Ins) {
         if let Ins::JLess(op1, op2, target) = op {
             self.emit_compare_and_jump(*op1, *op2, *target as _, RelationalCondition::LessThan);

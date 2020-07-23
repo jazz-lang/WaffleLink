@@ -14,6 +14,7 @@ pub mod arithmetic;
 pub mod call;
 use crate::object::*;
 use crate::vtable::VTable;
+pub mod bitop_generator;
 pub mod div_generator;
 #[cfg(target_pointer_width = "64")]
 pub mod jit64;
@@ -316,7 +317,7 @@ impl<'a> JIT<'a> {
                 Ins::Div { .. } => self.emit_op_div(ins),
                 Ins::Call(dest, this, callee, argc) => {
                     // TODO: Use code patching and fast path/slow path codegen for calls
-                    self.masm.prepare_call_with_arg_count(3);
+                    self.masm.prepare_call_with_arg_count(5);
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
                     self.emit_get_virtual_register(*callee, AGPR1);
                     self.masm
@@ -325,8 +326,29 @@ impl<'a> JIT<'a> {
                     self.emit_get_virtual_register(*this, T0);
                     self.masm.pass_reg_as_arg(T0, 4);
                     self.masm
-                        .call_ptr_argc(operations::operation_call_func as *const _, 3);
+                        .call_ptr_argc(operations::operation_call_func as *const _, 5);
                     self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
+                }
+                Ins::New(dest, callee, argc) => {
+                    self.masm.prepare_call_with_arg_count(4);
+                    self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
+                    self.emit_get_virtual_register(*callee, AGPR1);
+                    self.masm
+                        .pass_int32_as_arg(unsafe { std::mem::transmute(*callee) }, 2);
+                    self.masm.pass_int32_as_arg(*argc as _, 3);
+                    self.masm.call_ptr_argc(operations::operation_new as _, 4);
+                    self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
+                }
+                Ins::NewObject(dest) => {
+                    extern "C" fn new_obj(_: &mut CallFrame) -> Value {
+                        let vm = get_vm();
+                        Value::from(RegularObj::new(&mut vm.heap, Value::undefined(), None).cast())
+                    }
+                    self.masm.prepare_call_with_arg_count(1);
+                    self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
+                    self.masm.call_ptr_argc(new_obj as _, 1);
                     self.emit_put_virtual_register(*dest, RET1, RET0);
                 }
                 Ins::Safepoint => {
