@@ -378,6 +378,18 @@ impl Array {
         }
         this
     }
+    pub fn data(&self) -> *const Value {
+        &self.data as *const Value
+    }
+    pub fn get_at(&self, idx: usize) -> Value {
+        unsafe { *self.data().offset(idx as isize) }
+    }
+
+    pub fn set_at(&mut self, idx: usize, val: Value) {
+        unsafe {
+            *self.data_mut().offset(idx as isize) = val;
+        }
+    }
     pub fn header(&self) -> &Header {
         &self.header
     }
@@ -390,26 +402,12 @@ impl Array {
         self.length
     }
 
-    pub fn data(&self) -> *const Value {
-        &self.data as *const Value
-    }
-
     pub fn data_address(&self) -> Address {
         Address::from_ptr(self.data())
     }
 
     pub fn data_mut(&mut self) -> *mut Value {
         &self.data as *const Value as *mut Value
-    }
-
-    pub fn get_at(&self, idx: usize) -> Value {
-        unsafe { *self.data().offset(idx as isize) }
-    }
-
-    pub fn set_at(&mut self, idx: usize, val: Value) {
-        unsafe {
-            *self.data_mut().offset(idx as isize) = val;
-        }
     }
 }
 

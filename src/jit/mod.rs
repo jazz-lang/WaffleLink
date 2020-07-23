@@ -256,6 +256,9 @@ impl<'a> JIT<'a> {
             let ins = &self.code_block.instructions[i];
             self.add_comment(&format!("[{:04}] {:?}", self.bytecode_index, ins));
             match ins {
+                Ins::BitAnd { .. } => self.emit_op_bitand(ins),
+                Ins::BitOr { .. } => self.emit_op_bitor(ins),
+                Ins::BitXor { .. } => self.emit_op_bitxor(ins),
                 Ins::Move(dst, src) => {
                     self.emit_get_virtual_register(*src, T0);
                     self.emit_put_virtual_register(*dst, T0, T1);
@@ -501,6 +504,54 @@ impl<'a> JIT<'a> {
             let curr = &self.code_block.instructions[self.bytecode_index];
             self.add_comment(&format!("(S) [{:04}] {:?}", self.bytecode_index, curr));
             match curr {
+                Ins::BitAnd(dest, lhs, rhs) => {
+                    extern "C" fn and(x: Value, y: Value) -> Value {
+                        if x.is_number() && y.is_number() {
+                            Value::new_int(
+                                (x.to_number().trunc() as i32) & (y.to_number().trunc() as i32),
+                            )
+                        } else {
+                            Value::new_int(0)
+                        }
+                    }
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.emit_get_virtual_register(*lhs, AGPR0);
+                    self.emit_get_virtual_register(*rhs, AGPR1);
+                    self.masm.call_ptr_argc(and as _, 2);
+                    self.emit_put_virtual_register(*dest, RET0, RET1);
+                }
+                Ins::BitOr(dest, lhs, rhs) => {
+                    extern "C" fn or(x: Value, y: Value) -> Value {
+                        if x.is_number() && y.is_number() {
+                            Value::new_int(
+                                (x.to_number().trunc() as i32) | (y.to_number().trunc() as i32),
+                            )
+                        } else {
+                            Value::new_int(0)
+                        }
+                    }
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.emit_get_virtual_register(*lhs, AGPR0);
+                    self.emit_get_virtual_register(*rhs, AGPR1);
+                    self.masm.call_ptr_argc(or as _, 2);
+                    self.emit_put_virtual_register(*dest, RET0, RET1);
+                }
+                Ins::BitXor(dest, lhs, rhs) => {
+                    extern "C" fn xor(x: Value, y: Value) -> Value {
+                        if x.is_number() && y.is_number() {
+                            Value::new_int(
+                                (x.to_number().trunc() as i32) ^ (y.to_number().trunc() as i32),
+                            )
+                        } else {
+                            Value::new_int(0)
+                        }
+                    }
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.emit_get_virtual_register(*lhs, AGPR0);
+                    self.emit_get_virtual_register(*rhs, AGPR1);
+                    self.masm.call_ptr_argc(xor as _, 2);
+                    self.emit_put_virtual_register(*dest, RET0, RET1);
+                }
                 Ins::JEq(_, _, off) => {
                     self.link_all_slow_cases(&mut iter);
                     self.masm.prepare_call_with_arg_count(2);

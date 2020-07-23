@@ -20,6 +20,9 @@ impl<'a> JIT<'a> {
             self.emit_get_virtual_register(*op2, right_reg);
             gen.generate_fast_path(self);
             self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+            for j in gen.slow_path_jump_list {
+                self.add_slow_case(j);
+            }
         }
     }
     pub fn emit_op_bitor(&mut self, op: &Ins) {
@@ -38,6 +41,9 @@ impl<'a> JIT<'a> {
             self.emit_get_virtual_register(*op2, right_reg);
             gen.generate_fast_path(self);
             self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+            for j in gen.slow_path_jump_list {
+                self.add_slow_case(j);
+            }
         }
     }
     pub fn emit_op_bitxor(&mut self, op: &Ins) {
@@ -56,6 +62,9 @@ impl<'a> JIT<'a> {
             self.emit_get_virtual_register(*op2, right_reg);
             gen.generate_fast_path(self);
             self.emit_put_virtual_register(*dest, result_reg, scratch_gpr);
+            for j in gen.slow_path_jump_list {
+                self.add_slow_case(j);
+            }
         }
     }
     pub fn emit_op_jless(&mut self, op: &Ins) {
