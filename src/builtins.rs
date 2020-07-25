@@ -57,9 +57,7 @@ pub fn trace_array(arr: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
 }
 
 fn determine_array_size(obj: Ref<Obj>) -> usize {
-    let handle: Ref<Array> = Ref {
-        ptr: obj.ptr as *const Obj as *const Array,
-    };
+    let handle: Ref<Array> = obj.cast();
 
     let calc = Header::size() as usize
         + std::mem::size_of::<usize>()

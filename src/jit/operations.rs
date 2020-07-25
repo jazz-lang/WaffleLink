@@ -226,8 +226,11 @@ pub extern "C" fn operation_call_func(
     argc: u32,
     this: Value,
 ) -> WaffleResult {
-    let args = &cf.regs
-        [callee_r.to_local() as usize + 1..callee_r.to_local() as usize + argc as usize + 1];
+    let args = if argc != 0 {
+        &cf.regs[callee_r.to_local() as usize + 1..callee_r.to_local() as usize + argc as usize + 1]
+    } else {
+        &cf.regs[callee_r.to_local() as usize..callee_r.to_local() as usize]
+    };
 
     let passed = argc;
     if let Some((addr, _argc, vars, cb)) = get_executable_address_for(callee) {
@@ -307,26 +310,27 @@ pub fn get_executable_address_for(
 )> {
     if v.is_cell() && v.as_cell().is_function() {
         let cell = v.as_cell();
-        let mut cell = cell.cast::<function::Function>();
+        let cell = cell.cast::<function::Function>();
         if cell.native {
             return Some(unsafe { (std::mem::transmute(cell.native_code), 0, 0, None) });
         }
-        cell.code_block.exc_counter += 50;
-        let args = cell.code_block.num_args;
-        let vars = cell.code_block.num_vars;
-        let cb = cell.code_block;
+        let mut code_block = cell.code_block.unwrap();
+        code_block.exc_counter += 50;
+        let args = code_block.num_args;
+        let vars = code_block.num_vars;
+        let cb = code_block;
         let lock = cb.jit_data();
         if lock.executable_addr != 0 {
             let addr = lock.executable_addr;
             drop(lock);
-            return unsafe { Some((std::mem::transmute(addr), args, vars, Some(cell.code_block))) };
-        } else if cell.code_block.exc_counter >= crate::get_vm().jit_threshold {
+            return unsafe { Some((std::mem::transmute(addr), args, vars, Some(code_block))) };
+        } else if code_block.exc_counter >= crate::get_vm().jit_threshold {
             drop(lock);
             log!(
                 "Trying to compile function code block at {:p}",
-                cell.code_block.raw()
+                code_block.raw()
             );
-            let mut jit = JIT::new(&cell.code_block);
+            let mut jit = JIT::new(&code_block);
             jit.compile_without_linking();
             jit.link();
             if crate::get_vm().disasm {
@@ -336,15 +340,13 @@ pub fn get_executable_address_for(
             if lock.executable_addr != 0 {
                 let addr = lock.executable_addr;
                 drop(lock);
-                return unsafe {
-                    Some((std::mem::transmute(addr), args, vars, Some(cell.code_block)))
-                };
+                return unsafe { Some((std::mem::transmute(addr), args, vars, Some(code_block))) };
             } else {
                 // woops! JIT somehow managed to fail.
-                return Some((interpreter::interp_loop, args, vars, Some(cell.code_block)));
+                return Some((interpreter::interp_loop, args, vars, Some(code_block)));
             }
         } else {
-            return Some((interpreter::interp_loop, args, vars, Some(cell.code_block)));
+            return Some((interpreter::interp_loop, args, vars, Some(code_block)));
         }
     }
     None

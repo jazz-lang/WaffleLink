@@ -181,41 +181,39 @@ impl RegularObj {
                 prototype: proto,
                 table: get_vm().allocate(table::Table::new(class)),
             });
-            Ref { ptr: mem.to_ptr() }
+            Ref {
+                ptr: std::ptr::NonNull::new(mem.to_mut_ptr()).unwrap(),
+            }
         }
     }
 }
 
 #[repr(C)]
 pub struct Ref<T> {
-    pub ptr: *const T,
+    pub ptr: std::ptr::NonNull<T>,
 }
 
 unsafe impl<T> Send for Ref<T> {}
 unsafe impl<T> Sync for Ref<T> {}
 
 impl<T> Ref<T> {
-    pub fn null() -> Ref<T> {
-        Ref { ptr: ptr::null() }
-    }
-
     pub fn cast<R>(&self) -> Ref<R> {
         Ref {
-            ptr: self.ptr as *const R,
+            ptr: self.ptr.cast::<R>(),
         }
     }
 
     pub fn raw(&self) -> *const T {
-        self.ptr
+        self.ptr.as_ptr()
     }
     pub fn offset(&self, x: isize) -> Self {
         Self {
-            ptr: unsafe { self.ptr.offset(x) },
+            ptr: unsafe { std::ptr::NonNull::new_unchecked(self.ptr.as_ptr().offset(x)) },
         }
     }
 
     pub fn address(&self) -> Address {
-        Address::from_ptr(self.ptr)
+        Address::from_ptr(self.ptr.as_ptr())
     }
 }
 
@@ -232,27 +230,29 @@ impl<T> Deref for Ref<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        unsafe { &*self.ptr }
+        unsafe { &*self.ptr.as_ptr() }
     }
 }
 
 impl<T> DerefMut for Ref<T> {
     fn deref_mut(&mut self) -> &mut T {
-        unsafe { &mut *(self.ptr as *mut T) }
+        unsafe { &mut *(self.ptr.as_ptr() as *mut T) }
     }
 }
 
 impl<T> Into<Ref<T>> for usize {
     fn into(self) -> Ref<T> {
         Ref {
-            ptr: self as *const T,
+            ptr: std::ptr::NonNull::new(self as *mut T).unwrap(),
         }
     }
 }
 
 impl<T> Into<Ref<T>> for Address {
     fn into(self) -> Ref<T> {
-        Ref { ptr: self.to_ptr() }
+        Ref {
+            ptr: std::ptr::NonNull::new(self.to_mut_ptr() as *mut _).unwrap(),
+        }
     }
 }
 impl Obj {
@@ -302,7 +302,7 @@ impl Obj {
         } else {
             if let Some(c) = vtbl.calc_size_fn {
                 c(Ref {
-                    ptr: self as *const _,
+                    ptr: unsafe { std::ptr::NonNull::new_unchecked(self as *const Obj as *mut _) },
                 })
             } else {
                 panic!("Can't determine object size");
@@ -346,7 +346,7 @@ impl Obj {
 }
 fn determine_array_size(obj: &Obj) -> usize {
     let handle: Ref<Array> = Ref {
-        ptr: obj as *const Obj as *const Array,
+        ptr: std::ptr::NonNull::new(obj as *const Obj as *mut Array).unwrap(),
     };
 
     let calc = Header::size() as usize
@@ -368,7 +368,7 @@ impl Array {
         let ssize = (std::mem::size_of::<Self>() - 8) + size * 8;
         let mem = heap.allocate(ssize);
         let mut this = Ref {
-            ptr: mem.to_mut_ptr::<Self>(),
+            ptr: std::ptr::NonNull::new(mem.to_mut_ptr::<Self>()).unwrap(),
         };
         this.header = Header::new();
         this.length = size;
@@ -382,10 +382,16 @@ impl Array {
         &self.data as *const Value
     }
     pub fn get_at(&self, idx: usize) -> Value {
+        if idx < self.len() {
+            return Value::undefined();
+        }
         unsafe { *self.data().offset(idx as isize) }
     }
 
     pub fn set_at(&mut self, idx: usize, val: Value) {
+        if idx >= self.len() {
+            panic!("Overflow idx");
+        }
         unsafe {
             *self.data_mut().offset(idx as isize) = val;
         }
@@ -434,7 +440,7 @@ impl WaffleString {
             });
         }
         let this = Ref {
-            ptr: mem.to_ptr::<Self>(),
+            ptr: std::ptr::NonNull::new(mem.to_mut_ptr::<Self>()).unwrap(),
         };
 
         this

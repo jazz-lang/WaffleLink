@@ -36,6 +36,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0a137b2932c7a3bfd2cd905f77b2a5eb7cbabf2e90a9eac1d391900b8192050"
 
 [[package]]
+name = "bumpalo"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e8c087f005730276d1096a652e92a8bacee2e2472bcc9715a74d2bec38b5820"
+
+[[package]]
 name = "capstone"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -325,6 +331,7 @@ name = "wafflelink"
 version = "0.1.0"
 dependencies = [
  "bitset-core",
+ "bumpalo",
  "capstone",
  "indexmap",
  "log",

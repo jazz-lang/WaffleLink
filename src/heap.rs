@@ -128,7 +128,9 @@ impl Heap {
                             Self::get_heap_block(Address::from_ptr(*frame.to_mut_ptr::<*mut u8>()));
                         if (&*block).is_marked(*start.to_mut_ptr::<Address>()) {
                             let mut cell: Ref<Obj> = Ref {
-                                ptr: (*start.to_mut_ptr::<Address>()).to_mut_ptr(),
+                                ptr: std::ptr::NonNull::new_unchecked(
+                                    (*start.to_mut_ptr::<Address>()).to_mut_ptr(),
+                                ),
                             };
                             if cell.header().is_marked_non_atomic() {
                                 start = start.add_ptr(1);
@@ -156,7 +158,7 @@ impl Heap {
                 for reg in frame.regs.iter() {
                     if reg.is_cell() {
                         if !reg.as_cell().header().is_marked_non_atomic() {
-                            mark_stack.push(Address::from_ptr(reg.as_cell().ptr));
+                            mark_stack.push(Address::from_ptr(reg.as_cell().ptr.as_ptr()));
                         }
                     }
                 }
@@ -165,13 +167,13 @@ impl Heap {
                     let value = frame.args.offset(i as _);
                     if value.is_cell() {
                         if !value.as_cell().header().is_marked_non_atomic() {
-                            mark_stack.push(Address::from_ptr(value.as_cell().ptr));
+                            mark_stack.push(Address::from_ptr(value.as_cell().ptr.as_ptr()));
                         }
                     }
                 }
                 if frame.this.is_cell() {
                     if !frame.this.as_cell().header().is_marked_non_atomic() {
-                        mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr));
+                        mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr.as_ptr()));
                     }
                 }
             }
@@ -184,7 +186,7 @@ impl Heap {
         {
             while let Some(cell_addr) = mark_stack.pop() {
                 let mut cell: Ref<Obj> = Ref {
-                    ptr: cell_addr.to_mut_ptr(),
+                    ptr: unsafe { std::ptr::NonNull::new_unchecked(cell_addr.to_mut_ptr()) },
                 };
 
                 cell.header_mut().mark_non_atomic();

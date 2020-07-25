@@ -6,9 +6,10 @@ use crate::vtable::*;
 pub struct Function {
     header: Header,
     pub(crate) vtable: &'static VTable,
-    pub(crate) code_block: Ref<CodeBlock>,
+    pub(crate) code_block: Option<Ref<CodeBlock>>,
     pub native: bool,
     pub native_code: usize,
+    pub env: Option<Ref<Array>>,
 }
 
 impl Function {
@@ -21,17 +22,15 @@ impl Function {
             mem.to_mut_ptr::<Self>().write(Self {
                 header: Header::new(),
                 vtable: &FUNCTION_VTBL,
-                code_block: Ref {
-                    ptr: std::ptr::null(),
-                },
+                code_block: None,
+                env: None,
                 native: true,
                 native_code: fptr as _,
             });
         }
-        let cell = Ref {
-            ptr: mem.to_ptr::<Self>(),
-        };
-        return cell;
+        Ref {
+            ptr: std::ptr::NonNull::new(mem.to_mut_ptr()).unwrap(),
+        }
     }
 }
 

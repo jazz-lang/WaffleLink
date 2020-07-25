@@ -10,6 +10,7 @@ pub struct CallFrame {
     pub handlers: Vec<u32>,
     pub this: Value,
     pub callee: Value,
+
     pub pc: u32,
 }
 
@@ -18,7 +19,9 @@ impl CallFrame {
         Self {
             regs: vec![Value::undefined(); regc as usize + 1],
             argc: args.len() as u32,
-            args: Ref { ptr: args.as_ptr() },
+            args: Ref {
+                ptr: std::ptr::NonNull::new(args.as_ptr() as *mut Value).unwrap(),
+            },
             code_block: None,
             passed_argc: 0,
             handlers: vec![],

@@ -383,6 +383,47 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
             Ins::TryEnd => {
                 callframe.handlers.pop().unwrap();
             }
+            Ins::LoadU(dest, idx) => {
+                if let Some(env) = callframe.callee.as_cell().cast::<function::Function>().env {
+                    let val = env.get_at(idx as _);
+                    callframe.put_register(dest, val);
+                } else {
+                    catch!(Value::from(
+                        WaffleString::new(&mut vm.heap, "can't load upvalue, no environment found")
+                            .cast()
+                    ))
+                }
+            }
+            Ins::StoreU(src, idx) => {
+                if let Some(mut env) = callframe.callee.as_cell().cast::<function::Function>().env {
+                    let val = callframe.get_register(src);
+                    env.set_at(idx as _, val);
+                } else {
+                    catch!(Value::from(
+                        WaffleString::new(
+                            &mut vm.heap,
+                            "can't store upvalue, no environment found"
+                        )
+                        .cast()
+                    ))
+                }
+            }
+            Ins::Closure(f, count) => {
+                let func = callframe.get_register(f);
+                if func.is_cell() {
+                    debug_assert!(func.as_cell().is_function());
+                    let mut func = func.as_cell().cast::<function::Function>();
+                    let values = &callframe.regs
+                        [f.to_local() as usize + 1..f.to_local() as usize + count as usize];
+                    let mut array = Array::new(&mut vm.heap, values.len(), Value::undefined());
+                    for (i, val) in values.iter().enumerate() {
+                        array.set_at(i, *val);
+                    }
+                    func.env = Some(array);
+                } else {
+                    unreachable!();
+                }
+            }
             Ins::Catch(dst) => {
                 let exc = crate::get_vm().exception;
                 callframe.put_register(dst, exc);

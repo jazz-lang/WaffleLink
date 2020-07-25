@@ -19,7 +19,7 @@ fn destroy_bigint(x: Ref<Obj>) {
     println!("ded");
     let this = x.cast::<BigIntObject>();
     unsafe {
-        std::ptr::drop_in_place(this.ptr as *mut BigIntObject);
+        std::ptr::drop_in_place(this.ptr.as_ptr() as *mut BigIntObject);
     }
 }
 
@@ -36,7 +36,7 @@ impl BigIntObject {
     pub fn new(heap: &mut Heap, sign: num_bigint::Sign, digits: Vec<u32>) -> Ref<Self> {
         let mem = heap.allocate(std::mem::size_of::<Self>());
         let mut this: Ref<BigIntObject> = Ref {
-            ptr: mem.to_mut_ptr(),
+            ptr: std::ptr::NonNull::new(mem.to_mut_ptr()).unwrap(),
         };
         this.vtable = &BIGINT_VTBL;
         this.bigint = num_bigint::BigInt::new(sign, digits);

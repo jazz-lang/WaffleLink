@@ -61,7 +61,9 @@ fn main() {
     jit.disasm();
     let mut cf = Box::new(CallFrame::new(&[Value::new_int(4)], 4));
 
-    cf.code_block = Some(Ref { ptr: &*cb });
+    cf.code_block = Some(Ref {
+        ptr: std::ptr::NonNull::new((&*cb) as *const CodeBlock as *mut CodeBlock).unwrap(),
+    });
     let f: extern "C" fn(&mut CallFrame) -> WaffleResult =
         unsafe { std::mem::transmute(jit.link_buffer.code) };
     let res = f(&mut cf);

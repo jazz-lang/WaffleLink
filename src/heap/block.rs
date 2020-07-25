@@ -18,7 +18,7 @@ impl HeapBlock {
         self.for_each_cell_mut(|this, cell_addr| unsafe {
             if this.is_marked(cell_addr) {
                 let mut cell = Ref {
-                    ptr: cell_addr.to_mut_ptr::<Obj>(),
+                    ptr: std::ptr::NonNull::new_unchecked(cell_addr.to_mut_ptr::<Obj>()),
                 };
                 if cell.header().is_marked_non_atomic() {
                     cell.header_mut().unmark_non_atomic();

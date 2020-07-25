@@ -631,7 +631,7 @@ impl Hash for Value {
                     state.write_u32(c as u32);
                 }
             } else {
-                state.write_usize(cell.ptr as usize);
+                state.write_usize(cell.ptr.as_ptr() as usize);
             }
         } else {
             unreachable!()

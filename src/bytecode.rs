@@ -17,7 +17,8 @@ pub enum Ins {
     Store(VirtualRegister, VirtualRegister, VirtualRegister),
     LoadId(VirtualRegister, VirtualRegister, u32),
     StoreId(VirtualRegister, u32, VirtualRegister),
-
+    LoadU(VirtualRegister, u32),
+    StoreU(VirtualRegister, u32),
     LoadGlobal(VirtualRegister, u32 /* id constant */),
     StoreGlobal(VirtualRegister, u32 /* id constant */),
 
@@ -59,6 +60,7 @@ pub enum Ins {
     TryEnd,
     Throw(VirtualRegister),
     Catch(VirtualRegister),
+    Closure(VirtualRegister, u32),
     Call(
         VirtualRegister, /* dest */
         VirtualRegister, /* this */
