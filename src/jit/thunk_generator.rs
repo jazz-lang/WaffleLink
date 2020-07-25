@@ -92,5 +92,37 @@ pub fn osr_from_interpreter_to_jit_generator() -> *const u8 {
         addr = AGPR1;
     }
     jit.masm.far_jump_r(addr);
+    jit.link();
     jit.link_buffer.code
+}
+
+fn build_callframe(
+    argc: u32,
+    callee: Value,
+    callee_r: virtual_register::VirtualRegister,
+    this: Value,
+) -> (*mut CallFrame, usize) {
+    todo!();
+}
+
+pub fn jit_generate_tail_call(jit: &mut JIT<'_>, pass_args: impl FnOnce(&mut JIT<'_>)) {
+    jit.masm.prepare_call_with_arg_count(4);
+    pass_args(jit);
+    jit.masm.call_ptr_argc(build_callframe as *const _, 4);
+    let _ = if cfg!(windows) {
+        jit.masm.load64(Mem::Base(RET0, 0), AGPR1);
+        AGPR1
+    } else {
+        jit.masm.move_rr(RET0, AGPR0);
+        AGPR0
+    };
+    let addr = if cfg!(windows) {
+        jit.masm.load64(Mem::Base(RET0, 8), RET1);
+        RET1
+    } else {
+        RET1
+    };
+    jit.function_epilogue(AGPR0);
+
+    jit.masm.far_jump_r(addr);
 }
