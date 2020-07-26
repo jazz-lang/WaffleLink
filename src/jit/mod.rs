@@ -14,6 +14,7 @@ pub mod arithmetic;
 pub mod call;
 use crate::object::*;
 use crate::vtable::VTable;
+use std::mem::size_of;
 pub mod bitop_generator;
 pub mod div_generator;
 #[cfg(target_pointer_width = "64")]
@@ -263,6 +264,54 @@ impl<'a> JIT<'a> {
                     self.emit_get_virtual_register(*src, T0);
                     self.emit_put_virtual_register(*dst, T0, T1);
                 }
+                Ins::Less(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_less as _, 2);
+                    self.box_boolean(RET0, RET1);
+                    self.emit_put_virtual_register(*dst, RET1, RET0);
+                }
+                Ins::LessOrEqual(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_lesseq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::Greater(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_greater as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::GreaterOrEqual(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_greatereq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::Equal(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_eq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::NotEqual(dst, lhs, rhs) => {
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_neq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
                 Ins::JEq(lhs, rhs, offset) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
                     self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
@@ -275,7 +324,7 @@ impl<'a> JIT<'a> {
                     let jump = self.masm.branch32(RelationalCondition::NotEqual, T0, T1);
                     self.add_jump(jump, *offset);
                 }
-                Ins::Equal(dst, lhs, rhs) => {
+                /*Ins::Equal(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, T0, T1);
                     self.emit_jump_slow_case_if_not_ints(T0, T1, T2);
                     self.masm.compare32(RelationalCondition::Equal, T0, T1, T0);
@@ -289,7 +338,7 @@ impl<'a> JIT<'a> {
                         .compare32(RelationalCondition::NotEqual, T0, T1, T0);
                     self.box_boolean(T0, T0);
                     self.emit_put_virtual_register(*dst, T0, T1);
-                }
+                }*/
                 Ins::JmpIfZero(value_v, off) => {
                     let value = T0;
                     let s1 = T1;
@@ -436,6 +485,79 @@ impl<'a> JIT<'a> {
                     }
                     self.masm.ret();
                 }
+                Ins::LoadU(dest, idx) => {
+                    self.masm.load64(
+                        Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, callee) as i32),
+                        T0,
+                    );
+                    self.masm.load64(
+                        Mem::Base(T0, offset_of!(function::Function, env) as i32),
+                        T0,
+                    );
+                    const PTR: i32 = size_of::<usize>() as i32;
+                    self.masm
+                        .load64(Mem::Base(T0, PTR + PTR + PTR + 8 * (*idx) as i32), T1);
+                    self.emit_put_virtual_register(*dest, T1, T0);
+                }
+                Ins::StoreU(src, idx) => {
+                    self.emit_get_virtual_register(*src, T1);
+                    self.masm.load64(
+                        Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, callee) as i32),
+                        T0,
+                    );
+                    self.masm.load64(
+                        Mem::Base(T0, offset_of!(function::Function, env) as i32),
+                        T0,
+                    );
+                    const PTR: i32 = size_of::<usize>() as i32;
+                    self.masm
+                        .store64(T1, Mem::Base(T0, PTR + PTR + PTR + 8 * (*idx) as i32));
+                }
+                Ins::Closure(func, count) => {
+                    extern "C" fn closure(
+                        callframe: &mut CallFrame,
+                        mut func: Ref<function::Function>,
+                        count: u32,
+                        f: virtual_register::VirtualRegister,
+                    ) {
+                        let values = &callframe.regs
+                            [f.to_local() as usize + 1..f.to_local() as usize + count as usize];
+                        let mut array =
+                            Array::new(&mut crate::get_vm().heap, values.len(), Value::undefined());
+                        for (i, val) in values.iter().enumerate() {
+                            array.set_at(i, *val);
+                        }
+                        func.env = Some(array);
+                    }
+                    self.emit_get_virtual_register(*func, AGPR1);
+                    let j = self.branch_if_not_cell(AGPR1, true);
+                    let j2 = self.branch_if_not_type(AGPR1, &function::FUNCTION_VTBL);
+                    self.masm.move_rr(REG_CALLFRAME, AGPR0);
+                    self.masm.move_i32(*count as _, AGPR2);
+                    self.masm
+                        .move_i32(unsafe { std::mem::transmute(*func) }, AGPR3);
+                    self.masm.call_ptr(closure as _);
+                    let done = self.masm.jump();
+                    j.link(&mut self.masm);
+                    j2.link(&mut self.masm);
+
+                    self.masm.load64(
+                        Mem::Absolute(&crate::get_vm().not_a_func_exc as *const Value as usize),
+                        RET1,
+                    );
+                    self.masm.move_i64(1, RET0);
+                    self.function_epilogue(T4);
+                    if cfg!(windows) {
+                        self.masm
+                            .store64(RET1, Mem::Base(T4, offset_of!(WaffleResult, b) as i32));
+                        self.masm
+                            .store64(RET0, Mem::Base(T4, offset_of!(WaffleResult, a) as i32));
+                        self.masm.move_rr(T4, RET0);
+                    }
+                    self.masm.ret();
+
+                    done.link(&mut self.masm);
+                }
                 Ins::Load(dest, object, key) => {
                     self.masm.prepare_call_with_arg_count(3);
                     self.masm
@@ -487,7 +609,11 @@ impl<'a> JIT<'a> {
                     self.check_exception(false);
                 }
                 Ins::Enter => {}
-                _ => todo!(),
+                Ins::Jmp(off) => {
+                    let j = self.masm.jump();
+                    self.add_jump(j, *off);
+                }
+                _ => todo!("{:?}", ins),
             }
         }
         self.add_comment("\t(End of main path)");

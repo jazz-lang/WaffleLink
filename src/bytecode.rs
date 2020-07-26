@@ -21,7 +21,8 @@ pub enum Ins {
     StoreU(VirtualRegister, u32),
     LoadGlobal(VirtualRegister, u32 /* id constant */),
     StoreGlobal(VirtualRegister, u32 /* id constant */),
-
+    LoadThis(VirtualRegister),
+    StoreThis(VirtualRegister),
     Add(VirtualRegister, VirtualRegister, VirtualRegister),
     Sub(VirtualRegister, VirtualRegister, VirtualRegister),
     Mul(VirtualRegister, VirtualRegister, VirtualRegister),
@@ -77,10 +78,11 @@ pub enum Ins {
 
     Return(VirtualRegister),
 }
-
+use crate::vtable;
 #[repr(C)]
 pub struct CodeBlock {
     pub header: Header,
+    pub vtable: &'static vtable::VTable,
     pub num_vars: u32,
     pub exc_counter: u32,
     pub num_args: u32,
@@ -92,6 +94,20 @@ pub struct CodeBlock {
     pub jit_data: parking_lot::Mutex<JITData>,
     pub metadata: Vec<OpcodeMetadata>,
 }
+pub static CB_VTBL: vtable::VTable = vtable::VTable {
+    element_size: 0,
+    instance_size: std::mem::size_of::<CodeBlock>(),
+    parent: None,
+    lookup_fn: None,
+    index_fn: None,
+    calc_size_fn: None,
+    apply_fn: None,
+    destroy_fn: None,
+    trace_fn: None,
+    set_fn: None,
+    set_index_fn: None,
+};
+
 #[derive(Default)]
 pub struct JITData {
     pub add_ics: HashMap<*const ArithProfile, mathic::MathIC<add_generator::AddGenerator>>,
@@ -106,6 +122,7 @@ impl CodeBlock {
         Self {
             header: Header::new(),
             num_params: 0,
+            vtable: &CB_VTBL,
             num_vars: 0,
             instructions: vec![],
             num_args: 0,

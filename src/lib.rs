@@ -29,16 +29,17 @@ pub mod bigint;
 pub mod builtins;
 pub mod bytecode;
 pub mod bytecompiler;
+pub mod frontend;
 pub mod function;
 pub mod gc;
-pub mod mir;
 pub mod heap;
-pub mod utils;
 pub mod interpreter;
 pub mod jit;
+pub mod mir;
 pub mod object;
 pub mod pure_nan;
 pub mod table;
+pub mod utils;
 pub mod value;
 pub mod vtable;
 pub struct MutatingVecIter<'a, T>(&'a mut Vec<T>, usize);
@@ -72,10 +73,12 @@ pub struct VM {
     pub empty_string: value::Value,
     pub constructor: value::Value,
     pub length: value::Value,
+    pub not_a_func_exc: value::Value,
     pub prototype: value::Value,
     pub stop_world: bool,
     pub disasm: bool,
     pub opt_jit: bool,
+    pub template_jit: bool,
     pub jit_threshold: u32,
     pub log: bool,
     pub heap: heap::Heap,
@@ -104,7 +107,7 @@ impl JITStubs {
         }
     }
 }
-static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 impl VM {
     pub fn new(stack_start: *const bool) -> Self {
         let mut this = Self {
@@ -112,6 +115,7 @@ impl VM {
             exception: value::Value::undefined(),
             call_stack: vec![],
             jit_threshold: 500,
+            template_jit: true,
             disasm: false,
             stubs: JITStubs::new(),
             stop_world: false,
@@ -125,6 +129,7 @@ impl VM {
             length: value::Value::undefined(),
             constructor: value::Value::undefined(),
             prototype: value::Value::undefined(),
+            not_a_func_exc: value::Value::undefined(),
             globals: Default::default(),
         };
         this.length =
@@ -135,6 +140,9 @@ impl VM {
             value::Value::from(object::WaffleString::new(&mut this.heap, "").cast());
         this.prototype =
             value::Value::from(object::WaffleString::new(&mut this.heap, "prototype").cast());
+        this.not_a_func_exc = value::Value::from(
+            object::WaffleString::new(&mut this.heap, "function value expected").cast(),
+        );
         this
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {
@@ -178,8 +186,8 @@ pub fn get_vm() -> &'static mut VM {
 
 #[repr(C)]
 pub struct WaffleResult {
-    pub(crate) a: u64,
-    pub(crate) b: u64,
+    pub a: u64,
+    pub b: u64,
 }
 impl WaffleResult {
     pub fn is_error(&self) -> bool {

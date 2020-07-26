@@ -118,7 +118,9 @@ impl<T: MathICGenerator> MathIC<T> {
                 "Generated JIT code for MathIC: linking constant jump out of line stub: {:p}",
                 this.code
             );
-            disasm_code(None, link_buffer.code, link_buffer.size);
+            if crate::get_vm().disasm {
+                disasm_code(None, link_buffer.code, link_buffer.size);
+            }
         };
         let replace_call = |this: &mut Self| unsafe {
             log!(
@@ -155,7 +157,9 @@ impl<T: MathICGenerator> MathIC<T> {
                     }
                     buffer.link_jump_ptr(jump_to_done.label().asm_label(), self.inline_end);
                     log!("Generated IC snippet:");
-                    disasm_code(Some(&jit.comments), buffer.code, buffer.size);
+                    if crate::get_vm().disasm {
+                        disasm_code(Some(&jit.comments), buffer.code, buffer.size);
+                    }
                     link_jump_out_of_line_snippet(self);
                     return;
                 }
@@ -188,7 +192,9 @@ impl<T: MathICGenerator> MathIC<T> {
             buffer.link_jump_ptr(j.label().asm_label(), self.slow_path_start_loc);
         }
         self.code = buffer.code;
-        disasm_code(Some(&jit.comments), self.code, buffer.size);
+        if crate::get_vm().disasm {
+            disasm_code(Some(&jit.comments), self.code, buffer.size);
+        }
         link_jump_out_of_line_snippet(self);
         log!("[MathIC] Generated code");
     }

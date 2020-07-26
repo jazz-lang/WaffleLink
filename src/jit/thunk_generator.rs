@@ -92,7 +92,9 @@ pub fn osr_from_interpreter_to_jit_generator() -> *const u8 {
         addr = AGPR1;
     }
     jit.masm.far_jump_r(addr);
+    jit.compile_without_linking();
     jit.link();
+
     jit.link_buffer.code
 }
 

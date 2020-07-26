@@ -567,6 +567,67 @@ impl<'a> JIT<'a> {
         self.add_jump(j, target as _);
     }
 
+    pub fn emit_compare(
+        &mut self,
+        op1: virtual_register::VirtualRegister,
+        op2: virtual_register::VirtualRegister,
+        cond: RelationalCondition,
+        dest: virtual_register::VirtualRegister,
+    ) {
+        self.emit_get_virtual_registers(op1, op2, T0, T1);
+        let br = self.branch_if_not_int32(T0, true);
+        self.add_slow_case(br);
+        let br = self.branch_if_not_int32(T1, true);
+        self.add_slow_case(br);
+        self.masm.compare32(cond, T0, T1, T0);
+        self.box_boolean(T0, T0);
+        self.emit_put_virtual_register(dest, T0, T1);
+    }
+
+    pub fn emit_compare_slow(
+        &mut self,
+        op1: virtual_register::VirtualRegister,
+        op2: virtual_register::VirtualRegister,
+        dest: virtual_register::VirtualRegister,
+        double_cond: FpCondition,
+        operation: *const u8,
+        invert: bool,
+        slow_cases: &mut std::iter::Peekable<std::slice::Iter<'_, SlowCaseEntry>>,
+    ) {
+        self.link_all_slow_cases(slow_cases); // lhs is not int
+        let fail1 = self.branch_if_not_number(T0, true);
+        let fail2 = self.branch_if_not_number(T1, true);
+        let fail3 = self.branch_if_int32(T1, true);
+        self.masm.add64(NUMBER_TAG_REGISTER, T0, T0);
+        self.masm.add64(NUMBER_TAG_REGISTER, T1, T1);
+        self.masm.move_gp_to_fp(T0, FT0);
+        self.masm.move_gp_to_fp(T1, FT1);
+        let j = self.masm.branch_double(double_cond, FT0, FT1);
+        self.emit_jump_slow_to_hot(j, 0);
+        let j = self.masm.jump();
+        self.emit_jump_slow_to_hot(j, 0);
+        fail1.link(&mut self.masm);
+        fail2.link(&mut self.masm);
+        fail3.link(&mut self.masm);
+
+        self.link_all_slow_cases(slow_cases);
+        self.masm.prepare_call_with_arg_count(3);
+        self.masm.pass_reg_as_arg(T0, 1);
+        self.masm.pass_reg_as_arg(T1, 2);
+        self.masm
+            .pass_ptr_as_arg(crate::get_vm() as *const _ as _, 0);
+        self.masm.call_ptr_argc(operation, 3);
+        let c = if invert {
+            ResultCondition::Zero
+        } else {
+            ResultCondition::NonZero
+        };
+        self.masm.test32(c, RET0, RET0, RET0);
+        self.box_boolean(RET0, RET0);
+        self.emit_put_virtual_register(dest, RET0, RET1);
+        //let j = self.masm.branch32_test(c, RET0, RET0);
+    }
+
     pub fn emit_compare_and_jump_slow(
         &mut self,
         _op1: virtual_register::VirtualRegister,

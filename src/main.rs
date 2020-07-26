@@ -1,4 +1,5 @@
 use bytecode::*;
+use bytecompiler::*;
 use heap::*;
 use interpreter::callframe::*;
 use jit::*;
@@ -6,6 +7,56 @@ use object::*;
 use value::*;
 use virtual_register::*;
 use wafflelink::*;
+
+use frontend::parser::*;
+use frontend::reader::*;
+
+fn main() {
+    let x = false;
+    let mut vm = VM::new(&x);
+    vm.template_jit = true;
+    vm.disasm = true;
+    wafflelink::LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+    set_vm(&vm);
+    let reader = Reader::from_string(
+        "
+        var i = 0
+        while i < 100000 {
+            i = i + 1
+        }
+        return i
+        ",
+    );
+    let mut ast = vec![];
+    let mut p = Parser::new(reader, &mut ast);
+    if let Err(e) = p.parse() {
+        eprintln!("{}", e);
+        return;
+    }
+    let code = match compile(&ast, "<main>") {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{}", e);
+            return;
+        }
+    };
+
+    for (ix, c) in code.instructions.iter().enumerate() {
+        println!("[{:04}] {:?}", ix, c);
+    }
+    let fun = function::Function::new(&mut get_vm().heap, code);
+    let start = std::time::Instant::now();
+    let res = fun.execute(Value::undefined(), &[]);
+    let e = start.elapsed();
+    println!("{}ms or {}ns", e.as_millis(), e.as_nanos());
+    if res.is_error() {
+        panic!();
+    }
+    println!("{} {:x}", res.a, res.b);
+    println!("{}", res.value().as_int32());
+}
+
+/*
 pub extern "C" fn foo(cf: &mut CallFrame) -> WaffleResult {
     assert!(cf.this.is_int32());
     let arg = cf.get_register(VirtualRegister::new_argument(0));
@@ -69,3 +120,4 @@ fn main() {
     let res = f(&mut cf);
     println!("{}", res.value().to_int32());
 }
+*/

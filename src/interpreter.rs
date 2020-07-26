@@ -66,22 +66,28 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
         pc += 1;
         match ins {
             Ins::LoopHint => {
-                cb.exc_counter = cb.exc_counter.wrapping_add(10);
-                if cb.exc_counter >= crate::get_vm().jit_threshold {
-                    use crate::jit::*;
-                    let mut jit = JIT::new(&cb);
-                    jit.compile_without_linking();
-                    jit.link();
-                    let addr = cb.jit_data().code_map.get(&(pc - 1)).copied().unwrap();
-                    let trampoline = crate::get_vm()
-                        .stubs
-                        .get_stub(thunk_generator::osr_from_interpreter_to_jit_generator);
-                    let trampoline_fn: extern "C" fn(
-                        &mut callframe::CallFrame,
-                        *const u8,
-                    ) -> WaffleResult = unsafe { std::mem::transmute(trampoline) };
-                    // TemplateJIT can't do OSR exit to interpreter, OptimizingJIT does OSR exit to template JIT.
-                    return trampoline_fn(callframe, addr);
+                if vm.template_jit {
+                    cb.exc_counter = cb.exc_counter.wrapping_add(10);
+                    if cb.exc_counter >= crate::get_vm().jit_threshold {
+                        println!("Compile");
+                        use crate::jit::*;
+                        let mut jit = JIT::new(&cb);
+                        jit.compile_without_linking();
+                        jit.link();
+                        if vm.disasm {
+                            jit.disasm();
+                        }
+                        let addr = cb.jit_data().code_map.get(&(pc - 1)).copied().unwrap();
+                        let trampoline = crate::get_vm()
+                            .stubs
+                            .get_stub(thunk_generator::osr_from_interpreter_to_jit_generator);
+                        let trampoline_fn: extern "C" fn(
+                            &mut callframe::CallFrame,
+                            *const u8,
+                        ) -> WaffleResult = unsafe { std::mem::transmute(trampoline) };
+                        // TemplateJIT can't do OSR exit to interpreter, OptimizingJIT does OSR exit to template JIT.
+                        return trampoline_fn(callframe, addr);
+                    }
                 }
             }
             Ins::Return(value) => {
@@ -94,6 +100,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let rhs = callframe.get_register(rhs);
                 let res = binop!(lhs,rhs,operation_value_add,overflowing_add,+);
                 callframe.put_register(dest, res);
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::Sub(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -274,6 +283,8 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_less,<);
+                println!("{} {}", x.as_int32(), y.as_int32());
+                //println!("Less? {}", res);
                 callframe.put_register(dst, Value::new_bool(res));
             }
             Ins::LessOrEqual(dst, x, y) => {
@@ -283,17 +294,21 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 callframe.put_register(dst, Value::new_bool(res));
             }
             Ins::Jmp(off) => {
+                pc -= 1;
                 pc = (pc as i32 + off) as u32;
+                //println!("J {}", pc);
             }
             Ins::JmpIfNotZero(x, off) => {
                 let val = callframe.get_register(x);
                 if val.to_boolean() {
+                    pc -= 1;
                     pc = (pc as i32 + off) as u32;
                 }
             }
             Ins::JmpIfZero(x, off) => {
                 let val = callframe.get_register(x);
                 if !val.to_boolean() {
+                    pc -= 1;
                     pc = (pc as i32 + off) as u32;
                 }
             }
@@ -495,6 +510,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                     ));
                 }
             }
+            Ins::Safepoint => {}
             _ => todo!(),
         }
     }
