@@ -266,35 +266,43 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Less(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
-                    self.masm.prepare_call_with_arg_count(2);
-                    self.masm
-                        .call_ptr_argc(operations::operation_compare_less as _, 2);
-                    self.box_boolean(RET0, RET1);
-                    self.emit_put_virtual_register(*dst, RET1, RET0);
+                    let br = self.branch_if_not_int32(AGPR0, true);
+                    self.add_slow_case(br);
+                    let br = self.branch_if_not_int32(AGPR1, true);
+                    self.add_slow_case(br);
+                    self.masm.compare32(RelationalCondition::LessThan, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0,T0);
+                    self.emit_put_virtual_register(*dst, T0,T1);
                 }
                 Ins::LessOrEqual(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
-                    self.masm.prepare_call_with_arg_count(2);
-                    self.masm
-                        .call_ptr_argc(operations::operation_compare_lesseq as _, 2);
-                    self.box_boolean(RET0, RET0);
-                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                    let br = self.branch_if_not_int32(AGPR0, true);
+                    self.add_slow_case(br);
+                    let br = self.branch_if_not_int32(AGPR1, true);
+                    self.add_slow_case(br);
+                    self.masm.compare32(RelationalCondition::LessThanOrEqual, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0,T0);
+                    self.emit_put_virtual_register(*dst, T0,T1);
                 }
                 Ins::Greater(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
-                    self.masm.prepare_call_with_arg_count(2);
-                    self.masm
-                        .call_ptr_argc(operations::operation_compare_greater as _, 2);
-                    self.box_boolean(RET0, RET0);
-                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                    let br = self.branch_if_not_int32(AGPR0, true);
+                    self.add_slow_case(br);
+                    let br = self.branch_if_not_int32(AGPR1, true);
+                    self.add_slow_case(br);
+                    self.masm.compare32(RelationalCondition::GreaterThan, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0,T0);
+                    self.emit_put_virtual_register(*dst, T0,T1);
                 }
                 Ins::GreaterOrEqual(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
-                    self.masm.prepare_call_with_arg_count(2);
-                    self.masm
-                        .call_ptr_argc(operations::operation_compare_greatereq as _, 2);
-                    self.box_boolean(RET0, RET0);
-                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                    let br = self.branch_if_not_int32(AGPR0, true);
+                    self.add_slow_case(br);
+                    let br = self.branch_if_not_int32(AGPR1, true);
+                    self.add_slow_case(br);
+                    self.masm.compare32(RelationalCondition::GreaterThanOrEqual, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0,T0);
+                    self.emit_put_virtual_register(*dst, T0,T1);
                 }
                 Ins::Equal(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -630,6 +638,42 @@ impl<'a> JIT<'a> {
             let curr = &self.code_block.instructions[self.bytecode_index];
             self.add_comment(&format!("(S) [{:04}] {:?}", self.bytecode_index, curr));
             match curr {
+                Ins::Less(dst, lhs, rhs) => {
+                    self.link_all_slow_cases(&mut iter);
+                    //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_less as _, 2);
+                    self.box_boolean(RET0, RET1);
+                    self.emit_put_virtual_register(*dst, RET1, RET0);
+                }
+                Ins::LessOrEqual(dst, lhs, rhs) => {
+                    self.link_all_slow_cases(&mut iter);
+                    //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_lesseq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::Greater(dst, lhs, rhs) => {
+                    self.link_all_slow_cases(&mut iter);
+                    //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_greater as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
+                Ins::GreaterOrEqual(dst, lhs, rhs) => {
+                    self.link_all_slow_cases(&mut iter);
+                    //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm
+                        .call_ptr_argc(operations::operation_compare_greatereq as _, 2);
+                    self.box_boolean(RET0, RET0);
+                    self.emit_put_virtual_register(*dst, RET0, RET1);
+                }
                 Ins::BitAnd(dest, lhs, rhs) => {
                     extern "C" fn and(x: Value, y: Value) -> Value {
                         if x.is_number() && y.is_number() {

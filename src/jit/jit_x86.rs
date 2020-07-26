@@ -133,18 +133,12 @@ impl<'a> JIT<'a> {
         #[cfg(all(unix, target_arch = "x86_64"))]
         {
             use RegisterID::*;
-            //self.masm.move_rr(SP, BP);
             self.masm.push(EBP);
-            /*self.masm.push(R15);
-            self.masm.push(R14);
-            self.masm.push(R13);
-            self.masm.push(R12);
-            self.masm.push(EBX);*/
+            self.masm.move_rr(SP,BP);
             CALLEE_SAVES.iter().for_each(|r| {
                 self.masm.push(*r);
             });
-            self.masm.move_rr(SP, BP);
-            //self.masm.sub64_imm32(8 * 8, SP);
+            self.masm.sub64_imm32(16 * 4, SP);
         }
         #[cfg(windows)]
         {
@@ -159,18 +153,11 @@ impl<'a> JIT<'a> {
         #[cfg(all(unix, target_arch = "x86_64"))]
         {
             use RegisterID::*;
-            //self.masm.add64_imm32(8 * 8, SP, SP);
-            /*self.masm.pop(EBX);
-            self.masm.pop(R12);
-            self.masm.pop(R13);
-            self.masm.pop(R14);
-            self.masm.pop(R15);*/
-            self.masm.move_rr(BP, SP);
+            self.masm.add64_imm32(16*4, SP, SP);
             CALLEE_SAVES.iter().rev().for_each(|r| {
                 self.masm.pop(*r);
             });
             self.masm.pop(EBP);
-            //self.masm.move_rr(BP, SP);
             let _ = ret_addr;
         }
         #[cfg(windows)]

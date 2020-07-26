@@ -48,11 +48,10 @@ fn main() {
     let start = std::time::Instant::now();
     let res = fun.execute(Value::undefined(), &[]);
     let e = start.elapsed();
-    println!("{}ms or {}ns", e.as_millis(), e.as_nanos());
+    println!("executed code in {}ms or {}ns", e.as_millis(), e.as_nanos());
     if res.is_error() {
         panic!();
     }
-    println!("{} {:x}", res.a, res.b);
     println!("{}", res.value().as_int32());
 }
 

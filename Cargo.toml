@@ -25,3 +25,5 @@ default    = ["value64"]
 value32-64 = []
 value64    = []
 opt-jit    = []
+[profile.release]
+debug=true

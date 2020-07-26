@@ -69,7 +69,6 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 if vm.template_jit {
                     cb.exc_counter = cb.exc_counter.wrapping_add(10);
                     if cb.exc_counter >= crate::get_vm().jit_threshold {
-                        println!("Compile");
                         use crate::jit::*;
                         let mut jit = JIT::new(&cb);
                         jit.compile_without_linking();
@@ -283,7 +282,6 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_less,<);
-                println!("{} {}", x.as_int32(), y.as_int32());
                 //println!("Less? {}", res);
                 callframe.put_register(dst, Value::new_bool(res));
             }

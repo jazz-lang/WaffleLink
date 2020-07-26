@@ -145,7 +145,6 @@ pub extern "C" fn operation_compare_eq(x: Value, y: Value) -> bool {
 }
 
 pub extern "C" fn operation_compare_less(x: Value, y: Value) -> bool {
-    println!("{} {}", x.as_int32(), y.as_int32());
     if x.is_number() && y.is_number() {
         return x.to_number() < y.to_number();
     }
