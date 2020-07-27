@@ -20,7 +20,7 @@ pub enum Ins {
     Store(VirtualRegister, VirtualRegister, VirtualRegister),
     #[display(fmt = "loadid {}, {}, const{}", _0, _1, _2)]
     LoadId(VirtualRegister, VirtualRegister, u32),
-    #[display(fmt = "storeid {}, {}, const{}", _0, _1, _2)]
+    #[display(fmt = "storeid {}, const{}, {}", _0, _1, _2)]
     StoreId(VirtualRegister, u32, VirtualRegister),
     #[display(fmt = "loadu {}, u{}", _0, _1)]
     LoadU(VirtualRegister, u32),
@@ -251,7 +251,7 @@ impl CodeBlock {
         for (i, c) in self.constants.iter().enumerate() {
             writeln!(buffer, "\tconst{} = {}", i, val_str(*c))?;
         }
-        writeln!(buffer,"num_vars={}",self.num_vars).unwrap();
+        writeln!(buffer,"\tnum_vars={}",self.num_vars).unwrap();
         writeln!(buffer, "bytecode: ")?;
         for (i, _ins) in self.instructions.iter().enumerate() {
             write!(buffer, "\t[{:4}] ", i)?;

@@ -382,7 +382,7 @@ pub fn operation_put_by(vm: &VM, object: Value, key: Value, value: Value) -> Waf
     WaffleResult::error(Value::from(
         WaffleString::new(
             &mut get_vm().heap,
-            "cannot set property on value that is not an object",
+            format!("cannot set property on value '{}' that is not an object",runtime::val_str(object)),
         )
         .cast(),
     ))

@@ -85,6 +85,7 @@ impl ByteCompiler {
         self.scope.parent = Some(scope);
     }
     pub fn new_string(&mut self, s: impl AsRef<str>) -> u32 {
+       
         if let Some(ix) = self.str_constants.get(s.as_ref()) {
             return *ix as u32;
         } else {
@@ -105,7 +106,6 @@ impl ByteCompiler {
     }
     pub fn allocate_regs(&mut self,count: usize) -> Vec<VirtualRegister> {
         let mut start = None;
-        println!("{}",count);
         let mut ix = 0;
         for i in 0..self.state.len() {
             if !self.state[i] {
@@ -212,27 +212,37 @@ impl ByteCompiler {
         let vm = crate::get_vm();
         let mut constants = self.constants.clone();
         for (s, ix) in self.str_constants.iter() {
+            
             if s == "length" {
                 constants[*ix] = vm.length;
             } else if s == "constructor" {
                 constants[*ix] = vm.constructor;
             } else if s == "prototype" {
                 constants[*ix] = vm.prototype;
-            } else if s.is_empty() {
-                constants[*ix] = vm.empty_string;
             } else {
+                
                 constants[*ix] = Value::from(WaffleString::new(&mut vm.heap, s).cast());
+                
             }
         }
+        /*for c in constants.iter_mut() {
+            if c.is_cell() {
+                if c.as_cell().is_string() {
+                    if c.as_cell().cast::<WaffleString>().len() == 0 {
+                        *c = vm.empty_string;
+                    }
+                }
+            }
+        }*/
         // simple peephole opt
-        /*self.code.retain(|ins| {
+        self.code.retain(|ins| {
             if let Ins::Move(x, y) = ins {
                 if x == y {
                     return false;
                 }
             }
             true
-        });*/
+        });
         let mut cb = CodeBlock::new();
         cb.constants = constants;
         cb.instructions = self.code.clone();
@@ -387,8 +397,10 @@ impl Context {
         );
         cb.constants[c2.to_constant_index() as usize] = Value::from(f.cast());
         self.builder.constants[c.to_constant_index() as usize] = Value::from(f.cast());let mut b = String::new();
-        cb.dump(&mut b).unwrap();
-        println!("{}", b);
+        if crate::get_vm().disasm {
+            cb.dump(&mut b).unwrap();
+            println!("{}", b);
+        }
         self.builder.register_push(reg);
         Ok(())
     }
@@ -495,10 +507,12 @@ impl Context {
             }
             Access::Field(e, f) => {
                 let val = self.builder.register_pop(false);
+                self.builder.protect(val);
                 let key = self.builder.new_string(f);
                 self.compile(&e)?;
                 let r = self.builder.register_pop(false);
                 self.builder.code.push(Ins::StoreId(r, key, val));
+                self.builder.unprotect(val);
                 Ok(())
             }
             _ => unreachable!(),
@@ -508,6 +522,49 @@ impl Context {
         match &e.expr {
             ExprKind::Function(vname, args, body) => {
                 self.compile_function(e.pos, args, body, vname.clone())
+            }
+            ExprKind::New(call) => {
+                match &call.expr {
+                    ExprKind::Call(obj,arguments) => {
+                        let mut callee;
+                        self.compile(obj)?;
+                        callee = self.builder.register_pop(false); let dst = self.builder.register_new();
+                
+                       
+                        let dest = self.builder.allocate_regs(arguments.len() + 1);
+                    
+                        //if callee != dest[0] {
+                            
+                            self.builder.code.push(Ins::Move(dest[0],callee));
+                            callee = dest[0];
+                        //} 
+                        dest.iter().for_each(|x| {
+        
+                            self.builder.protect(*x);
+                        });
+                        for (i, argument) in arguments.iter().enumerate() {
+                            self.compile(argument)?;
+                            let reg = self.builder.register_pop(false);
+                            if reg != dest[i+1] {
+                               
+                                self.builder.code.push(Ins::Move(dest[i+1], reg));
+                            }
+                        }
+                        self.builder
+                            .code
+                            .push(Ins::New(dst,  callee, arguments.len() as _));
+                        for r in dest {
+                            self.builder.unprotect(r);
+                        }
+                        if self.builder.is_temp(callee) && callee.is_local() {
+                            self.builder.unprotect(callee);
+                        }
+                        
+                        self.builder.register_push(dst);
+                        Ok(())
+                    }
+                    _ => unreachable!()
+                }
             }
             ExprKind::Call(callee, arguments) => {
                 let (mut callee, this) = match &callee.expr {
@@ -537,7 +594,7 @@ impl Context {
                 let dest = self.builder.allocate_regs(arguments.len() + 1);
             
                 //if callee != dest[0] {
-                    println!("Move {}<-{}",dest[0],callee);
+                   
                     self.builder.code.push(Ins::Move(dest[0],callee));
                     callee = dest[0];
                 //} 
@@ -729,6 +786,16 @@ impl Context {
                     .register_push(VirtualRegister::new_constant_index(k as _));
                 Ok(())
             }
+            ExprKind::This => {
+                let dst = self.builder.register_new();
+                self.builder.code.push(Ins::LoadThis(dst));
+                self.builder.register_push(dst);
+                Ok(())
+            }
+            ExprKind::Access(_,_) => {
+                let acc = self.compile_access(&e.expr)?;
+                self.access_get(acc)
+            }
             _ => todo!("{:?}", e),
         }
     }
@@ -754,6 +821,12 @@ impl Context {
                     }
                 }
             }
+            ExprKind::Access(object,field) => {
+                Ok(Access::Field(object.clone(),field.clone()))
+            }
+            ExprKind::ArrayIndex(object,ix) => {
+                Ok(Access::Array(object.clone(),ix.clone()))
+            }
             _ => unimplemented!(),
         }
     }
@@ -774,7 +847,7 @@ pub fn compile(ast: &[Box<Expr>]) -> Result<Ref<CodeBlock>, MsgWithPos> {
     ctx.builder.code.push(Ins::Safepoint);
     let r = ctx.builder.register_pop(false);
     ctx.builder.code.push(Ins::Return(r));
-    let mut cb = ctx.builder.code_block();
+    let cb = ctx.builder.code_block();
     
     Ok(cb)
 }

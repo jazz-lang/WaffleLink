@@ -507,6 +507,43 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
             Ins::TryEnd => {
                 callframe.handlers.pop().unwrap();
             }
+            Ins::LoadId(dest,object,key) => {
+                let key = cb.constants[key as usize];
+                let object = callframe.get_register(object);
+                let res = operation_get_by(vm,object,key);
+                if res.is_error() {
+                    catch!(res.value());
+                }
+                callframe.put_register(dest,res.value());
+            }
+            Ins::StoreId(object,id,val) => {
+                let key = cb.constants[id as usize];
+                let object = callframe.get_register(object);
+                let val = callframe.get_register(val);
+                let res = operation_put_by(vm,object,key,val);
+                if res.is_error() {
+                    catch!(res.value());
+                }
+            }
+            Ins::Store(object,key,val) => {
+                let key = callframe.get_register(key);
+                let object = callframe.get_register(object);
+                let val = callframe.get_register(val);
+                let res = operation_put_by(vm,object,key,val);
+                if res.is_error() {
+                    catch!(res.value());
+                }
+
+            }
+            Ins::Load(dest,object,key) => {
+                let key = callframe.get_register(key);
+                let object = callframe.get_register(object);
+                let res = operation_get_by(vm,object,key);
+                if res.is_error() {
+                    catch!(res.value());
+                }
+                callframe.put_register(dest,res.value());
+            }
             Ins::LoadU(dest, idx) => {
                 if let Some(env) = callframe.callee.as_cell().cast::<function::Function>().env {
                     let val = env.get_at(idx as _);
@@ -623,6 +660,10 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 }
             }
             Ins::Safepoint => {}
+            Ins::LoadThis(dest) => {
+                let val = callframe.this;
+                callframe.put_register(dest, val);
+            }
             x => todo!("NYI {}",x),
         }
     }

@@ -16,14 +16,17 @@ fn main() {
     let reader = Reader::from_string(
         "
         
-function fac(x) {
-
-    if x < 2 {
-        return 1
-    }
-    return fac(x - 1) * x
-}
-print(fac(5))
+        function Point(x,y) {
+            this.x = x
+            this.y = y
+        }
+        
+        Point.prototype.getX = function() {
+            return this.x
+        }
+        
+        var p = new Point(2,3)
+        print(p.getX())
         ",
     );
     let mut ast = vec![];
@@ -39,9 +42,11 @@ print(fac(5))
             return;
         }
     };
-    let mut b = String::new();
-    code.dump(&mut b).unwrap();
-    println!("{}", b);
+    if vm.disasm {
+        let mut b = String::new();
+        code.dump(&mut b).unwrap();
+        println!("{}", b);
+    }
     let fun = function::Function::new(&mut get_vm().heap, code, "<main>");
     let start = std::time::Instant::now();
     let res = fun.execute(Value::undefined(), &[]);

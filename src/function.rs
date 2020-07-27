@@ -12,6 +12,17 @@ pub struct Function {
     pub native_code: usize,
     pub env: Option<Ref<Array>>,
     pub name: Ref<WaffleString>,
+    pub prototype: value::Value,
+}
+
+fn lookup_fn(vm: &VM,this: Ref<Obj>,key: value::Value) -> WaffleResult {
+    if key == vm.constructor {
+        return WaffleResult::okay(value::Value::from(this))
+    } else if key == vm.prototype {
+        return WaffleResult::okay(value::Value::from(this.cast::<Function>().prototype))
+    } else {
+        WaffleResult::okay(value::Value::undefined())
+    }
 }
 
 impl Function {
@@ -27,7 +38,7 @@ impl Function {
                 vtable: &FUNCTION_VTBL,
                 code_block: None,
                 env: None,
-                native: true,
+                native: true,prototype: value::Value::undefined(),
                 name: WaffleString::new(heap, name),
                 native_code: fptr as _,
             });
@@ -47,6 +58,7 @@ impl Function {
                 env: None,
                 native: false,
                 native_code: 0,
+                prototype: value::Value::from(RegularObj::new(heap,value::Value::undefined(),None).cast()),
                 name: WaffleString::new(heap, name),
             });
         }
@@ -56,7 +68,7 @@ impl Function {
     }
 
     pub fn execute(&self, this: value::Value, args: &[value::Value]) -> WaffleResult {
-        use interpreter::callframe::*;
+        
         let regc = if let Some(cb) = self.code_block {
             cb.num_vars
         } else {
@@ -99,7 +111,7 @@ pub static FUNCTION_VTBL: VTable = VTable {
     element_size: 0,
     instance_size: std::mem::size_of::<Function>(),
     parent: None,
-    lookup_fn: None,
+    lookup_fn: Some(lookup_fn),
     index_fn: None,
     calc_size_fn: None,
     apply_fn: None,

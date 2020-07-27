@@ -184,6 +184,7 @@ impl TableEnum {
                     if class.keys.as_ref().unwrap().len() > 12 {
                         return None;
                     }
+                    
                     *class = class.add_property(key);
                     return match class.get_descriptor(key) {
                         Some(Descriptor::Property(idx)) => Some(*idx),

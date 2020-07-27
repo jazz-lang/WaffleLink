@@ -18,7 +18,6 @@ pub struct Heap {
 
 impl Heap {
     pub fn new(stack_start: *const bool) -> Self {
-        println!("{:p}", stack_start);
         Self {
             start: stack_start as *mut u8,
             size_classes: [

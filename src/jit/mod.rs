@@ -419,6 +419,10 @@ impl<'a> JIT<'a> {
                     self.masm.call_ptr_argc(new_obj as _, 1);
                     self.emit_put_virtual_register(*dest, RET1, RET0);
                 }
+                Ins::LoadThis(dest) => {
+                    self.masm.load64(Mem::Base(REG_CALLFRAME,offset_of!(CallFrame,this) as i32),T0);
+                    self.emit_put_virtual_register(*dest,T0,T1);
+                }
                 Ins::Safepoint => {
                     self.masm.load64(
                         Mem::Absolute(&crate::get_vm().stop_world as *const bool as usize),
@@ -593,7 +597,7 @@ impl<'a> JIT<'a> {
                     self.emit_get_virtual_register(*key, AGPR2);
                     self.emit_get_virtual_register(*value, AGPR3);
                     self.masm
-                        .call_ptr_argc(operations::operation_get_by as _, 4);
+                        .call_ptr_argc(operations::operation_put_by as _, 4);
                     self.check_exception(false);
                 }
                 Ins::LoadId(dest, object, key) => {
@@ -621,7 +625,7 @@ impl<'a> JIT<'a> {
                     );
                     self.emit_get_virtual_register(*value, AGPR3);
                     self.masm
-                        .call_ptr_argc(operations::operation_get_by as _, 4);
+                        .call_ptr_argc(operations::operation_put_by as _, 4);
                     self.check_exception(false);
                 }
                 Ins::Enter => {}
@@ -1038,6 +1042,7 @@ impl<'a> JIT<'a> {
             }
         }
         is_string.link(&mut self.masm);
+        
         let j = self.masm.branch64_imm64(
             if invert {
                 RelationalCondition::Equal

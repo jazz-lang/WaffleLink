@@ -91,12 +91,12 @@ pub static OBJECT_VTBL: VTable = VTable {
     element_size: 0,
     instance_size: std::mem::size_of::<RegularObj>(),
     parent: None,
-    lookup_fn: None,
+    lookup_fn: Some(obj_lookup),
     index_fn: None,
     calc_size_fn: None,
     apply_fn: None,
     destroy_fn: None,
-    set_fn: None,
+    set_fn: Some(obj_set),
     trace_fn: Some(trace_obj),
     set_index_fn: None,
 };
@@ -111,7 +111,7 @@ fn obj_lookup(vm: &crate::VM, this: Ref<Obj>, key: Value) -> WaffleResult {
             WaffleString::new(&mut get_vm().heap, "Property name is not a string").cast(),
         ));
     }
-    WaffleResult::okay(this.table.table.load(key.unwrap()).unwrap_or_else(|| {
+    WaffleResult::okay(this.map.get(&key.unwrap()).copied().unwrap_or_else(|| {
         if this.prototype.is_cell() && !this.prototype.is_empty() {
             if let Some(fun) = this.prototype.as_cell().vtable.lookup_fn {
                 let res = fun(vm, this.prototype.as_cell(), keyv);
@@ -142,7 +142,8 @@ fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleRes
     let mut this = this.cast::<RegularObj>();
     let key = key_from_val(key);
     if let Some(key) = key {
-        this.table.table.set(key, value);
+        this.map.insert(key, value);
+        //this.table.table.set(key, value);
         WaffleResult::okay(Value::new_bool(true))
     } else {
         WaffleResult::error(Value::from(
@@ -153,7 +154,7 @@ fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleRes
 
 fn trace_obj(x: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
     let x = x.cast::<RegularObj>();
-    trace(x.table.cast());
+   // trace(x.table.cast());
     if x.prototype.is_cell() {
         trace(x.prototype.as_cell());
     }
@@ -163,7 +164,8 @@ pub struct RegularObj {
     header: Header,
     pub vtable: &'static VTable,
     pub prototype: Value,
-    pub table: Ref<table::Table>,
+    pub map: indexmap::IndexMap<Ref<WaffleString>,Value>,
+    //pub table: Ref<table::Table>,
 }
 
 impl RegularObj {
@@ -178,7 +180,8 @@ impl RegularObj {
                 header: Header::new(),
                 vtable: &OBJECT_VTBL,
                 prototype: proto,
-                table: get_vm().allocate(table::Table::new(class)),
+                map: Default::default(),
+                //table: get_vm().allocate(table::Table::new(class)),
             });
             Ref {
                 ptr: std::ptr::NonNull::new(mem.to_mut_ptr()).unwrap(),
@@ -427,11 +430,12 @@ pub struct WaffleString {
 
 impl WaffleString {
     pub fn new(heap: &mut crate::heap::Heap, s: impl AsRef<str>) -> Ref<Self> {
+        
         let mem = heap.allocate(
             Header::size() as usize
                 + std::mem::size_of::<usize>()
                 + std::mem::size_of::<usize>()
-                + std::mem::size_of::<char>() * s.as_ref().len(),
+                + std::mem::size_of::<String>(),
         );
         unsafe {
             mem.to_mut_ptr::<Self>().write(Self {
@@ -478,6 +482,14 @@ impl PartialEq for Ref<WaffleString> {
         self.string == other.string
     }
 }
+
+impl PartialEq for WaffleString {
+    fn eq(&self, other: &Self) -> bool {
+        self.str() == other.str()
+    }
+}
+
+impl Eq for WaffleString {}
 
 impl Eq for Ref<WaffleString> {}
 impl Hash for WaffleString {

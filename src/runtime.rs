@@ -84,8 +84,8 @@ pub fn write_val(
                 write!(buffer, "]")?;
             } else if c.is_robj() {
                 let obj = c.cast::<RegularObj>();
-                write!(buffer, "{{ ")?;
-                match &obj.table.table {
+                write!(buffer, "{{")?;
+                /*match &obj.table.table {
                     TableEnum::Fast(cls, fields) => {
                         if let Some(d) = &cls.descriptors {
                             for (key, desc) in d.iter() {
@@ -102,6 +102,15 @@ pub fn write_val(
                             write_val(buffer, *val, visited)?;
                         }
                     }
+                }*/
+                let mut i = 0;
+                for (name,prop) in obj.map.iter() {
+                    write!(buffer, "{} => ",name.str())?;
+                    write_val(buffer,*prop,visited)?;
+                    if i != obj.map.len() - 1 {
+                        write!(buffer,",")?;
+                    }
+                    i += 1;
                 }
                 write!(buffer, "}}")?;
             } else if c.is_function() {
