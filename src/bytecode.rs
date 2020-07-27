@@ -5,77 +5,130 @@ pub mod call_link_info;
 pub mod opcode_size;
 pub mod profile;
 pub mod virtual_register;
+use derive_more::Display;
 pub use profile::*;
 use std::collections::HashMap;
 use virtual_register::VirtualRegister;
-
-#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq, Debug, Display)]
 pub enum Ins {
     Enter,
+    #[display(fmt = "move {}, {}", _0, _1)]
     Move(VirtualRegister, VirtualRegister),
+    #[display(fmt = "load {}, {}, {}", _0, _1, _2)]
     Load(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "store {}, {}, {}", _0, _1, _2)]
     Store(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "loadid {}, {}, const{}", _0, _1, _2)]
     LoadId(VirtualRegister, VirtualRegister, u32),
+    #[display(fmt = "storeid {}, {}, const{}", _0, _1, _2)]
     StoreId(VirtualRegister, u32, VirtualRegister),
+    #[display(fmt = "loadu {}, u{}", _0, _1)]
     LoadU(VirtualRegister, u32),
+    #[display(fmt = "storeu {}, u{}", _0, _1)]
     StoreU(VirtualRegister, u32),
+    #[display(fmt = "load_global {}, const{}", _0, _1)]
     LoadGlobal(VirtualRegister, u32 /* id constant */),
+    #[display(fmt = "store_global {}, const{}", _0, _1)]
     StoreGlobal(VirtualRegister, u32 /* id constant */),
+    #[display(fmt = "load_this {}", _0)]
     LoadThis(VirtualRegister),
+    #[display(fmt = "store_this {}", _0)]
     StoreThis(VirtualRegister),
+    #[display(fmt = "add {}, {}, {}", _0, _1, _2)]
     Add(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "sub {}, {}, {}", _0, _1, _2)]
     Sub(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "mul {}, {}, {}", _0, _1, _2)]
     Mul(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "div {}, {}, {}", _0, _1, _2)]
     Div(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "rem {}, {}, {}", _0, _1, _2)]
     Rem(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "mod {}, {}, {}", _0, _1, _2)]
     Mod(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "lshift {}, {}, {}", _0, _1, _2)]
     LShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "rshift {}, {}, {}", _0, _1, _2)]
     RShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "urshift {}, {}, {}", _0, _1, _2)]
     URShift(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "band {}, {}, {}", _0, _1, _2)]
     BitAnd(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "bor {}, {}, {}", _0, _1, _2)]
     BitOr(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "bxor {}, {}, {}", _0, _1, _2)]
     BitXor(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "to_boolean {}, {}", _0, _1)]
     ToBoolean(VirtualRegister, VirtualRegister),
+    #[display(fmt = "equal {}, {}, {}", _0, _1, _2)]
     Equal(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "not_equal {}, {}, {}", _0, _1, _2)]
     NotEqual(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "greater {}, {}, {}", _0, _1, _2)]
     Greater(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "greatereq {}, {}, {}", _0, _1, _2)]
     GreaterOrEqual(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "less {}, {}, {}", _0, _1, _2)]
     Less(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "lesseq {}, {}, {}", _0, _1, _2)]
     LessOrEqual(VirtualRegister, VirtualRegister, VirtualRegister),
+    #[display(fmt = "safepoint")]
     Safepoint,
+    #[display(fmt = "loophint")]
     LoopHint,
+    #[display(fmt = "jmp {}", _0)]
     Jmp(i32),
+    #[display(fmt = "jmp_if_zero {}, {}", _0, _1)]
     JmpIfZero(VirtualRegister, i32),
+    #[display(fmt = "jmp_if_nzero {}, {}", _0, _1)]
     JmpIfNotZero(VirtualRegister, i32),
+    #[display(fmt = "jeq {}, {}, {}", _0, _1, _2)]
     JEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jneq {}, {}, {}", _0, _1, _2)]
     JNEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jless {}, {}, {}", _0, _1, _2)]
     JLess(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jlesseq {}, {}, {}", _0, _1, _2)]
     JLessEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jgreater {}, {}, {}", _0, _1, _2)]
     JGreater(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jgreatereq {}, {}, {}", _0, _1, _2)]
     JGreaterEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jless {}, {}, {}", _0, _1, _2)]
     JNGreater(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jlesseq {}, {}, {}", _0, _1, _2)]
     JNGreaterEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jgreater {}, {}, {}", _0, _1, _2)]
     JNLessEq(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "jgreatereq {}, {}, {}", _0, _1, _2)]
     JNLess(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "try {}", _0)]
     Try(u32 /* code size */),
+    #[display(fmt = "try_end")]
     TryEnd,
+    #[display(fmt = "throw {}", _0)]
     Throw(VirtualRegister),
+    #[display(fmt = "catch {}", _0)]
     Catch(VirtualRegister),
+    #[display(fmt = "closure {}, ->{}", _0, _1)]
     Closure(VirtualRegister, u32),
+    #[display(fmt = "call {},{},{}, ->{}", _0, _1, _2, _3)]
     Call(
         VirtualRegister, /* dest */
         VirtualRegister, /* this */
         VirtualRegister, /* callee */
         u32,             /* argc */
     ),
+    #[display(fmt = "new {}, {}, ->{}", _0, _1, _2)]
     New(
         VirtualRegister, /* dest */
         VirtualRegister, /* constructor or object */
         u32,             /* argc */
     ),
+    #[display(fmt = "new_object {}", _0)]
     /// Initializes new empty object.
     NewObject(VirtualRegister),
-
+    #[display(fmt = "return {}", _0)]
     Return(VirtualRegister),
 }
 use crate::vtable;
@@ -191,6 +244,38 @@ impl CodeBlock {
             .get(&profile)
             .and_then(|x| unsafe { Some(&mut *(x as *const _ as *mut _)) })
             .unwrap()
+    }
+    pub fn dump(&self, buffer: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        use crate::runtime::val_str;
+        writeln!(buffer, "CodeBlock at {:p}", self)?;
+        for (i, c) in self.constants.iter().enumerate() {
+            writeln!(buffer, "\tconst{} = {}", i, val_str(*c))?;
+        }
+        writeln!(buffer,"num_vars={}",self.num_vars).unwrap();
+        writeln!(buffer, "bytecode: ")?;
+        for (i, _ins) in self.instructions.iter().enumerate() {
+            write!(buffer, "\t[{:4}] ", i)?;
+            self.dump_ins(buffer, i)?;
+            writeln!(buffer, "")?;
+        }
+        writeln!(buffer, "end")?;
+
+        Ok(())
+    }
+
+    pub fn dump_ins(&self, buffer: &mut dyn std::fmt::Write, at: usize) -> std::fmt::Result {
+        let target = |rel| at as i32 + rel;
+        let ins = self.instructions[at];
+        match ins {
+            Ins::Jmp(rel) => write!(buffer, "jmp {}[->{}]", rel, target(rel)),
+            Ins::JmpIfNotZero(r, rel) => {
+                write!(buffer, "jmp_if_nzero {}, {}[->{}]", r, rel, target(rel))
+            }
+            Ins::JmpIfZero(r, rel) => {
+                write!(buffer, "jmp_if_zero {}, {}[->{}]", r, rel, target(rel))
+            }
+            _ => write!(buffer, "{}", ins),
+        }
     }
 }
 

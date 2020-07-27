@@ -255,7 +255,11 @@ impl<'a> JIT<'a> {
             self.bytecode_index = i as _;
             self.labels[i] = self.masm.label();
             let ins = &self.code_block.instructions[i];
-            self.add_comment(&format!("[{:04}] {:?}", self.bytecode_index, ins));
+            let mut buf = String::new();
+            self.code_block
+                .dump_ins(&mut buf, self.bytecode_index as _)
+                .unwrap();
+            self.add_comment(&format!("[{:4}] {}", self.bytecode_index, buf));
             match ins {
                 Ins::BitAnd { .. } => self.emit_op_bitand(ins),
                 Ins::BitOr { .. } => self.emit_op_bitor(ins),
@@ -697,9 +701,13 @@ impl<'a> JIT<'a> {
         while let Some(case) = iter.peek() {
             self.bytecode_index = case.to as _;
             let curr = &self.code_block.instructions[self.bytecode_index];
-            self.add_comment(&format!("(S) [{:04}] {:?}", self.bytecode_index, curr));
+            let mut buf = String::new();
+            self.code_block
+                .dump_ins(&mut buf, self.bytecode_index as _)
+                .unwrap();
+            self.add_comment(&format!("(S) [{:4}] {}", self.bytecode_index, buf));
             match curr {
-                Ins::Less(dst, lhs, rhs) => {
+                Ins::Less(dst, _lhs, _rhs) => {
                     self.link_all_slow_cases(&mut iter);
                     //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
                     self.masm.prepare_call_with_arg_count(2);
@@ -708,7 +716,7 @@ impl<'a> JIT<'a> {
                     self.box_boolean(RET0, RET1);
                     self.emit_put_virtual_register(*dst, RET1, RET0);
                 }
-                Ins::LessOrEqual(dst, lhs, rhs) => {
+                Ins::LessOrEqual(dst, _lhs, _rhs) => {
                     self.link_all_slow_cases(&mut iter);
                     //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
                     self.masm.prepare_call_with_arg_count(2);
@@ -717,7 +725,7 @@ impl<'a> JIT<'a> {
                     self.box_boolean(RET0, RET0);
                     self.emit_put_virtual_register(*dst, RET0, RET1);
                 }
-                Ins::Greater(dst, lhs, rhs) => {
+                Ins::Greater(dst, _lhs, _rhs) => {
                     self.link_all_slow_cases(&mut iter);
                     //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
                     self.masm.prepare_call_with_arg_count(2);
@@ -726,7 +734,7 @@ impl<'a> JIT<'a> {
                     self.box_boolean(RET0, RET0);
                     self.emit_put_virtual_register(*dst, RET0, RET1);
                 }
-                Ins::GreaterOrEqual(dst, lhs, rhs) => {
+                Ins::GreaterOrEqual(dst, _lhs, _rhs) => {
                     self.link_all_slow_cases(&mut iter);
                     //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
                     self.masm.prepare_call_with_arg_count(2);

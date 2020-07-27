@@ -191,7 +191,7 @@ impl<'a> Parser<'a> {
         self.expect_token(TokenKind::Catch)?;
         let name = self.expect_identifier()?;
         let c = self.parse_expression()?;
-        return Ok(expr!(ExprKind::Try(e,name,c),pos));
+        return Ok(expr!(ExprKind::Try(e, name, c), pos));
     }
 
     fn parse_while(&mut self) -> EResult {

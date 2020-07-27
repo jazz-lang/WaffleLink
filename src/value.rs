@@ -131,46 +131,46 @@ impl Value {
         Self::with_tag_payload(BOOL_TAG, 0)
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         self.tag() == EMPTY_TAG
     }
 
-    pub fn is_null(&self) -> bool {
+    pub fn is_null(self) -> bool {
         self.tag() == NULL_TAG
     }
 
-    pub fn is_undefined(&self) -> bool {
+    pub fn is_undefined(self) -> bool {
         self.tag() == UNDEFINED_TAG
     }
 
-    pub fn is_undefined_or_null(&self) -> bool {
+    pub fn is_undefined_or_null(self) -> bool {
         self.is_undefined() || self.is_null()
     }
-    pub fn is_cell(&self) -> bool {
+    pub fn is_cell(self) -> bool {
         self.tag() == CELL_TAG
     }
 
-    pub fn is_int32(&self) -> bool {
+    pub fn is_int32(self) -> bool {
         self.tag() == INT32_TAG
     }
 
-    pub fn is_double(&self) -> bool {
+    pub fn is_double(self) -> bool {
         self.tag() < LOWEST_TAG
     }
 
-    pub fn is_true(&self) -> bool {
+    pub fn is_true(self) -> bool {
         self.tag() == BOOL_TAG && self.payload() != 0
     }
 
-    pub fn is_false(&self) -> bool {
+    pub fn is_false(self) -> bool {
         self.tag() == BOOL_TAG && self.payload() == 0
     }
 
-    pub fn as_int32(&self) -> bool {
+    pub fn as_int32(self) -> bool {
         self.payload()
     }
 
-    pub fn as_double(&self) -> bool {
+    pub fn as_double(self) -> bool {
         unsafe { self.u.as_double }
     }
 
@@ -185,15 +185,15 @@ impl Value {
         Self::with_tag_payload(INT32_TAG, x)
     }
 
-    pub fn is_number(&self) -> bool {
+    pub fn is_number(self) -> bool {
         self.is_int32() || self.is_double()
     }
 
-    pub fn is_boolean(&self) -> bool {
+    pub fn is_boolean(self) -> bool {
         self.tag() == BOOL_TAG
     }
 
-    pub fn as_boolean(&self) -> bool {
+    pub fn as_boolean(self) -> bool {
         assert!(self.is_boolean());
         self.payload() != 0
     }
@@ -201,7 +201,7 @@ impl Value {
         unsafe { std::mem::transmute(self.payload()) }
     }
     pub fn as_cell_ref<'a>(&'a self) -> &'a Ref<Obj> {
-        unsafe { std::mem::transmue(&self.u.as_bits.payload) }
+        unsafe { std::mem::transmue(self.u.as_bits.payload) }
     }
 }
 
@@ -301,7 +301,7 @@ impl Value {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(self) -> bool {
         unsafe { self.u.as_int64 == Self::VALUE_EMPTY }
     }
 
@@ -340,38 +340,38 @@ impl Value {
     pub fn as_cell_ref<'a>(&'a self) -> &'a Ref<Obj> {
         unsafe { &self.u.cell }
     }
-    pub fn is_number(&self) -> bool {
+    pub fn is_number(self) -> bool {
         unsafe { self.u.as_int64 & Self::NUMBER_TAG != 0 }
     }
 
-    pub fn is_int32(&self) -> bool {
+    pub fn is_int32(self) -> bool {
         unsafe { (self.u.as_int64 & Self::NUMBER_TAG) == Self::NUMBER_TAG }
     }
 
-    pub fn is_undefined(&self) -> bool {
-        *self == Self::undefined()
+    pub fn is_undefined(self) -> bool {
+        self == Self::undefined()
     }
 
-    pub fn is_null(&self) -> bool {
-        *self == Self::null()
+    pub fn is_null(self) -> bool {
+        self == Self::null()
     }
 
-    pub fn is_true(&self) -> bool {
-        *self == Self::true_()
+    pub fn is_true(self) -> bool {
+        self == Self::true_()
     }
 
-    pub fn is_false(&self) -> bool {
-        *self == Self::false_()
+    pub fn is_false(self) -> bool {
+        self == Self::false_()
     }
 
-    pub fn is_undefined_or_null(&self) -> bool {
+    pub fn is_undefined_or_null(self) -> bool {
         unsafe { (self.u.as_int64 & !Self::UNDEFINED_TAG) == Self::VALUE_NULL }
     }
 
-    pub fn is_boolean(&self) -> bool {
+    pub fn is_boolean(self) -> bool {
         unsafe { (self.u.as_int64 & !1) == Self::VALUE_FALSE }
     }
-    pub fn is_cell(&self) -> bool {
+    pub fn is_cell(self) -> bool {
         unsafe { (self.u.as_int64 & Self::NOT_CELL_MASK) == 0 }
     }
 
@@ -393,12 +393,12 @@ impl Value {
     pub fn is_double(self) -> bool {
         !self.is_int32() && self.is_number()
     }
-    pub fn as_double(&self) -> f64 {
+    pub fn as_double(self) -> f64 {
         assert!(self.is_double());
         unsafe { f64::from_bits((self.u.as_int64 - Self::DOUBLE_ENCODE_OFFSET) as u64) }
     }
     #[inline]
-    pub fn is_any_int(&self) -> bool {
+    pub fn is_any_int(self) -> bool {
         if self.is_int32() {
             true
         } else if !self.is_number() {
@@ -408,12 +408,12 @@ impl Value {
         }
     }
     #[inline(always)]
-    pub fn as_int32(&self) -> i32 {
+    pub fn as_int32(self) -> i32 {
         debug_assert!(self.is_int32());
         unsafe { self.u.as_int64 as i32 }
     }
     #[inline]
-    pub fn as_any_int(&self) -> i64 {
+    pub fn as_any_int(self) -> i64 {
         assert!(self.is_any_int());
         if self.is_int32() {
             return self.as_int32() as i64;
@@ -421,7 +421,7 @@ impl Value {
         return self.as_double() as i64;
     }
     #[inline]
-    pub fn is_int32_as_any_int(&self) -> bool {
+    pub fn is_int32_as_any_int(self) -> bool {
         if !self.is_any_int() {
             return false;
         }
@@ -429,7 +429,7 @@ impl Value {
         return value >= i32::min_value() as i64 && value <= i32::max_value() as i64;
     }
     #[inline]
-    pub fn as_int32_as_any_int(&self) -> i32 {
+    pub fn as_int32_as_any_int(self) -> i32 {
         assert!(self.is_int32_as_any_int());
         if self.is_int32() {
             return self.as_int32();
@@ -437,7 +437,7 @@ impl Value {
         self.as_double() as i32
     }
     #[inline]
-    pub fn is_uint32_as_any_int(&self) -> bool {
+    pub fn is_uint32_as_any_int(self) -> bool {
         if !self.is_any_int() {
             return false;
         }
@@ -445,7 +445,7 @@ impl Value {
         return value >= 0 as i64 && value <= u32::max_value() as i64;
     }
     #[inline]
-    pub fn as_uint32_as_any_int(&self) -> u32 {
+    pub fn as_uint32_as_any_int(self) -> u32 {
         assert!(self.is_int32_as_any_int());
         if self.is_int32() {
             return self.as_int32() as u32;
@@ -462,20 +462,20 @@ impl PartialEq for Value {
 impl Eq for Value {}
 impl Value {
     #[inline]
-    pub fn is_uint32(&self) -> bool {
+    pub fn is_uint32(self) -> bool {
         self.is_int32() && self.as_int32() >= 0
     }
 
     #[inline]
-    pub fn to_int32(&self) -> i32 {
+    pub fn to_int32(self) -> i32 {
         let d = self.to_number();
         d as i32
     }
-    pub fn to_uint32(&self) -> u32 {
+    pub fn to_uint32(self) -> u32 {
         self.to_int32() as u32
     }
     #[inline(always)]
-    pub fn to_number(&self) -> f64 {
+    pub fn to_number(self) -> f64 {
         if self.is_int32() {
             return self.as_int32() as f64;
         }
@@ -484,7 +484,7 @@ impl Value {
         }
         self.to_number_slow_case()
     }
-    pub fn to_number_slow_case(&self) -> f64 {
+    pub fn to_number_slow_case(self) -> f64 {
         assert!(!self.is_int32() && !self.is_double());
         if self.is_cell() {
             unimplemented!()
@@ -499,7 +499,7 @@ impl Value {
         }
     }
 
-    pub fn as_number(&self) -> f64 {
+    pub fn as_number(self) -> f64 {
         assert!(self.is_number());
         if self.is_int32() {
             self.as_int32() as f64
@@ -508,7 +508,7 @@ impl Value {
         }
     }
     #[inline]
-    pub fn to_boolean(&self) -> bool {
+    pub fn to_boolean(self) -> bool {
         if self.is_number() {
             if self.is_int32() {
                 self.as_int32() != 0
@@ -584,7 +584,7 @@ pub fn try_convert_to_i52(number: f64) -> i64 {
 
 /*
 impl Hash for Value {
-    fn hash<H: Hasher>(&self, s: &mut H) {
+    fn hash<H: Hasher>(self, s: &mut H) {
         unsafe {
             if self.is_cell() {
                 let cell = self.as_cell();

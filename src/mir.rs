@@ -5,7 +5,6 @@ pub mod basic_block;
 pub mod node;
 pub mod opcodes;
 
-use node::*;
 pub struct MIRGraph {
     pub basic_blocks: Vec<basic_block::BasicBlock>,
     pub values: Vec<ValueData>,

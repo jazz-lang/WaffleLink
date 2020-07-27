@@ -99,10 +99,10 @@ pub fn osr_from_interpreter_to_jit_generator() -> *const u8 {
 }
 
 fn build_callframe(
-    argc: u32,
-    callee: Value,
-    callee_r: virtual_register::VirtualRegister,
-    this: Value,
+    _argc: u32,
+    _callee: Value,
+    _callee_r: virtual_register::VirtualRegister,
+    _this: Value,
 ) -> (*mut CallFrame, usize) {
     todo!();
 }

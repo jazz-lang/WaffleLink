@@ -10,8 +10,8 @@ pub struct CallFrame {
     pub handlers: Vec<u32>,
     pub this: Value,
     pub callee: Value,
-
     pub pc: u32,
+    pub caller: *mut Self,
 }
 
 impl CallFrame {
@@ -28,6 +28,7 @@ impl CallFrame {
             callee: Value::undefined(),
             this: Value::undefined(),
             pc: 0,
+            caller: std::ptr::null_mut(),
         }
     }
 

@@ -1,11 +1,5 @@
-use bytecode::*;
 use bytecompiler::*;
-use heap::*;
-use interpreter::callframe::*;
-use jit::*;
-use object::*;
 use value::*;
-use virtual_register::*;
 use wafflelink::*;
 
 use frontend::parser::*;
@@ -16,17 +10,20 @@ fn main() {
     let mut vm = VM::new(&x);
     vm.template_jit = true;
     vm.disasm = true;
-    wafflelink::LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+    wafflelink::LOG.store(!true, std::sync::atomic::Ordering::Relaxed);
     set_vm(&vm);
     runtime::initialize();
     let reader = Reader::from_string(
         "
         
-        var i = 0
-        while i < 100000 {
-            i = i + 1
-        }
-        return print(\"Result is: \",i)
+function fac(x) {
+
+    if x < 2 {
+        return 1
+    }
+    return fac(x - 1) * x
+}
+print(fac(5))
         ",
     );
     let mut ast = vec![];
@@ -42,10 +39,9 @@ fn main() {
             return;
         }
     };
-
-    for (ix, c) in code.instructions.iter().enumerate() {
-        println!("[{:04}] {:?}", ix, c);
-    }
+    let mut b = String::new();
+    code.dump(&mut b).unwrap();
+    println!("{}", b);
     let fun = function::Function::new(&mut get_vm().heap, code, "<main>");
     let start = std::time::Instant::now();
     let res = fun.execute(Value::undefined(), &[]);
@@ -55,7 +51,7 @@ fn main() {
         println!("Error");
         runtime::print_val(res.value());
     } else {
-        println!("{}", res.value().as_int32());
+        runtime::print_val(res.value());
     }
 }
 

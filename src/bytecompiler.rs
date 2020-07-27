@@ -63,6 +63,11 @@ impl ByteCompiler {
         self.constants.len() as u32 - 1
     }
 
+    pub fn new_const_force(&mut self,val: Value) -> u32 {
+        self.constants.push(val);
+        self.constants.len() as u32 - 1
+    }
+
     pub fn new_local(&mut self, name: impl AsRef<str>) -> VirtualRegister {
         let r = self.register_new();
         self.locals.insert(r);
@@ -98,7 +103,37 @@ impl ByteCompiler {
         }
         self.scope = scope.parent.expect("No parent scope was found");
     }
-
+    pub fn allocate_regs(&mut self,count: usize) -> Vec<VirtualRegister> {
+        let mut start = None;
+        println!("{}",count);
+        let mut ix = 0;
+        for i in 0..self.state.len() {
+            if !self.state[i] {
+                ix += 1;
+                if let None = start {
+                    start = Some(i);
+                }
+                if ix - 1 == count {
+                    let end = i;
+                    let mut regs = vec![];
+                    for i in start.unwrap()..end {
+                        regs.push(virtual_register_for_local(i as _));
+                    }
+                    return regs;
+                }
+            } else {
+                if let Some(_) = start {
+                    break;
+                }
+            }
+        }
+        let mut regs = vec![];
+        for _ in 0..count {
+            regs.push(virtual_register_for_local(self.state.len() as _));
+            self.state.push(false);
+        }
+        regs
+    }
     pub fn register_new(&mut self) -> VirtualRegister {
         for i in 0..self.state.len() {
             if !self.state[i] {
@@ -190,14 +225,14 @@ impl ByteCompiler {
             }
         }
         // simple peephole opt
-        self.code.retain(|ins| {
+        /*self.code.retain(|ins| {
             if let Ins::Move(x, y) = ins {
                 if x == y {
                     return false;
                 }
             }
             true
-        });
+        });*/
         let mut cb = CodeBlock::new();
         cb.constants = constants;
         cb.instructions = self.code.clone();
@@ -279,7 +314,102 @@ impl Context {
         }
         None
     }
+    fn compile_function(
+        &mut self,
+        fpos: Position,
+        params: &[Arg],
+        e: &Box<Expr>,
+        vname: Option<String>,
+    ) -> Result<(), MsgWithPos> {
+        let mut ctx = Context::new(
+            Rc::new(RefCell::new(Default::default())),
+            Rc::new(RefCell::new(Default::default())),
+        );
+        ctx.builder.new_const(Value::undefined());
+        ctx.parent = Some(std::ptr::NonNull::new(self as *mut _).unwrap());
+        let mut i = 0;
+        for p in params.iter() {
+            ctx.compile_arg(p, i, fpos)?;
+            i += 1;
+        }
+        let c =
+            VirtualRegister::new_constant_index(self.builder.new_const_force(Value::undefined()) as _);
+        let c2 =
+            VirtualRegister::new_constant_index(ctx.builder.new_const_force(Value::undefined()) as _);
+        if vname.is_some() {
+            self.fmap
+                .borrow_mut()
+                .insert(vname.as_ref().unwrap().to_owned(), c);
+            ctx.fmap
+                .borrow_mut()
+                .insert(vname.as_ref().unwrap().to_owned(), c2);
+        }
 
+        ctx.compile(e)?;
+        ctx.builder.code.push(Ins::Safepoint);
+        let r = ctx.builder.register_pop(false);
+        ctx.builder.code.push(Ins::Return(r));
+
+        let reg = if ctx.builder.used_upvars.is_empty() {
+            let dst = self.builder.register_new();
+            self.builder.code.push(Ins::Move(dst, c));
+            dst
+        } else {
+            let dst = self.builder.register_new();
+            if self.builder.is_temp(dst) {
+                self.builder.protect(dst);
+            }
+            let mut dest = vec![];
+            for _ in 0..ctx.builder.used_upvars.len() {
+                dest.push(self.builder.register_new());
+            }
+            for (i, (var, _)) in ctx.builder.used_upvars.iter().enumerate() {
+                self.ident(var);
+                let reg = self.builder.register_pop(false);
+                if reg != dest[i] {
+                    self.builder.code.push(Ins::Move(dest[i], reg));
+                }
+            }
+            self.builder.code.push(Ins::Closure(dst, dest.len() as _));
+            if self.builder.is_temp(dst) {
+                self.builder.unprotect(dst);
+            }
+            dst
+        };
+        use crate::function::Function;
+        let mut cb = ctx.builder.code_block();
+        
+        let anon = "<anonymous>".to_string();
+        let f = Function::new(
+            &mut crate::get_vm().heap,
+            cb,
+            vname.as_ref().unwrap_or(&anon),
+        );
+        cb.constants[c2.to_constant_index() as usize] = Value::from(f.cast());
+        self.builder.constants[c.to_constant_index() as usize] = Value::from(f.cast());let mut b = String::new();
+        cb.dump(&mut b).unwrap();
+        println!("{}", b);
+        self.builder.register_push(reg);
+        Ok(())
+    }
+
+    fn compile_arg(&mut self, arg: &Arg, i: i32, p: Position) -> Result<(), MsgWithPos> {
+        match arg {
+            Arg::Ident(_, name) => {
+                if self.builder.get_local(name).is_some() {
+                    return Err(MsgWithPos::new(
+                        p,
+                        Msg::Custom(format!("argument '{}' already defined", name)),
+                    ));
+                }
+                let r = self.builder.new_local(name);
+                let arg = VirtualRegister::new_argument(i);
+                self.builder.code.push(Ins::Move(r, arg));
+                Ok(())
+            }
+            _ => todo!("NYI"),
+        }
+    }
     fn ident(&mut self, name: &str) {
         if let Some(loc) = self.builder.get_local(name) {
             self.builder.register_push(loc);
@@ -289,10 +419,14 @@ impl Context {
                 self.builder.code.push(Ins::LoadU(dst, x as u32));
                 self.builder.register_push(dst);
             } else {
-                let key = self.builder.new_string(name);
-                let dst = self.builder.register_new();
-                self.builder.code.push(Ins::LoadGlobal(dst, key));
-                self.builder.register_push(dst);
+                if let Some(r) = self.global(name) {
+                    self.builder.register_push(r);
+                } else {
+                    let key = self.builder.new_string(name);
+                    let dst = self.builder.register_new();
+                    self.builder.code.push(Ins::LoadGlobal(dst, key));
+                    self.builder.register_push(dst);
+                }
             }
         }
     }
@@ -372,8 +506,11 @@ impl Context {
     }
     fn compile(&mut self, e: &Expr) -> Result<(), MsgWithPos> {
         match &e.expr {
+            ExprKind::Function(vname, args, body) => {
+                self.compile_function(e.pos, args, body, vname.clone())
+            }
             ExprKind::Call(callee, arguments) => {
-                let (callee, this) = match &callee.expr {
+                let (mut callee, this) = match &callee.expr {
                     ExprKind::Access(obj, f) => {
                         self.compile(obj)?;
                         let this = self.builder.register_pop(false);
@@ -391,22 +528,29 @@ impl Context {
                         )
                     }
                 };
+                
                 let dst = self.builder.register_new();
-                if self.builder.is_temp(callee) && callee.is_local() {
-                    self.builder.protect(callee);
-                }
+                
                 if self.builder.is_temp(this) && this.is_local() {
                     self.builder.protect(this);
                 }
-                let mut dest = vec![];
-                for _ in 0..arguments.len() {
-                    dest.push(self.builder.register_new());
-                }
+                let dest = self.builder.allocate_regs(arguments.len() + 1);
+            
+                //if callee != dest[0] {
+                    println!("Move {}<-{}",dest[0],callee);
+                    self.builder.code.push(Ins::Move(dest[0],callee));
+                    callee = dest[0];
+                //} 
+                dest.iter().for_each(|x| {
+
+                    self.builder.protect(*x);
+                });
                 for (i, argument) in arguments.iter().enumerate() {
                     self.compile(argument)?;
                     let reg = self.builder.register_pop(false);
-                    if reg != dest[i] {
-                        self.builder.code.push(Ins::Move(dest[i], reg));
+                    if reg != dest[i+1] {
+                       
+                        self.builder.code.push(Ins::Move(dest[i+1], reg));
                     }
                 }
                 self.builder
@@ -476,8 +620,9 @@ impl Context {
             }
             ExprKind::If(cond, then, or_else) => {
                 self.compile(cond)?;
-                let c = self.builder.register_pop(false);
+                let c = self.builder.register_pop(true);
                 let phi = self.builder.register_new();
+                self.builder.unprotect(c);
                 let co = self.builder.new_const(Value::undefined());
                 self.builder
                     .code
@@ -534,7 +679,7 @@ impl Context {
                         self.compile(e)?;
                         last = self.builder.register_pop(false);
                     }
-                    assert!(!last.is_argument());
+
                     self.builder.register_push(last);
                 }
                 Ok(())
@@ -567,6 +712,7 @@ impl Context {
                     .register_push(VirtualRegister::new_constant_index(c as _));
                 Ok(())
             }
+
             ExprKind::Assign(e, val) => {
                 let acc = self.compile_access(&e.expr)?;
                 self.compile(val)?;
@@ -628,5 +774,7 @@ pub fn compile(ast: &[Box<Expr>]) -> Result<Ref<CodeBlock>, MsgWithPos> {
     ctx.builder.code.push(Ins::Safepoint);
     let r = ctx.builder.register_pop(false);
     ctx.builder.code.push(Ins::Return(r));
-    Ok(ctx.builder.code_block())
+    let mut cb = ctx.builder.code_block();
+    
+    Ok(cb)
 }

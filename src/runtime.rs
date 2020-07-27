@@ -1,5 +1,4 @@
 use crate::*;
-use bigint::*;
 use bytecode::virtual_register::VirtualRegister;
 use function::*;
 use interpreter::callframe::*;

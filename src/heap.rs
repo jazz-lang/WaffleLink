@@ -154,8 +154,10 @@ impl Heap {
         // precise roots
         {
             let vm = crate::get_vm();
-            for frame in vm.call_stack.iter() {
-                for reg in frame.regs.iter() {
+            let mut frame = vm.top_call_frame;
+            while !frame.is_null() {
+                let f = unsafe {&mut *frame};
+                for reg in f.regs.iter() {
                     if reg.is_cell() {
                         if !reg.as_cell().header().is_marked_non_atomic() {
                             mark_stack.push(Address::from_ptr(reg.as_cell().ptr.as_ptr()));
@@ -163,19 +165,20 @@ impl Heap {
                     }
                 }
 
-                for i in 0..frame.argc {
-                    let value = frame.args.offset(i as _);
+                for i in 0..f.argc {
+                    let value = f.args.offset(i as _);
                     if value.is_cell() {
                         if !value.as_cell().header().is_marked_non_atomic() {
                             mark_stack.push(Address::from_ptr(value.as_cell().ptr.as_ptr()));
                         }
                     }
                 }
-                if frame.this.is_cell() {
-                    if !frame.this.as_cell().header().is_marked_non_atomic() {
-                        mark_stack.push(Address::from_ptr(frame.this.as_cell().ptr.as_ptr()));
+                if f.this.is_cell() {
+                    if !f.this.as_cell().header().is_marked_non_atomic() {
+                        mark_stack.push(Address::from_ptr(f.this.as_cell().ptr.as_ptr()));
                     }
                 }
+                frame = f.caller;
             }
         }
         mark_stack

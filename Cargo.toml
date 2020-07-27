@@ -12,6 +12,7 @@ capstone = "0.7"
 parking_lot = "0.11"
 simple_logger = "*"
 num-bigint = "0.3"
+derive_more = "0.99"
 hmap = "0.1"
 bitset-core = "0.1"
 bumpalo = {version = "3.4",features = ["collections"]}

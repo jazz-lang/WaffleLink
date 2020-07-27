@@ -3,7 +3,6 @@ use crate::value::*;
 use crate::vtable::VTable;
 use std;
 use std::ops::{Deref, DerefMut};
-use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[repr(transparent)]

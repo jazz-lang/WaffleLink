@@ -226,23 +226,29 @@ pub extern "C" fn operation_call_func(
     argc: u32,
     this: Value,
 ) -> WaffleResult {
+    //println!("Callee {}",callee_r);
     let args = if argc != 0 {
         &cf.regs[callee_r.to_local() as usize + 1..callee_r.to_local() as usize + argc as usize + 1]
     } else {
         &cf.regs[callee_r.to_local() as usize..callee_r.to_local() as usize]
     };
-
+    /*println!("[");
+    for arg in args.iter() {
+        runtime::print_val(*arg);
+    }
+    println!("]");*/
+    let vm = get_vm();
     let passed = argc;
     if let Some((addr, _argc, vars, cb)) = get_executable_address_for(callee) {
-        let mut call_frame = CallFrame::new(args, vars);
+        let mut call_frame = vm.push_frame(args, vars);
         call_frame.this = this;
         call_frame.callee = callee;
         call_frame.passed_argc = passed as u32;
         call_frame.code_block = cb;
         let vm = crate::get_vm();
-        vm.call_stack.push(call_frame);
-        let result = addr(&mut vm.call_stack.last_mut().unwrap());
-        vm.call_stack.pop().unwrap();
+        
+        let result = addr(call_frame);
+        vm.pop_frame();
         return result;
     }
 
@@ -328,7 +334,7 @@ pub fn get_executable_address_for(
             let addr = lock.executable_addr;
             drop(lock);
             return unsafe { Some((std::mem::transmute(addr), args, vars, Some(code_block))) };
-        } else if code_block.exc_counter >= crate::get_vm().jit_threshold {
+        } else if code_block.exc_counter >= crate::get_vm().jit_threshold && get_vm().template_jit {
             drop(lock);
             log!(
                 "Trying to compile function code block at {:p}",

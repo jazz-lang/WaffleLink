@@ -62,6 +62,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
         *pc = (*pc as i32 + off) as u32;
     };
     loop {
+        let mut b = String::new();
+        cb.dump_ins(&mut b, pc as _).unwrap();
+        //println!("[{:4}] {}",pc,b);
         let ins = unsafe { *code.get_unchecked(pc as usize) };
         pc += 1;
         match ins {
@@ -357,7 +360,6 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_less,<);
-                //println!("Less? {}", res);
                 callframe.put_register(dst, Value::new_bool(res));
                 callframe.code_block.unwrap().metadata[pc as usize - 1]
                     .arith_profile
@@ -367,6 +369,24 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_lesseq,<=);
+                callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
+            }Ins::Greater(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_greater,>);
+                //println!("Less? {}", res);
+                callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
+            }
+            Ins::GreaterOrEqual(dst, x, y) => {
+                let x = callframe.get_register(x);
+                let y = callframe.get_register(y);
+                let res = cmp!(x,y,operation_compare_greatereq,>=);
                 callframe.put_register(dst, Value::new_bool(res));
                 callframe.code_block.unwrap().metadata[pc as usize - 1]
                     .arith_profile
@@ -539,9 +559,12 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
             Ins::Call(dest, this, callee_r, argc) => {
                 let this = callframe.get_register(this);
                 let callee = callframe.get_register(callee_r);
+                
+                
                 let result = crate::jit::operations::operation_call_func(
                     callframe, callee, callee_r, argc, this,
                 );
+                
                 if result.is_okay() {
                     callframe.put_register(dest, result.value());
                 } else {
@@ -600,7 +623,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 }
             }
             Ins::Safepoint => {}
-            _ => todo!(),
+            x => todo!("NYI {}",x),
         }
     }
 }

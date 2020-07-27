@@ -84,7 +84,7 @@ impl Globals {
 }
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
-    pub call_stack: Vec<interpreter::callframe::CallFrame>,
+   
     pub exception: value::Value,
     pub empty_string: value::Value,
     pub constructor: value::Value,
@@ -129,7 +129,7 @@ impl VM {
         let mut this = Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
-            call_stack: vec![],
+            
             globals: Default::default(),
             jit_threshold: 25000,
             template_jit: true,
@@ -172,7 +172,24 @@ impl VM {
     pub fn exception_addr(&self) -> *const value::Value {
         &self.exception
     }
+    pub fn push_frame(&mut self,args: &[value::Value],regc: u32) -> &mut interpreter::callframe::CallFrame {
+        let mut cf = Box::new(interpreter::callframe::CallFrame::new(args,regc));
+        unsafe {
+            let top = &mut *self.top_call_frame;
+            cf.caller = top as *mut _;
+            self.top_call_frame = Box::into_raw(cf);
+            &mut *self.top_call_frame
+        }
+    }
 
+    pub fn pop_frame(&mut self) -> Box<interpreter::callframe::CallFrame> {
+        unsafe {
+            let top = &mut *self.top_call_frame;
+            let caller = top.caller;
+            self.top_call_frame = caller;
+            Box::from_raw(top)
+        }
+    }
     pub fn throw_exception_str(&mut self, s: impl AsRef<str>) -> WaffleResult {
         let val = object::WaffleString::new(&mut self.heap, s);
         self.exception = value::Value::from(val.cast());

@@ -67,7 +67,7 @@ impl Function {
         };
         let callee = value::Value::from(callee.cast());
         let vm = get_vm();
-        let mut cf = CallFrame::new(args, regc);
+        let cf = vm.push_frame(args, regc);
         cf.this = this;
         cf.callee = callee;
         cf.passed_argc = args.len() as _;
@@ -76,17 +76,17 @@ impl Function {
             let f: extern "C" fn(
                 &mut crate::interpreter::callframe::CallFrame,
             ) -> crate::WaffleResult = unsafe { std::mem::transmute(self.native_code) };
-            vm.call_stack.push(cf);
-            let res = f(vm.call_stack.last_mut().unwrap());
-            vm.call_stack.pop();
+            
+            let res = f(cf);
+            vm.pop_frame();
             res
         } else {
-            if let Some((fun, _argc, vars, cb)) =
+            if let Some((fun, _argc, _vars, _cb)) =
                 jit::operations::get_executable_address_for(callee)
             {
-                vm.call_stack.push(cf);
-                let result = fun(&mut vm.call_stack.last_mut().unwrap());
-                vm.call_stack.pop().unwrap();
+                //vm.call_stack.push(cf);
+                let result = fun(cf);
+                vm.pop_frame();
                 return result;
             } else {
                 todo!()

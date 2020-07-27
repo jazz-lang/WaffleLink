@@ -586,8 +586,8 @@ impl<'a> JIT<'a> {
 
     pub fn emit_compare_slow(
         &mut self,
-        op1: virtual_register::VirtualRegister,
-        op2: virtual_register::VirtualRegister,
+        _op1: virtual_register::VirtualRegister,
+        _op2: virtual_register::VirtualRegister,
         dest: virtual_register::VirtualRegister,
         double_cond: FpCondition,
         operation: *const u8,
