@@ -625,6 +625,38 @@ impl<'a> JIT<'a> {
                     let j = self.masm.jump();
                     self.add_jump(j, *off);
                 }
+                Ins::StoreGlobal(src, ix) => {
+                    extern "C" fn store_global(
+                        cf: &mut CallFrame,
+                        src: virtual_register::VirtualRegister,
+                        key: u32,
+                    ) -> WaffleResult {
+                        let c = cf.code_block.unwrap().get_constant(
+                            virtual_register::VirtualRegister::new_constant_index(key as _),
+                        );
+                        let val = cf.get_register(src);
+                        let s = c.as_cell().cast::<WaffleString>();
+                        let vm = get_vm();
+                        if vm.globals.has(s.str()) {
+                            vm.globals.insert(s.str(), val);
+                            WaffleResult::okay(Value::undefined())
+                        } else {
+                            WaffleResult::error(Value::from(
+                                WaffleString::new(
+                                    &mut vm.heap,
+                                    &format!("global '{}' not found", runtime::val_str(c)),
+                                )
+                                .cast(),
+                            ))
+                        }
+                    }
+                    self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
+                    self.masm
+                        .pass_int32_as_arg(unsafe { std::mem::transmute(*src) }, 1);
+                    self.masm.pass_int32_as_arg(*ix as _, 2);
+                    self.masm.prepare_call_with_arg_count(3);
+                    self.masm.call_ptr_argc(store_global as _, 3);
+                }
                 Ins::LoadGlobal(dest, ix) => {
                     extern "C" fn load_global(cf: &mut CallFrame, key: u32) -> WaffleResult {
                         let c = cf.code_block.unwrap().get_constant(
