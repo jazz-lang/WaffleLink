@@ -18,13 +18,15 @@ fn main() {
     vm.disasm = true;
     wafflelink::LOG.store(true, std::sync::atomic::Ordering::Relaxed);
     set_vm(&vm);
+    runtime::initialize();
     let reader = Reader::from_string(
         "
+        
         var i = 0
         while i < 100000 {
             i = i + 1
         }
-        return i
+        return print(\"Result is: \",i)
         ",
     );
     let mut ast = vec![];
@@ -33,7 +35,7 @@ fn main() {
         eprintln!("{}", e);
         return;
     }
-    let code = match compile(&ast, "<main>") {
+    let code = match compile(&ast) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", e);
@@ -44,15 +46,17 @@ fn main() {
     for (ix, c) in code.instructions.iter().enumerate() {
         println!("[{:04}] {:?}", ix, c);
     }
-    let fun = function::Function::new(&mut get_vm().heap, code);
+    let fun = function::Function::new(&mut get_vm().heap, code, "<main>");
     let start = std::time::Instant::now();
     let res = fun.execute(Value::undefined(), &[]);
     let e = start.elapsed();
     println!("executed code in {}ms or {}ns", e.as_millis(), e.as_nanos());
     if res.is_error() {
-        panic!();
+        println!("Error");
+        runtime::print_val(res.value());
+    } else {
+        println!("{}", res.value().as_int32());
     }
-    println!("{}", res.value().as_int32());
 }
 
 /*

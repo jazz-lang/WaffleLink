@@ -38,6 +38,7 @@ pub mod jit;
 pub mod mir;
 pub mod object;
 pub mod pure_nan;
+pub mod runtime;
 pub mod table;
 pub mod utils;
 pub mod value;
@@ -66,6 +67,21 @@ impl<'a, T> std::iter::Iterator for MutatingVecIter<'a, T> {
     }
 }
 
+#[derive(Default)]
+pub struct Globals {
+    map: std::collections::HashMap<String, value::Value>,
+}
+impl Globals {
+    pub fn lookup(&self, name: &str) -> Option<value::Value> {
+        self.map.get(name).copied()
+    }
+    pub fn has(&self, name: &str) -> bool {
+        self.map.contains_key(name)
+    }
+    pub fn insert(&mut self, name: &str, val: value::Value) {
+        self.map.insert(name.to_owned(), val);
+    }
+}
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
     pub call_stack: Vec<interpreter::callframe::CallFrame>,
@@ -83,7 +99,7 @@ pub struct VM {
     pub log: bool,
     pub heap: heap::Heap,
     pub stubs: JITStubs,
-    pub globals: std::collections::HashMap<object::Ref<object::WaffleString>, value::Value>,
+    pub globals: Globals,
 }
 
 pub struct JITStubs {
@@ -114,7 +130,8 @@ impl VM {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
             call_stack: vec![],
-            jit_threshold: 500,
+            globals: Default::default(),
+            jit_threshold: 25000,
             template_jit: true,
             disasm: false,
             stubs: JITStubs::new(),
@@ -130,7 +147,6 @@ impl VM {
             constructor: value::Value::undefined(),
             prototype: value::Value::undefined(),
             not_a_func_exc: value::Value::undefined(),
-            globals: Default::default(),
         };
         this.length =
             value::Value::from(object::WaffleString::new(&mut this.heap, "length").cast());

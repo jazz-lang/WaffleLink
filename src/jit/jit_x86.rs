@@ -134,11 +134,11 @@ impl<'a> JIT<'a> {
         {
             use RegisterID::*;
             self.masm.push(EBP);
-            self.masm.move_rr(SP,BP);
+            self.masm.move_rr(SP, BP);
             CALLEE_SAVES.iter().for_each(|r| {
                 self.masm.push(*r);
             });
-            self.masm.sub64_imm32(16 * 4, SP);
+            self.masm.sub64_imm32(16 * 3, SP);
         }
         #[cfg(windows)]
         {
@@ -153,7 +153,7 @@ impl<'a> JIT<'a> {
         #[cfg(all(unix, target_arch = "x86_64"))]
         {
             use RegisterID::*;
-            self.masm.add64_imm32(16*4, SP, SP);
+            self.masm.add64_imm32(16 * 3, SP, SP);
             CALLEE_SAVES.iter().rev().for_each(|r| {
                 self.masm.pop(*r);
             });

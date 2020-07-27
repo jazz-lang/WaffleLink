@@ -70,6 +70,10 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                     cb.exc_counter = cb.exc_counter.wrapping_add(10);
                     if cb.exc_counter >= crate::get_vm().jit_threshold {
                         use crate::jit::*;
+                        log!(
+                            "Triggering OSR after ~{} loop iterations",
+                            cb.exc_counter / 10
+                        );
                         let mut jit = JIT::new(&cb);
                         jit.compile_without_linking();
                         jit.link();
@@ -93,7 +97,48 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let val = callframe.get_register(value);
                 return WaffleResult::okay(val);
             }
-
+            Ins::LoadGlobal(dest, key) => {
+                debug_assert!(cb.constants[key as usize].as_cell().is_string());
+                let constant = cb
+                    .get_constant(virtual_register::VirtualRegister::new_constant_index(
+                        key as _,
+                    ))
+                    .as_cell()
+                    .cast::<WaffleString>();
+                let global = vm.globals.lookup(constant.str());
+                if let Some(global) = global {
+                    callframe.put_register(dest, global);
+                } else {
+                    catch!(Value::from(
+                        WaffleString::new(
+                            &mut vm.heap,
+                            &format!("global '{}' not found", constant.str())
+                        )
+                        .cast()
+                    ));
+                }
+            }
+            Ins::StoreGlobal(src, key) => {
+                debug_assert!(cb.constants[key as usize].as_cell().is_string());
+                let constant = cb
+                    .get_constant(virtual_register::VirtualRegister::new_constant_index(
+                        key as _,
+                    ))
+                    .as_cell()
+                    .cast::<WaffleString>();
+                let val = callframe.get_register(src);
+                if vm.globals.has(constant.str()) {
+                    vm.globals.insert(constant.str(), val);
+                } else {
+                    catch!(Value::from(
+                        WaffleString::new(
+                            &mut vm.heap,
+                            &format!("global '{}' not found", constant.str())
+                        )
+                        .cast()
+                    ));
+                }
+            }
             Ins::Add(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
                 let rhs = callframe.get_register(rhs);
@@ -108,12 +153,18 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let rhs = callframe.get_register(rhs);
                 let res = binop!(lhs,rhs,operation_value_sub,overflowing_sub,-);
                 callframe.put_register(dest, res);
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::Mul(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
                 let rhs = callframe.get_register(rhs);
                 let res = binop!(lhs,rhs,operation_value_mul,overflowing_mul,*);
                 callframe.put_register(dest, res);
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::Div(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -149,6 +200,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::RShift(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -168,6 +222,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::URShift(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -191,6 +248,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::BitAnd(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -214,6 +274,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::BitOr(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -237,6 +300,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::BitXor(dest, lhs, rhs) => {
                 let lhs = callframe.get_register(lhs);
@@ -260,6 +326,9 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 } else {
                     callframe.put_register(dest, Value::undefined());
                 }
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(lhs, rhs);
             }
             Ins::ToBoolean(dest, source) => {
                 let src = callframe.get_register(source);
@@ -271,12 +340,18 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_eq,==);
                 callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
             }
             Ins::NotEqual(dst, x, y) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_neq,!=);
                 callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
             }
             Ins::Less(dst, x, y) => {
                 let x = callframe.get_register(x);
@@ -284,12 +359,18 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let res = cmp!(x,y,operation_compare_less,<);
                 //println!("Less? {}", res);
                 callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
             }
             Ins::LessOrEqual(dst, x, y) => {
                 let x = callframe.get_register(x);
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_lesseq,<=);
                 callframe.put_register(dst, Value::new_bool(res));
+                callframe.code_block.unwrap().metadata[pc as usize - 1]
+                    .arith_profile
+                    .observe_lhs_and_rhs(x, y);
             }
             Ins::Jmp(off) => {
                 pc -= 1;
@@ -315,6 +396,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_less,<);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -323,6 +405,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_lesseq,<=);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -331,6 +414,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_greater,>);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -339,6 +423,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_greatereq,>=);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -347,6 +432,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_greater,>);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -355,6 +441,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_greatereq,>=);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -363,6 +450,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_less,<);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -371,6 +459,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_lesseq,<=);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -379,6 +468,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_eq,==);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }
@@ -387,6 +477,7 @@ pub extern "C" fn interp_loop(callframe: &mut callframe::CallFrame) -> WaffleRes
                 let y = callframe.get_register(y);
                 let res = cmp!(x,y,operation_compare_neq,!=);
                 if res {
+                    pc -= 1;
                     update_pc(&mut pc, target);
                 }
             }

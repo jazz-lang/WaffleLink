@@ -11,12 +11,14 @@ pub struct Function {
     pub native: bool,
     pub native_code: usize,
     pub env: Option<Ref<Array>>,
+    pub name: Ref<WaffleString>,
 }
 
 impl Function {
     pub fn new_native(
         heap: &mut Heap,
         fptr: extern "C" fn(&mut crate::interpreter::callframe::CallFrame) -> crate::WaffleResult,
+        name: &str,
     ) -> Ref<Self> {
         let mem = heap.allocate(std::mem::size_of::<Self>());
         unsafe {
@@ -26,6 +28,7 @@ impl Function {
                 code_block: None,
                 env: None,
                 native: true,
+                name: WaffleString::new(heap, name),
                 native_code: fptr as _,
             });
         }
@@ -34,7 +37,7 @@ impl Function {
         }
     }
 
-    pub fn new(heap: &mut Heap, cb: Ref<CodeBlock>) -> Ref<Self> {
+    pub fn new(heap: &mut Heap, cb: Ref<CodeBlock>, name: &str) -> Ref<Self> {
         let mem = heap.allocate(std::mem::size_of::<Self>());
         unsafe {
             mem.to_mut_ptr::<Self>().write(Self {
@@ -44,6 +47,7 @@ impl Function {
                 env: None,
                 native: false,
                 native_code: 0,
+                name: WaffleString::new(heap, name),
             });
         }
         Ref {

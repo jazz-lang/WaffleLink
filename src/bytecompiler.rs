@@ -177,7 +177,17 @@ impl ByteCompiler {
         let vm = crate::get_vm();
         let mut constants = self.constants.clone();
         for (s, ix) in self.str_constants.iter() {
-            constants[*ix] = Value::from(WaffleString::new(&mut vm.heap, s).cast());
+            if s == "length" {
+                constants[*ix] = vm.length;
+            } else if s == "constructor" {
+                constants[*ix] = vm.constructor;
+            } else if s == "prototype" {
+                constants[*ix] = vm.prototype;
+            } else if s.is_empty() {
+                constants[*ix] = vm.empty_string;
+            } else {
+                constants[*ix] = Value::from(WaffleString::new(&mut vm.heap, s).cast());
+            }
         }
         // simple peephole opt
         self.code.retain(|ins| {
@@ -279,7 +289,10 @@ impl Context {
                 self.builder.code.push(Ins::LoadU(dst, x as u32));
                 self.builder.register_push(dst);
             } else {
-                todo!()
+                let key = self.builder.new_string(name);
+                let dst = self.builder.register_new();
+                self.builder.code.push(Ins::LoadGlobal(dst, key));
+                self.builder.register_push(dst);
             }
         }
     }
@@ -359,6 +372,58 @@ impl Context {
     }
     fn compile(&mut self, e: &Expr) -> Result<(), MsgWithPos> {
         match &e.expr {
+            ExprKind::Call(callee, arguments) => {
+                let (callee, this) = match &callee.expr {
+                    ExprKind::Access(obj, f) => {
+                        self.compile(obj)?;
+                        let this = self.builder.register_pop(false);
+                        let key = self.builder.new_string(f);
+                        let callee = self.builder.register_new();
+                        self.builder.code.push(Ins::LoadId(callee, this, key));
+                        (callee, this)
+                    }
+                    _ => {
+                        let this = self.builder.new_const(Value::undefined());
+                        self.compile(callee)?;
+                        (
+                            self.builder.register_pop(false),
+                            VirtualRegister::new_constant_index(this as _),
+                        )
+                    }
+                };
+                let dst = self.builder.register_new();
+                if self.builder.is_temp(callee) && callee.is_local() {
+                    self.builder.protect(callee);
+                }
+                if self.builder.is_temp(this) && this.is_local() {
+                    self.builder.protect(this);
+                }
+                let mut dest = vec![];
+                for _ in 0..arguments.len() {
+                    dest.push(self.builder.register_new());
+                }
+                for (i, argument) in arguments.iter().enumerate() {
+                    self.compile(argument)?;
+                    let reg = self.builder.register_pop(false);
+                    if reg != dest[i] {
+                        self.builder.code.push(Ins::Move(dest[i], reg));
+                    }
+                }
+                self.builder
+                    .code
+                    .push(Ins::Call(dst, this, callee, arguments.len() as _));
+                for r in dest {
+                    self.builder.unprotect(r);
+                }
+                if self.builder.is_temp(callee) && callee.is_local() {
+                    self.builder.unprotect(callee);
+                }
+                if self.builder.is_temp(this) && this.is_local() {
+                    self.builder.unprotect(this);
+                }
+                self.builder.register_push(dst);
+                Ok(())
+            }
             ExprKind::Var(_, name, init) => {
                 let dst = self.builder.new_local(name);
                 if let Some(i) = init {
@@ -512,6 +577,12 @@ impl Context {
                 Ok(())
             }
             ExprKind::Ident(n) => Ok(self.ident(n)),
+            ExprKind::ConstStr(s) => {
+                let k = self.builder.new_string(s);
+                self.builder
+                    .register_push(VirtualRegister::new_constant_index(k as _));
+                Ok(())
+            }
             _ => todo!("{:?}", e),
         }
     }
@@ -542,7 +613,7 @@ impl Context {
     }
 }
 use frontend::token::*;
-pub fn compile(ast: &[Box<Expr>], name: &str) -> Result<Ref<CodeBlock>, MsgWithPos> {
+pub fn compile(ast: &[Box<Expr>]) -> Result<Ref<CodeBlock>, MsgWithPos> {
     //let vm = crate::get_vm();
     let ast = Box::new(Expr {
         pos: Position::new(0, 0),

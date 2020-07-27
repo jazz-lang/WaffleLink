@@ -270,9 +270,10 @@ impl<'a> JIT<'a> {
                     self.add_slow_case(br);
                     let br = self.branch_if_not_int32(AGPR1, true);
                     self.add_slow_case(br);
-                    self.masm.compare32(RelationalCondition::LessThan, AGPR0, AGPR1, T0);
-                    self.box_boolean(T0,T0);
-                    self.emit_put_virtual_register(*dst, T0,T1);
+                    self.masm
+                        .compare32(RelationalCondition::LessThan, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
                 }
                 Ins::LessOrEqual(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -280,9 +281,10 @@ impl<'a> JIT<'a> {
                     self.add_slow_case(br);
                     let br = self.branch_if_not_int32(AGPR1, true);
                     self.add_slow_case(br);
-                    self.masm.compare32(RelationalCondition::LessThanOrEqual, AGPR0, AGPR1, T0);
-                    self.box_boolean(T0,T0);
-                    self.emit_put_virtual_register(*dst, T0,T1);
+                    self.masm
+                        .compare32(RelationalCondition::LessThanOrEqual, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
                 }
                 Ins::Greater(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -290,9 +292,10 @@ impl<'a> JIT<'a> {
                     self.add_slow_case(br);
                     let br = self.branch_if_not_int32(AGPR1, true);
                     self.add_slow_case(br);
-                    self.masm.compare32(RelationalCondition::GreaterThan, AGPR0, AGPR1, T0);
-                    self.box_boolean(T0,T0);
-                    self.emit_put_virtual_register(*dst, T0,T1);
+                    self.masm
+                        .compare32(RelationalCondition::GreaterThan, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
                 }
                 Ins::GreaterOrEqual(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -300,9 +303,10 @@ impl<'a> JIT<'a> {
                     self.add_slow_case(br);
                     let br = self.branch_if_not_int32(AGPR1, true);
                     self.add_slow_case(br);
-                    self.masm.compare32(RelationalCondition::GreaterThanOrEqual, AGPR0, AGPR1, T0);
-                    self.box_boolean(T0,T0);
-                    self.emit_put_virtual_register(*dst, T0,T1);
+                    self.masm
+                        .compare32(RelationalCondition::GreaterThanOrEqual, AGPR0, AGPR1, T0);
+                    self.box_boolean(T0, T0);
+                    self.emit_put_virtual_register(*dst, T0, T1);
                 }
                 Ins::Equal(dst, lhs, rhs) => {
                     self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -377,7 +381,6 @@ impl<'a> JIT<'a> {
                 Ins::Div { .. } => self.emit_op_div(ins),
                 Ins::Call(dest, this, callee, argc) => {
                     // TODO: Use code patching and fast path/slow path codegen for calls
-                    self.masm.prepare_call_with_arg_count(5);
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
                     self.emit_get_virtual_register(*callee, AGPR1);
                     self.masm
@@ -385,6 +388,7 @@ impl<'a> JIT<'a> {
                     self.masm.pass_int32_as_arg(*argc as _, 3);
                     self.emit_get_virtual_register(*this, T0);
                     self.masm.pass_reg_as_arg(T0, 4);
+                    self.masm.prepare_call_with_arg_count(5);
                     self.masm
                         .call_ptr_argc(operations::operation_call_func as *const _, 5);
                     self.check_exception(false);
@@ -620,6 +624,31 @@ impl<'a> JIT<'a> {
                 Ins::Jmp(off) => {
                     let j = self.masm.jump();
                     self.add_jump(j, *off);
+                }
+                Ins::LoadGlobal(dest, ix) => {
+                    extern "C" fn load_global(cf: &mut CallFrame, key: u32) -> WaffleResult {
+                        let c = cf.code_block.unwrap().get_constant(
+                            virtual_register::VirtualRegister::new_constant_index(key as _),
+                        );
+                        let val = get_vm().globals.lookup(&runtime::val_str(c));
+                        if let Some(val) = val {
+                            WaffleResult::okay(val)
+                        } else {
+                            WaffleResult::error(Value::from(
+                                WaffleString::new(
+                                    &mut get_vm().heap,
+                                    &format!("global '{}' not found", runtime::val_str(c)),
+                                )
+                                .cast(),
+                            ))
+                        }
+                    }
+                    self.masm.pass_int32_as_arg(*ix as i32, 1);
+                    self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
+                    self.masm.prepare_call_with_arg_count(2);
+                    self.masm.call_ptr_argc(load_global as *const _, 2);
+                    self.check_exception(false);
+                    self.emit_put_virtual_register(*dest, RET1, RET0);
                 }
                 _ => todo!("{:?}", ins),
             }

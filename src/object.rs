@@ -281,7 +281,9 @@ impl Obj {
     pub fn is_array_ref(&self) -> bool {
         self.vtable.is_array_ref()
     }
-
+    pub fn is_robj(&self) -> bool {
+        self.vtable as *const _ == &OBJECT_VTBL as *const _
+    }
     pub fn is_string(&self) -> bool {
         self.vtable as *const _ == &crate::builtins::STRING_VTBL as *const _
     }

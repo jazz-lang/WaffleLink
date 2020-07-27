@@ -18,8 +18,8 @@ pub struct Class {
     header: object::Header,
     vtable: &'static vtable::VTable,
     kind: ClassKind,
-    descriptors: Option<Box<IndexMap<Ref<WaffleString>, Descriptor>>>,
-    keys: Option<Vec<Ref<WaffleString>>>,
+    pub descriptors: Option<Box<IndexMap<Ref<WaffleString>, Descriptor>>>,
+    pub keys: Option<Vec<Ref<WaffleString>>>,
 }
 
 pub static CLASS_VTBL: vtable::VTable = vtable::VTable {

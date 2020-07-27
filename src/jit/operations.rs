@@ -245,7 +245,11 @@ pub extern "C" fn operation_call_func(
         vm.call_stack.pop().unwrap();
         return result;
     }
-    get_vm().throw_exception_str("callee is not a function")
+
+    get_vm().throw_exception_str(&format!(
+        "callee '{}' is not a function",
+        runtime::val_str(callee)
+    ))
 }
 
 pub extern "C" fn operation_new(
