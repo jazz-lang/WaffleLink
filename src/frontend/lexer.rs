@@ -52,7 +52,7 @@ impl Lexer {
             "return" => TokenKind::Return,
             "true" => TokenKind::True,
             "false" => TokenKind::False,
-            "nil" => TokenKind::Nil,
+            "null" => TokenKind::Nil,
             "type" => TokenKind::Type,
             "throw" => TokenKind::Throw,
             "do" => TokenKind::Do,

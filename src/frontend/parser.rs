@@ -522,7 +522,7 @@ impl<'a> Parser<'a> {
             TokenKind::BitOr | TokenKind::Or => self.parse_lambda(),
             TokenKind::True => self.parse_bool_literal(),
             TokenKind::False => self.parse_bool_literal(),
-            TokenKind::Nil => self.parse_nil(),
+            TokenKind::Nil => self.parse_null(),
             TokenKind::New => {
                 let pos = self.token.position;
                 self.advance_token()?;
@@ -568,7 +568,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn parse_nil(&mut self) -> EResult {
+    fn parse_null(&mut self) -> EResult {
         let tok = self.advance_token()?;
         let pos = tok.position;
         if let TokenKind::Nil = tok.kind {

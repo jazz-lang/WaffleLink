@@ -104,11 +104,11 @@ pub fn write_val(
                     }
                 }*/
                 let mut i = 0;
-                for (name,prop) in obj.map.iter() {
-                    write!(buffer, "{} => ",name.str())?;
-                    write_val(buffer,*prop,visited)?;
+                for (name, prop) in obj.map.iter() {
+                    write!(buffer, "{} => ", name.str())?;
+                    write_val(buffer, *prop, visited)?;
                     if i != obj.map.len() - 1 {
-                        write!(buffer,",")?;
+                        write!(buffer, ",")?;
                     }
                     i += 1;
                 }
@@ -121,6 +121,8 @@ pub fn write_val(
                     f.name.str(),
                     f.ptr
                 )?;
+            } else if c.vtable as *const vtable::VTable == &bytecode::CB_VTBL as *const _ {
+                write!(buffer, "CodeBlock at {:p}", c.ptr)?;
             } else {
                 write!(buffer, "[object at {:p}]", ix as *const u8)?;
             }

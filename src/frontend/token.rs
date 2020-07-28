@@ -153,7 +153,7 @@ impl TokenKind {
             TokenKind::Return => "return",
             TokenKind::True => "true",
             TokenKind::False => "false",
-            TokenKind::Nil => "nil",
+            TokenKind::Nil => "null",
             TokenKind::Throw => "throw",
             TokenKind::Match => "match",
             TokenKind::Do => "do",

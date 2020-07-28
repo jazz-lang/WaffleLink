@@ -1,9 +1,11 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 use std::sync::atomic::AtomicU8;
 #[macro_export]
 macro_rules! log {
     ($($arg: tt)*) => {
-        if crate::LOG.load(std::sync::atomic::Ordering::Relaxed) {
+        #[cfg(debug_assertions)]
+        if $crate::LOG.load(std::sync::atomic::Ordering::Relaxed) {
             let lock = std::io::stdout();
             let lock = lock.lock();
             print!("LOG: ");
@@ -12,6 +14,21 @@ macro_rules! log {
         }
     };
 }
+#[macro_export]
+macro_rules! clog {
+    ($cond: expr; $($arg:tt)*) => {
+        #[cfg(debug_assertions)]{
+        if $cond && $crate::LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            let lock = std::io::stdout();
+            let lock = lock.lock();
+            print!("LOG: ");
+            println!($($arg)*);
+            drop(lock);
+        }
+    }
+    };
+}
+
 macro_rules! offset_of {
     ($ty: ty, $field: ident) => {
         unsafe { &(*(0 as *const $ty)).$field as *const _ as usize }
@@ -84,7 +101,7 @@ impl Globals {
 }
 pub struct VM {
     pub top_call_frame: *mut interpreter::callframe::CallFrame,
-   
+
     pub exception: value::Value,
     pub empty_string: value::Value,
     pub constructor: value::Value,
@@ -92,6 +109,7 @@ pub struct VM {
     pub not_a_func_exc: value::Value,
     pub prototype: value::Value,
     pub stop_world: bool,
+    pub dump_bc: bool,
     pub disasm: bool,
     pub opt_jit: bool,
     pub template_jit: bool,
@@ -100,6 +118,7 @@ pub struct VM {
     pub heap: heap::Heap,
     pub stubs: JITStubs,
     pub globals: Globals,
+    pub verbose_alloc: bool,
 }
 
 pub struct JITStubs {
@@ -125,16 +144,18 @@ impl JITStubs {
 }
 pub static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 impl VM {
-    pub fn new(stack_start: *const bool) -> Self {
+    pub fn new(_stack_start: *const bool) -> Self {
         let mut this = Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
-            
+
             globals: Default::default(),
             jit_threshold: 25000,
             template_jit: true,
+            verbose_alloc: false,
             disasm: false,
             stubs: JITStubs::new(),
+            dump_bc: false,
             stop_world: false,
             log: true,
             #[cfg(feature = "opt-jit")]
@@ -142,7 +163,7 @@ impl VM {
             #[cfg(not(feature = "opt-jit"))]
             opt_jit: false,
             empty_string: value::Value::undefined(),
-            heap: heap::Heap::new(stack_start),
+            heap: heap::Heap::new(&_stack_start as *const *const bool as *const bool),
             length: value::Value::undefined(),
             constructor: value::Value::undefined(),
             prototype: value::Value::undefined(),
@@ -172,8 +193,12 @@ impl VM {
     pub fn exception_addr(&self) -> *const value::Value {
         &self.exception
     }
-    pub fn push_frame(&mut self,args: &[value::Value],regc: u32) -> &mut interpreter::callframe::CallFrame {
-        let mut cf = Box::new(interpreter::callframe::CallFrame::new(args,regc));
+    pub fn push_frame(
+        &mut self,
+        args: &[value::Value],
+        regc: u32,
+    ) -> &mut interpreter::callframe::CallFrame {
+        let mut cf = Box::new(interpreter::callframe::CallFrame::new(args, regc));
         unsafe {
             let top = &mut *self.top_call_frame;
             cf.caller = top as *mut _;

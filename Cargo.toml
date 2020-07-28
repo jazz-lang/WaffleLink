@@ -17,7 +17,9 @@ hmap = "0.1"
 bitset-core = "0.1"
 bumpalo = {version = "3.4",features = ["collections"]}
 indexmap = "1.5"
+structopt = "0.3"
 log = "0.4"
+libc = "0.2"
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
 

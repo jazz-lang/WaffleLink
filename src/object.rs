@@ -108,7 +108,11 @@ fn obj_lookup(vm: &crate::VM, this: Ref<Obj>, key: Value) -> WaffleResult {
     let key = key_from_val(key);
     if key.is_none() {
         return WaffleResult::error(Value::from(
-            WaffleString::new(&mut get_vm().heap, "Property name is not a string").cast(),
+            WaffleString::new(
+                &mut get_vm().heap,
+                format!("Property name '{}' is not a string", runtime::val_str(keyv)),
+            )
+            .cast(),
         ));
     }
     WaffleResult::okay(this.map.get(&key.unwrap()).copied().unwrap_or_else(|| {
@@ -140,6 +144,7 @@ fn key_from_val(key: Value) -> Option<Ref<WaffleString>> {
 
 fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleResult {
     let mut this = this.cast::<RegularObj>();
+    let keyv = key;
     let key = key_from_val(key);
     if let Some(key) = key {
         this.map.insert(key, value);
@@ -147,16 +152,26 @@ fn obj_set(_: &crate::VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleRes
         WaffleResult::okay(Value::new_bool(true))
     } else {
         WaffleResult::error(Value::from(
-            WaffleString::new(&mut get_vm().heap, "Property name is not a string").cast(),
+            WaffleString::new(
+                &mut get_vm().heap,
+                format!("Property name '{}' is not a string", runtime::val_str(keyv)),
+            )
+            .cast(),
         ))
     }
 }
 
-fn trace_obj(x: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
+fn trace_obj(x: Ref<Obj>, trace: &mut dyn FnMut(*const Ref<Obj>)) {
     let x = x.cast::<RegularObj>();
-   // trace(x.table.cast());
+    for (key, prop) in x.map.iter() {
+        trace(unsafe { std::mem::transmute(key) });
+        if prop.is_cell() {
+            trace(prop.as_cell_ref());
+        }
+    }
+    // trace(x.table.cast());
     if x.prototype.is_cell() {
-        trace(x.prototype.as_cell());
+        trace(x.prototype.as_cell_ref());
     }
 }
 #[repr(C)]
@@ -164,16 +179,12 @@ pub struct RegularObj {
     header: Header,
     pub vtable: &'static VTable,
     pub prototype: Value,
-    pub map: indexmap::IndexMap<Ref<WaffleString>,Value>,
+    pub map: indexmap::IndexMap<Ref<WaffleString>, Value>,
     //pub table: Ref<table::Table>,
 }
 
 impl RegularObj {
-    pub fn new(
-        heap: &mut crate::heap::Heap,
-        proto: Value,
-        class: Option<Ref<table::Class>>,
-    ) -> Ref<Self> {
+    pub fn new(heap: &mut crate::heap::Heap, proto: Value) -> Ref<Self> {
         let mem = heap.allocate(std::mem::size_of::<Self>());
         unsafe {
             mem.to_mut_ptr::<Self>().write(Self {
@@ -295,6 +306,7 @@ impl Obj {
     }
 
     pub fn size_for_vtblptr(&self, vtblptr: Address) -> usize {
+        println!("obj {:p}", self);
         let vtbl = unsafe { &*vtblptr.to_mut_ptr::<VTable>() };
         let instance_size = vtbl.instance_size;
 
@@ -430,12 +442,16 @@ pub struct WaffleString {
 
 impl WaffleString {
     pub fn new(heap: &mut crate::heap::Heap, s: impl AsRef<str>) -> Ref<Self> {
-        
         let mem = heap.allocate(
             Header::size() as usize
                 + std::mem::size_of::<usize>()
                 + std::mem::size_of::<usize>()
                 + std::mem::size_of::<String>(),
+        );
+        log!(
+            "Allocated string '{}' at {:p}",
+            s.as_ref(),
+            mem.to_ptr::<u8>()
         );
         unsafe {
             mem.to_mut_ptr::<Self>().write(Self {
@@ -500,5 +516,51 @@ impl Hash for WaffleString {
 impl<T: Hash> Hash for Ref<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (**self).hash(state);
+    }
+}
+
+pub struct Module {
+    pub header: Header,
+    pub vtable: &'static VTable,
+    pub name: Ref<WaffleString>,
+    pub scope: std::collections::HashMap<String, Value>,
+}
+
+pub static MODULE_VTBL: VTable = VTable {
+    element_size: 0,
+    instance_size: std::mem::size_of::<Module>(),
+    parent: None,
+    lookup_fn: None,
+    index_fn: None,
+    calc_size_fn: None,
+    apply_fn: None,
+    destroy_fn: None,
+    set_fn: None,
+    trace_fn: Some(trace_mod),
+    set_index_fn: None,
+};
+
+fn trace_mod(this: Ref<Obj>, trace: &mut dyn FnMut(*const Ref<Obj>)) {
+    let this = this.cast::<Module>();
+    trace(unsafe { std::mem::transmute(&this.name) });
+    for (_, v) in this.scope.iter() {
+        if v.is_cell() {
+            trace(v.as_cell_ref());
+        }
+    }
+}
+
+impl Module {
+    pub fn new(heap: &mut heap::Heap, name: &str) -> Ref<Self> {
+        let mem = heap.allocate(std::mem::size_of::<Self>());
+        unsafe {
+            mem.to_mut_ptr::<Self>().write(Self {
+                name: WaffleString::new(heap, name),
+                scope: Default::default(),
+                header: Header::new(),
+                vtable: &MODULE_VTBL,
+            });
+            std::mem::transmute(mem)
+        }
     }
 }

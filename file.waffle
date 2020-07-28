@@ -1,0 +1,34 @@
+function LinkedList() {
+    this.head = null
+}
+
+function ListNode(val) {
+    this.val = val
+    this.next = null
+}
+
+LinkedList.prototype.push = function lpush(val) {
+    let node = new ListNode(val)
+    node.next = this.head
+    this.head = node
+}
+
+LinkedList.prototype.pop = function lpop(val) {
+    let next = this.head.next 
+    let val = this.head.val 
+    this.head = next
+    return val
+}
+
+let ls = new LinkedList()
+var i = 0
+ls.push(42)
+ls.push(3)
+ls.push(4)
+while i  < 100 {
+    print(i)
+    ls.push(i)
+    i = i + 1
+}
+print(ls)
+print(ls.pop())

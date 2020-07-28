@@ -63,7 +63,7 @@ impl ByteCompiler {
         self.constants.len() as u32 - 1
     }
 
-    pub fn new_const_force(&mut self,val: Value) -> u32 {
+    pub fn new_const_force(&mut self, val: Value) -> u32 {
         self.constants.push(val);
         self.constants.len() as u32 - 1
     }
@@ -85,7 +85,6 @@ impl ByteCompiler {
         self.scope.parent = Some(scope);
     }
     pub fn new_string(&mut self, s: impl AsRef<str>) -> u32 {
-       
         if let Some(ix) = self.str_constants.get(s.as_ref()) {
             return *ix as u32;
         } else {
@@ -104,7 +103,7 @@ impl ByteCompiler {
         }
         self.scope = scope.parent.expect("No parent scope was found");
     }
-    pub fn allocate_regs(&mut self,count: usize) -> Vec<VirtualRegister> {
+    pub fn allocate_regs(&mut self, count: usize) -> Vec<VirtualRegister> {
         let mut start = None;
         let mut ix = 0;
         for i in 0..self.state.len() {
@@ -197,11 +196,15 @@ impl ByteCompiler {
     }
 
     pub fn protect(&mut self, r: VirtualRegister) {
-        self.state[r.to_local() as usize] = true;
+        if r.is_local() {
+            self.state[r.to_local() as usize] = true;
+        }
     }
 
     pub fn unprotect(&mut self, r: VirtualRegister) {
-        self.state[r.to_local() as usize] = false;
+        if r.is_local() {
+            self.state[r.to_local() as usize] = false;
+        }
     }
 
     pub fn goto(&mut self, p: usize) {
@@ -212,7 +215,6 @@ impl ByteCompiler {
         let vm = crate::get_vm();
         let mut constants = self.constants.clone();
         for (s, ix) in self.str_constants.iter() {
-            
             if s == "length" {
                 constants[*ix] = vm.length;
             } else if s == "constructor" {
@@ -220,9 +222,7 @@ impl ByteCompiler {
             } else if s == "prototype" {
                 constants[*ix] = vm.prototype;
             } else {
-                
                 constants[*ix] = Value::from(WaffleString::new(&mut vm.heap, s).cast());
-                
             }
         }
         /*for c in constants.iter_mut() {
@@ -272,18 +272,21 @@ use std::rc::Rc;
 pub struct Context {
     pub parent: Option<NonNull<Self>>,
     pub builder: ByteCompiler,
+    pub module: Ref<Module>,
     pub fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
     pub functions: Rc<RefCell<Vec<(Ref<CodeBlock>, VirtualRegister, String)>>>,
 }
 
 impl Context {
     pub fn new(
+        module: Ref<Module>,
         fmap: Rc<RefCell<HashMap<String, VirtualRegister>>>,
         funcs: Rc<RefCell<Vec<(Ref<CodeBlock>, VirtualRegister, String)>>>,
     ) -> Self {
         Self {
             parent: None,
             fmap,
+            module,
             functions: funcs,
             builder: ByteCompiler::new(),
         }
@@ -332,6 +335,7 @@ impl Context {
         vname: Option<String>,
     ) -> Result<(), MsgWithPos> {
         let mut ctx = Context::new(
+            self.module,
             Rc::new(RefCell::new(Default::default())),
             Rc::new(RefCell::new(Default::default())),
         );
@@ -342,10 +346,12 @@ impl Context {
             ctx.compile_arg(p, i, fpos)?;
             i += 1;
         }
-        let c =
-            VirtualRegister::new_constant_index(self.builder.new_const_force(Value::undefined()) as _);
-        let c2 =
-            VirtualRegister::new_constant_index(ctx.builder.new_const_force(Value::undefined()) as _);
+        let c = VirtualRegister::new_constant_index(
+            self.builder.new_const_force(Value::undefined()) as _,
+        );
+        let c2 = VirtualRegister::new_constant_index(
+            ctx.builder.new_const_force(Value::undefined()) as _,
+        );
         if vname.is_some() {
             self.fmap
                 .borrow_mut()
@@ -388,18 +394,33 @@ impl Context {
         };
         use crate::function::Function;
         let mut cb = ctx.builder.code_block();
-        
+
         let anon = "<anonymous>".to_string();
-        let f = Function::new(
+        let mut f = Function::new(
             &mut crate::get_vm().heap,
             cb,
             vname.as_ref().unwrap_or(&anon),
         );
         cb.constants[c2.to_constant_index() as usize] = Value::from(f.cast());
-        self.builder.constants[c.to_constant_index() as usize] = Value::from(f.cast());let mut b = String::new();
-        if crate::get_vm().disasm {
+        self.builder.constants[c.to_constant_index() as usize] = Value::from(f.cast());
+        if let Some(name) = vname.as_ref() {
+            self.module
+                .scope
+                .insert(name.to_owned(), Value::from(f.cast()));
+        }
+        f.module = Some(self.module);
+        let mut b = String::new();
+        if crate::get_vm().dump_bc {
+            println!(
+                "CodeBlock for function {}",
+                if vname.is_none() {
+                    &anon
+                } else {
+                    vname.as_ref().unwrap()
+                }
+            );
             cb.dump(&mut b).unwrap();
-            println!("{}", b);
+            eprintln!("{}", b);
         }
         self.builder.register_push(reg);
         Ok(())
@@ -480,6 +501,28 @@ impl Context {
                 self.builder.code.push(Ins::LoadThis(dst));
                 Ok(())
             }
+            Access::Array(object, ix) => {
+                self.compile(&ix)?;
+                let r = self.builder.register_pop(false);
+                if r.is_local() && self.builder.is_temp(r) {
+                    self.builder.protect(r);
+                }
+                self.compile(&object)?;
+                let obj = self.builder.register_pop(false);
+                let dst = self.builder.register_new();
+                if r.is_constant() {
+                    self.builder
+                        .code
+                        .push(Ins::LoadId(dst, obj, r.to_constant_index() as _));
+                } else {
+                    self.builder.code.push(Ins::Load(dst, obj, r));
+                }
+                if r.is_local() && self.builder.is_temp(r) {
+                    self.builder.unprotect(r);
+                }
+                self.builder.register_push(dst);
+                Ok(())
+            }
             _ => unimplemented!(),
         }
     }
@@ -523,47 +566,68 @@ impl Context {
             ExprKind::Function(vname, args, body) => {
                 self.compile_function(e.pos, args, body, vname.clone())
             }
+            ExprKind::NewObject(fields) => {
+                let dest = self.builder.register_new();
+                self.builder.protect(dest);
+                self.builder.code.push(Ins::NewObject(dest));
+                for (f, v) in fields.iter() {
+                    let key = self.builder.new_string(f);
+                    if let Some(v) = v {
+                        self.compile(v)?;
+                        let r = self.builder.register_pop(false);
+                        self.builder.code.push(Ins::StoreId(dest, key, r));
+                    } else {
+                        let c = self.builder.new_const(Value::undefined());
+                        self.builder.code.push(Ins::StoreId(
+                            dest,
+                            key,
+                            VirtualRegister::new_constant_index(c as _),
+                        ));
+                    }
+                }
+                self.builder.unprotect(dest);
+                self.builder.register_push(dest);
+                Ok(())
+            }
             ExprKind::New(call) => {
                 match &call.expr {
-                    ExprKind::Call(obj,arguments) => {
+                    ExprKind::Call(obj, arguments) => {
                         let mut callee;
                         self.compile(obj)?;
-                        callee = self.builder.register_pop(false); let dst = self.builder.register_new();
-                
-                       
+                        callee = self.builder.register_pop(false);
+                        let dst = self.builder.register_new();
+
                         let dest = self.builder.allocate_regs(arguments.len() + 1);
-                    
+
                         //if callee != dest[0] {
-                            
-                            self.builder.code.push(Ins::Move(dest[0],callee));
-                            callee = dest[0];
-                        //} 
+
+                        self.builder.code.push(Ins::Move(dest[0], callee));
+                        callee = dest[0];
+                        //}
                         dest.iter().for_each(|x| {
-        
                             self.builder.protect(*x);
                         });
                         for (i, argument) in arguments.iter().enumerate() {
                             self.compile(argument)?;
                             let reg = self.builder.register_pop(false);
-                            if reg != dest[i+1] {
-                               
-                                self.builder.code.push(Ins::Move(dest[i+1], reg));
+                            if reg != dest[i + 1] {
+                                self.builder.code.push(Ins::Move(dest[i + 1], reg));
                             }
                         }
                         self.builder
                             .code
-                            .push(Ins::New(dst,  callee, arguments.len() as _));
+                            .push(Ins::New(dst, callee, arguments.len() as _));
                         for r in dest {
                             self.builder.unprotect(r);
                         }
                         if self.builder.is_temp(callee) && callee.is_local() {
                             self.builder.unprotect(callee);
                         }
-                        
+
                         self.builder.register_push(dst);
                         Ok(())
                     }
-                    _ => unreachable!()
+                    _ => unreachable!(),
                 }
             }
             ExprKind::Call(callee, arguments) => {
@@ -585,29 +649,27 @@ impl Context {
                         )
                     }
                 };
-                
+
                 let dst = self.builder.register_new();
-                
+
                 if self.builder.is_temp(this) && this.is_local() {
                     self.builder.protect(this);
                 }
                 let dest = self.builder.allocate_regs(arguments.len() + 1);
-            
-                //if callee != dest[0] {
-                   
-                    self.builder.code.push(Ins::Move(dest[0],callee));
-                    callee = dest[0];
-                //} 
-                dest.iter().for_each(|x| {
 
+                //if callee != dest[0] {
+
+                self.builder.code.push(Ins::Move(dest[0], callee));
+                callee = dest[0];
+                //}
+                dest.iter().for_each(|x| {
                     self.builder.protect(*x);
                 });
                 for (i, argument) in arguments.iter().enumerate() {
                     self.compile(argument)?;
                     let reg = self.builder.register_pop(false);
-                    if reg != dest[i+1] {
-                       
-                        self.builder.code.push(Ins::Move(dest[i+1], reg));
+                    if reg != dest[i + 1] {
+                        self.builder.code.push(Ins::Move(dest[i + 1], reg));
                     }
                 }
                 self.builder
@@ -710,15 +772,65 @@ impl Context {
                 self.builder.register_push(r);
                 Ok(())
             }
+            ExprKind::Unop(op, e) => {
+                if op == "-" {
+                    match &e.expr {
+                        ExprKind::ConstInt(x) => {
+                            let x = *x;
+                            if x as i32 as i64 == x {
+                                let c = self.builder.new_const(Value::new_int(-(x as i32)));
+                                self.builder
+                                    .register_push(VirtualRegister::new_constant_index(c as _));
+                            } else {
+                                let c = self.builder.new_const(Value::new_double(-(x as f64)));
+                                self.builder
+                                    .register_push(VirtualRegister::new_constant_index(c as _));
+                            }
+                        }
+                        ExprKind::ConstFloat(x) => {
+                            let x = *x;
+                            if x as i32 as f64 == x {
+                                let c = self.builder.new_const(Value::new_int(-(x as i32)));
+                                self.builder
+                                    .register_push(VirtualRegister::new_constant_index(c as _));
+                            } else {
+                                let c = self.builder.new_const(Value::new_double(-x));
+                                self.builder
+                                    .register_push(VirtualRegister::new_constant_index(c as _));
+                            }
+                        }
+                        _ => {
+                            self.compile(e)?;
+                            let r = self.builder.register_pop(false);
+                            let d = self.builder.register_new();
+                            self.builder.code.push(Ins::Neg(d, r));
+                            self.builder.register_push(d);
+                        }
+                    }
+                } else if op == "!" {
+                    self.compile(e)?;
+                    let r = self.builder.register_pop(false);
+                    let d = self.builder.register_new();
+                    self.builder.code.push(Ins::Not(d, r));
+                    self.builder.register_push(d);
+                }
+                Ok(())
+            }
             ExprKind::While(cond, body) => {
                 let start = self.builder.code.len();
                 self.compile(cond)?;
                 let cond = self.builder.register_pop(false);
+                //let phi = self.builder.register_new();
+                //self.builder.protect(phi);
                 let jend = self.builder.cjmp(true, cond);
                 self.builder.code.push(Ins::LoopHint);
                 self.compile(body)?;
+                //let r = self.builder.register_pop(false);
+                self.builder.code.push(Ins::Safepoint);
                 self.builder.goto(start);
                 jend(&mut self.builder);
+                //self.builder.code.push(Ins::Move(phi, r));
+                //self.builder.unprotect(phi);
                 Ok(())
             }
             ExprKind::Block(e) => {
@@ -792,9 +904,19 @@ impl Context {
                 self.builder.register_push(dst);
                 Ok(())
             }
-            ExprKind::Access(_,_) => {
+            ExprKind::Access(_, _) => {
                 let acc = self.compile_access(&e.expr)?;
                 self.access_get(acc)
+            }
+            ExprKind::ArrayIndex(_, _) => {
+                let acc = self.compile_access(&e.expr)?;
+                self.access_get(acc)
+            }
+            ExprKind::Nil => {
+                let c = self.builder.new_const(Value::null());
+                self.builder
+                    .register_push(VirtualRegister::new_constant_index(c as _));
+                Ok(())
             }
             _ => todo!("{:?}", e),
         }
@@ -821,24 +943,22 @@ impl Context {
                     }
                 }
             }
-            ExprKind::Access(object,field) => {
-                Ok(Access::Field(object.clone(),field.clone()))
-            }
-            ExprKind::ArrayIndex(object,ix) => {
-                Ok(Access::Array(object.clone(),ix.clone()))
-            }
+            ExprKind::Access(object, field) => Ok(Access::Field(object.clone(), field.clone())),
+            ExprKind::ArrayIndex(object, ix) => Ok(Access::Array(object.clone(), ix.clone())),
             _ => unimplemented!(),
         }
     }
 }
 use frontend::token::*;
-pub fn compile(ast: &[Box<Expr>]) -> Result<Ref<CodeBlock>, MsgWithPos> {
+pub fn compile(ast: &[Box<Expr>]) -> Result<(Ref<Module>, Ref<CodeBlock>), MsgWithPos> {
     //let vm = crate::get_vm();
     let ast = Box::new(Expr {
         pos: Position::new(0, 0),
         expr: ExprKind::Block(ast.to_vec()),
     });
+    let mut module = Module::new(&mut crate::get_vm().heap, "<main>");
     let mut ctx = Context::new(
+        module,
         Rc::new(RefCell::new(Default::default())),
         Rc::new(RefCell::new(Default::default())),
     );
@@ -848,6 +968,6 @@ pub fn compile(ast: &[Box<Expr>]) -> Result<Ref<CodeBlock>, MsgWithPos> {
     let r = ctx.builder.register_pop(false);
     ctx.builder.code.push(Ins::Return(r));
     let cb = ctx.builder.code_block();
-    
-    Ok(cb)
+
+    Ok((module, cb))
 }

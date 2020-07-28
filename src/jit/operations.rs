@@ -20,6 +20,18 @@ pub extern "C" fn operation_value_add(_vm: &VM, op1: Value, op2: Value) -> Value
     // TODO: Concatenate strings,add arrays, add bigint/int64
     Value::undefined()
 }
+pub extern "C" fn operation_value_mod(_vm: &VM, op1: Value, op2: Value) -> Value {
+    if op1.is_number() && op2.is_number() {
+        let result = op1.to_number() % op2.to_number();
+        if result as i32 as f64 == result {
+            return Value::new_int(result as _);
+        } else {
+            return Value::new_double(result);
+        }
+    }
+    // TODO: Concatenate strings,add arrays, add bigint/int64
+    Value::undefined()
+}
 
 pub extern "C" fn operation_value_add_optimize(
     vm: &VM,
@@ -246,15 +258,16 @@ pub extern "C" fn operation_call_func(
         call_frame.passed_argc = passed as u32;
         call_frame.code_block = cb;
         let vm = crate::get_vm();
-        
+
         let result = addr(call_frame);
         vm.pop_frame();
         return result;
     }
 
     get_vm().throw_exception_str(&format!(
-        "callee '{}' is not a function",
-        runtime::val_str(callee)
+        "callee '{}'(in {}) is not a function",
+        runtime::val_str(callee),
+        callee_r
     ))
 }
 
@@ -280,7 +293,7 @@ pub extern "C" fn operation_new(
             if ctor.is_error() {
                 catch!(ctor.value());
             } else if ctor.value().is_cell() && ctor.value().as_cell().is_function() {
-                let this = RegularObj::new(&mut vm.heap, proto, None);
+                let this = RegularObj::new(&mut vm.heap, proto);
                 let result = crate::jit::operations::operation_call_func(
                     cf,
                     ctor.value(),
@@ -325,7 +338,7 @@ pub fn get_executable_address_for(
             return Some(unsafe { (std::mem::transmute(cell.native_code), 0, 0, None) });
         }
         let mut code_block = cell.code_block.unwrap();
-        code_block.exc_counter += 50;
+        code_block.exc_counter += 2;
         let args = code_block.num_args;
         let vars = code_block.num_vars;
         let cb = code_block;
@@ -382,7 +395,10 @@ pub fn operation_put_by(vm: &VM, object: Value, key: Value, value: Value) -> Waf
     WaffleResult::error(Value::from(
         WaffleString::new(
             &mut get_vm().heap,
-            format!("cannot set property on value '{}' that is not an object",runtime::val_str(object)),
+            format!(
+                "cannot set property on value '{}' that is not an object",
+                runtime::val_str(object)
+            ),
         )
         .cast(),
     ))

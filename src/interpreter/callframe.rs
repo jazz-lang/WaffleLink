@@ -31,7 +31,9 @@ impl CallFrame {
             caller: std::ptr::null_mut(),
         }
     }
-
+    pub fn arg_ref(&self, ix: usize) -> Ref<Value> {
+        self.args.offset(ix as _)
+    }
     pub fn get_register(&mut self, r: virtual_register::VirtualRegister) -> Value {
         if r.is_constant() {
             return self

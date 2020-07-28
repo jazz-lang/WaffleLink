@@ -102,6 +102,10 @@ pub enum Ins {
     JNLessEq(VirtualRegister, VirtualRegister, i32),
     #[display(fmt = "jgreatereq {}, {}, {}", _0, _1, _2)]
     JNLess(VirtualRegister, VirtualRegister, i32),
+    #[display(fmt = "not {}, {}", _0, _1)]
+    Not(VirtualRegister, VirtualRegister),
+    #[display(fmt = "neg {}, {}", _0, _1)]
+    Neg(VirtualRegister, VirtualRegister),
     #[display(fmt = "try {}", _0)]
     Try(u32 /* code size */),
     #[display(fmt = "try_end")]
@@ -156,10 +160,19 @@ pub static CB_VTBL: vtable::VTable = vtable::VTable {
     calc_size_fn: None,
     apply_fn: None,
     destroy_fn: None,
-    trace_fn: None,
+    trace_fn: Some(trace),
     set_fn: None,
     set_index_fn: None,
 };
+
+fn trace(cb: Ref<Obj>, f: &mut dyn FnMut(*const Ref<Obj>)) {
+    let cb = cb.cast::<CodeBlock>();
+    for c in cb.constants.iter() {
+        if c.is_cell() && !c.is_empty() {
+            f(c.as_cell_ref());
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct JITData {
@@ -249,9 +262,19 @@ impl CodeBlock {
         use crate::runtime::val_str;
         writeln!(buffer, "CodeBlock at {:p}", self)?;
         for (i, c) in self.constants.iter().enumerate() {
-            writeln!(buffer, "\tconst{} = {}", i, val_str(*c))?;
+            if !c.is_cell() {
+                writeln!(buffer, "\tconst{} = {}", i, val_str(*c))?;
+            } else {
+                writeln!(
+                    buffer,
+                    "\tconst{} = {} at {:p}",
+                    i,
+                    val_str(*c),
+                    c.as_cell().ptr
+                )?;
+            }
         }
-        writeln!(buffer,"\tnum_vars={}",self.num_vars).unwrap();
+        writeln!(buffer, "\tnum_vars={}", self.num_vars).unwrap();
         writeln!(buffer, "bytecode: ")?;
         for (i, _ins) in self.instructions.iter().enumerate() {
             write!(buffer, "\t[{:4}] ", i)?;

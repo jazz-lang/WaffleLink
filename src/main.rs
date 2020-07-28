@@ -1,53 +1,81 @@
 use bytecompiler::*;
-use value::*;
-use wafflelink::*;
-
 use frontend::parser::*;
 use frontend::reader::*;
+use std::path::PathBuf;
+use structopt::StructOpt;
+use value::*;
+use wafflelink::*;
+#[derive(StructOpt, Debug)]
+struct Opts {
+    #[structopt(long = "dumpBytecode", help = "Dump bytecode")]
+    dump_bc: bool,
+    #[structopt(
+        long = "disassemble",
+        help = "Dump machine disassembly if JIT is enabled"
+    )]
+    disasm: bool,
+    #[structopt(
+        long = "useJIT",
+        help = "Enable baseline JIT compiler",
+        default_value = "1"
+    )]
+    template_jit: u8,
+    #[structopt(long = "useOPTJIT", help = "Enable optimizing JIT compiler")]
+    opt_jit: bool,
+    #[structopt(
+        long = "useTracingJIT",
+        help = "Enable tracing JIT compiler, works only when useJIT=false and useOPTJIT=false"
+    )]
+    tracing_jit: bool,
+    #[structopt(
+        long = "jitThreshold",
+        help = "Set threshold before OSR to JIT",
+        default_value = "100"
+    )]
+    jit_threshold: usize,
+    #[structopt(short, long = "verbose")]
+    verbose: bool,
+    /// Input file
+    #[structopt(parse(from_os_str))]
+    input: PathBuf,
+    #[structopt(long = "verboseAlloc", help = "Verbose log when allocating")]
+    verbose_alloc: bool,
+}
 
 fn main() {
+    let opt: Opts = Opts::from_args();
     let x = false;
     let mut vm = VM::new(&x);
-    vm.template_jit = true;
-    vm.disasm = true;
-    wafflelink::LOG.store(!true, std::sync::atomic::Ordering::Relaxed);
+    vm.template_jit = opt.template_jit == 1;
+    vm.disasm = opt.disasm;
+    vm.dump_bc = opt.dump_bc;
+    vm.verbose_alloc = opt.verbose_alloc;
+    vm.jit_threshold = opt.jit_threshold as _;
+    wafflelink::LOG.store(opt.verbose, std::sync::atomic::Ordering::Relaxed);
     set_vm(&vm);
     runtime::initialize();
-    let reader = Reader::from_string(
-        "
-        
-        function Point(x,y) {
-            this.x = x
-            this.y = y
-        }
-        
-        Point.prototype.getX = function() {
-            return this.x
-        }
-        
-        var p = new Point(2,3)
-        print(p.getX())
-        ",
-    );
+    let reader = Reader::from_file(opt.input.as_os_str().to_str().unwrap()).unwrap();
     let mut ast = vec![];
     let mut p = Parser::new(reader, &mut ast);
     if let Err(e) = p.parse() {
         eprintln!("{}", e);
         return;
     }
-    let code = match compile(&ast) {
+    let (m, code) = match compile(&ast) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{}", e);
             return;
         }
     };
-    if vm.disasm {
+    if vm.dump_bc {
+        println!("CodeBlock for global script:");
         let mut b = String::new();
         code.dump(&mut b).unwrap();
         println!("{}", b);
     }
-    let fun = function::Function::new(&mut get_vm().heap, code, "<main>");
+    let mut fun = function::Function::new(&mut get_vm().heap, code, "<main>");
+    fun.module = Some(m);
     let start = std::time::Instant::now();
     let res = fun.execute(Value::undefined(), &[]);
     let e = start.elapsed();

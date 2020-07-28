@@ -4,6 +4,9 @@ use std::fmt;
 pub struct Address(usize);
 
 impl Address {
+    pub fn deref(self) -> Self {
+        unsafe { *(self.offset(0).to_mut_ptr::<Self>()) }
+    }
     #[inline(always)]
     pub fn from(val: usize) -> Address {
         Address(val)

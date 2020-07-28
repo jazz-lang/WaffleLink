@@ -13,13 +13,14 @@ pub struct Function {
     pub env: Option<Ref<Array>>,
     pub name: Ref<WaffleString>,
     pub prototype: value::Value,
+    pub module: Option<Ref<Module>>,
 }
 
-fn lookup_fn(vm: &VM,this: Ref<Obj>,key: value::Value) -> WaffleResult {
+fn lookup_fn(vm: &VM, this: Ref<Obj>, key: value::Value) -> WaffleResult {
     if key == vm.constructor {
-        return WaffleResult::okay(value::Value::from(this))
+        return WaffleResult::okay(value::Value::from(this));
     } else if key == vm.prototype {
-        return WaffleResult::okay(value::Value::from(this.cast::<Function>().prototype))
+        return WaffleResult::okay(value::Value::from(this.cast::<Function>().prototype));
     } else {
         WaffleResult::okay(value::Value::undefined())
     }
@@ -37,8 +38,10 @@ impl Function {
                 header: Header::new(),
                 vtable: &FUNCTION_VTBL,
                 code_block: None,
+                module: None,
                 env: None,
-                native: true,prototype: value::Value::undefined(),
+                native: true,
+                prototype: value::Value::undefined(),
                 name: WaffleString::new(heap, name),
                 native_code: fptr as _,
             });
@@ -57,8 +60,11 @@ impl Function {
                 code_block: Some(cb),
                 env: None,
                 native: false,
+                module: None,
                 native_code: 0,
-                prototype: value::Value::from(RegularObj::new(heap,value::Value::undefined(),None).cast()),
+                prototype: value::Value::from(
+                    RegularObj::new(heap, value::Value::undefined()).cast(),
+                ),
                 name: WaffleString::new(heap, name),
             });
         }
@@ -68,7 +74,6 @@ impl Function {
     }
 
     pub fn execute(&self, this: value::Value, args: &[value::Value]) -> WaffleResult {
-        
         let regc = if let Some(cb) = self.code_block {
             cb.num_vars
         } else {
@@ -88,7 +93,7 @@ impl Function {
             let f: extern "C" fn(
                 &mut crate::interpreter::callframe::CallFrame,
             ) -> crate::WaffleResult = unsafe { std::mem::transmute(self.native_code) };
-            
+
             let res = f(cf);
             vm.pop_frame();
             res
@@ -120,3 +125,20 @@ pub static FUNCTION_VTBL: VTable = VTable {
     set_fn: None,
     set_index_fn: None,
 };
+
+fn trace(this: Ref<Obj>, trace: &mut dyn FnMut(*const Ref<Obj>)) {
+    let this = this.cast::<Function>();
+    trace(unsafe { std::mem::transmute(&this.name) });
+    if let Some(e) = &this.env {
+        trace(unsafe { std::mem::transmute(e) });
+    }
+    if let Some(cb) = &this.code_block {
+        trace(unsafe { std::mem::transmute(cb) });
+    }
+    if this.prototype.is_cell() {
+        trace(this.prototype.as_cell_ref());
+    }
+    if let Some(m) = &this.module {
+        trace(unsafe { std::mem::transmute(m) });
+    }
+}

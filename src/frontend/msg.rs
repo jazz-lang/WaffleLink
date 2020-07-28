@@ -145,7 +145,7 @@ impl Msg {
                 "method with name `{}` already exists in class `{}` at line {}.",
                 name, cls, pos
             ),
-            IncompatibleWithNil(ref ty) => format!("cannot assign `nil` to type `{}`.", ty),
+            IncompatibleWithNil(ref ty) => format!("cannot assign `null` to type `{}`.", ty),
             UnknownField(ref field, ref ty) => {
                 format!("unknown field `{}` for type `{}`", field, ty)
             }
@@ -210,7 +210,7 @@ impl Msg {
             }
             SuperNeedsMethodCall => "`super` only allowed in method calls".into(),
             ReferenceTypeExpected(ref name) => format!("`{}` is not a reference type.", name),
-            ThrowNil => "throwing `nil` is not allowed.".into(),
+            ThrowNil => "throwing `null` is not allowed.".into(),
             CatchOrFinallyExpected => "`try` without `catch` or `finally`.".into(),
             LetMissingInitialization => "`let` binding is missing initialization.".into(),
             LetReassigned => "`let` binding cannot be reassigned.".into(),

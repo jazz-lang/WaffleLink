@@ -375,6 +375,15 @@ impl<'a> JIT<'a> {
                         self.add_jump(j, *off);
                     }
                 }
+                Ins::Mod(dest, lhs, rhs) => {
+                    self.masm
+                        .pass_ptr_as_arg(crate::get_vm() as *const _ as usize, 0);
+                    self.emit_get_virtual_registers(*lhs, *rhs, AGPR1, AGPR2);
+                    self.masm.prepare_call_with_arg_count(3);
+                    self.masm
+                        .call_ptr_argc(operations::operation_value_mod as _, 3);
+                    self.emit_put_virtual_register(*dest, RET0, RET1);
+                }
                 Ins::JLess { .. } => self.emit_op_jless(ins),
                 Ins::JLessEq { .. } => self.emit_op_jlesseq(ins),
                 Ins::JGreater { .. } => self.emit_op_jnless(ins),
@@ -383,6 +392,24 @@ impl<'a> JIT<'a> {
                 Ins::Add { .. } => self.emit_op_add(ins),
                 Ins::Mul { .. } => self.emit_op_mul(ins),
                 Ins::Div { .. } => self.emit_op_div(ins),
+                Ins::Neg(dest, src) => {
+                    self.emit_get_virtual_register(*src, T0);
+                    let not_int = self.branch_if_not_int32(T0, true);
+                    self.add_slow_case(not_int);
+                    self.masm.neg32(T0, T0);
+                    self.box_int32(T0, T1, true);
+                    self.emit_put_virtual_register(*dest, T1, T0);
+                }
+                Ins::Not(dst, src) => {
+                    self.emit_get_virtual_register(*src, T0);
+                    let mut br = self.branch_if_truthy(T0, T1, T2, FT0, FT1, false);
+                    self.box_boolean_payload_const(true, T0);
+                    let end = self.masm.jump();
+                    br.link(&mut self.masm);
+                    self.box_boolean_payload_const(false, T0);
+                    end.link(&mut self.masm);
+                    self.emit_put_virtual_register(*dst, T0, T1);
+                }
                 Ins::Call(dest, this, callee, argc) => {
                     // TODO: Use code patching and fast path/slow path codegen for calls
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
@@ -412,7 +439,7 @@ impl<'a> JIT<'a> {
                 Ins::NewObject(dest) => {
                     extern "C" fn new_obj(_: &mut CallFrame) -> Value {
                         let vm = get_vm();
-                        Value::from(RegularObj::new(&mut vm.heap, Value::undefined(), None).cast())
+                        Value::from(RegularObj::new(&mut vm.heap, Value::undefined()).cast())
                     }
                     self.masm.prepare_call_with_arg_count(1);
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
@@ -420,15 +447,17 @@ impl<'a> JIT<'a> {
                     self.emit_put_virtual_register(*dest, RET1, RET0);
                 }
                 Ins::LoadThis(dest) => {
-                    self.masm.load64(Mem::Base(REG_CALLFRAME,offset_of!(CallFrame,this) as i32),T0);
-                    self.emit_put_virtual_register(*dest,T0,T1);
-                }
-                Ins::Safepoint => {
                     self.masm.load64(
-                        Mem::Absolute(&crate::get_vm().stop_world as *const bool as usize),
+                        Mem::Base(REG_CALLFRAME, offset_of!(CallFrame, this) as i32),
                         T0,
                     );
-                    let j = self.masm.branch64_imm32(RelationalCondition::Equal, 1, T0);
+                    self.emit_put_virtual_register(*dest, T0, T1);
+                }
+                Ins::Safepoint => {
+                    self.masm.move_i64(crate::get_vm() as *const VM as i64, T0);
+                    self.masm
+                        .load8(Mem::Base(T0, offset_of!(VM, stop_world) as i32), T0);
+                    let j = self.masm.branch32_test(ResultCondition::NonZero, T0, T0);
                     self.add_slow_case(j);
                 }
                 Ins::LoopHint => {
@@ -670,23 +699,37 @@ impl<'a> JIT<'a> {
                         let c = cf.code_block.unwrap().get_constant(
                             virtual_register::VirtualRegister::new_constant_index(key as _),
                         );
-                        let val = get_vm().globals.lookup(&runtime::val_str(c));
-                        if let Some(val) = val {
-                            WaffleResult::okay(val)
-                        } else {
-                            WaffleResult::error(Value::from(
-                                WaffleString::new(
-                                    &mut get_vm().heap,
-                                    &format!("global '{}' not found", runtime::val_str(c)),
-                                )
-                                .cast(),
-                            ))
+                        if c.is_cell() && c.as_cell().is_string() {
+                            //     println!("cell {}", c.as_cell().cast::<WaffleString>().str());
+                            let val = get_vm()
+                                .globals
+                                .lookup(c.as_cell().cast::<WaffleString>().str());
+                            if let Some(val) = val {
+                                return WaffleResult::okay(val);
+                            }
+                            if let Some(m) = cf.callee.as_cell().cast::<function::Function>().module
+                            {
+                                if let Some(g) =
+                                    m.scope.get(c.as_cell().cast::<WaffleString>().str())
+                                {
+                                    return WaffleResult::okay(*g);
+                                }
+                            }
                         }
+                        WaffleResult::error(Value::from(
+                            WaffleString::new(
+                                &mut get_vm().heap,
+                                &format!("global '{}' not found", runtime::val_str(c)),
+                            )
+                            .cast(),
+                        ))
                     }
+                    self.masm.prepare_call_with_arg_count(2);
                     self.masm.pass_int32_as_arg(*ix as i32, 1);
                     self.masm.pass_reg_as_arg(REG_CALLFRAME, 0);
-                    self.masm.prepare_call_with_arg_count(2);
+                    //self.masm.add64_imm32(8, SP, SP);
                     self.masm.call_ptr_argc(load_global as *const _, 2);
+                    //self.masm.sub64_imm32(8, SP);
                     self.check_exception(false);
                     self.emit_put_virtual_register(*dest, RET1, RET0);
                 }
@@ -711,6 +754,21 @@ impl<'a> JIT<'a> {
                 .unwrap();
             self.add_comment(&format!("(S) [{:4}] {}", self.bytecode_index, buf));
             match curr {
+                Ins::Neg(dest, _) => {
+                    self.link_all_slow_cases(&mut iter);
+                    let not_num = self.branch_if_not_double_known_not_int32(T0, true);
+                    self.unbox_double_non_destructive(T0, FT0, T1);
+                    self.masm.negate_double(FT0, FT1);
+                    self.box_double(FT1, T0, true);
+                    let jend = self.masm.jump();
+                    not_num.link(&mut self.masm);
+                    self.masm.move_i64(
+                        unsafe { std::mem::transmute(Value::new_double(pure_nan::pure_nan())) },
+                        T0,
+                    );
+                    jend.link(&mut self.masm);
+                    self.emit_put_virtual_register(*dest, T0, T1);
+                }
                 Ins::Less(dst, _lhs, _rhs) => {
                     self.link_all_slow_cases(&mut iter);
                     //self.emit_get_virtual_registers(*lhs, *rhs, AGPR0, AGPR1);
@@ -861,7 +919,10 @@ impl<'a> JIT<'a> {
                 }
                 Ins::Safepoint => {
                     self.link_all_slow_cases(&mut iter);
-                    extern "C" fn safepoint(_vm: &crate::VM, _stack_top: *const u8) {}
+                    extern "C" fn safepoint(_vm: &mut crate::VM, _stack_top: *const u8) {
+                        let vm = get_vm();
+                        vm.heap.collect(gc::Address::from_ptr(_stack_top));
+                    }
                     self.masm.prepare_call_with_arg_count(2);
                     self.masm
                         .pass_ptr_as_arg(crate::get_vm() as *const _ as usize, 0);
@@ -1042,7 +1103,7 @@ impl<'a> JIT<'a> {
             }
         }
         is_string.link(&mut self.masm);
-        
+
         let j = self.masm.branch64_imm64(
             if invert {
                 RelationalCondition::Equal

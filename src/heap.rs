@@ -14,6 +14,8 @@ pub const SIZE_CLASSES: usize = 6;
 pub struct Heap {
     pub size_classes: [Vec<*mut block::HeapBlock>; SIZE_CLASSES],
     pub start: *mut u8,
+    pub allocated: usize,
+    pub threshold: usize,
 }
 
 impl Heap {
@@ -28,6 +30,8 @@ impl Heap {
                 Vec::new(),
                 Vec::new(),
             ],
+            allocated: 0,
+            threshold: 8 * 1024,
         }
     }
     pub fn size_class_for(size: usize) -> usize {
@@ -58,7 +62,17 @@ impl Heap {
             println!("{}", size);
             todo!("Large classes is not yet supported")
         }
-        //log!("Allocate {} bytes in size class #{}", size, sc);
+        self.allocated += Self::size_class_size_for(sc);
+        if self.allocated >= self.threshold {
+            crate::get_vm().stop_world = true;
+        }
+        /*clog!(
+            crate::get_vm().verbose_alloc;
+            "Allocate {} bytes in size class #{} (total {} allocated bytes)",
+            size,
+            sc,
+            self.allocated
+        );*/
         unsafe {
             for block in self.size_classes[sc].iter_mut() {
                 let mem = (&mut **block).allocate();
@@ -75,9 +89,9 @@ impl Heap {
         let off = object.to_usize() % block::HeapBlock::BLOCK_SIZE;
         (object.to_usize() as isize + (-(off as isize))) as *mut _
     }
-
     #[inline(never)]
-    fn collect_roots(&mut self, sp: Address) -> Vec<Address> {
+    fn collect_roots(&mut self, sp: Address) -> Vec<Ref<Obj>> {
+        //clog!(crate::get_vm().verbose_alloc;"GC Started");
         let sp = Address::from_ptr(&sp);
         let filter = |frame_addr: Address| unsafe {
             if frame_addr.is_non_null() {
@@ -99,7 +113,19 @@ impl Heap {
                 false
             }
         };
-        let mut mark_stack = vec![];
+        let vm = crate::get_vm();
+        let mut mark_stack: Vec<Ref<Obj>> = vec![];
+        mark_stack.push(vm.constructor.as_cell());
+        mark_stack.push(vm.length.as_cell());
+        mark_stack.push(vm.prototype.as_cell());
+        for (_, g) in vm.globals.map.iter() {
+            if g.is_cell() {
+                if g.as_cell().header().is_marked_non_atomic() == false {
+                    g.as_cell().header_mut().mark_non_atomic();
+                    mark_stack.push(g.as_cell());
+                }
+            }
+        }
         // conservative roots
         {
             let mut start = sp;
@@ -114,11 +140,12 @@ impl Heap {
             if end.to_usize() % 8 != 0 {
                 end = Address::from(end.to_usize() + 8 - end.to_usize() % 8);
             }
-            log!(
+            /*clog!(
+                crate::get_vm().verbose_alloc;
                 "Scan for conservative roots in range {:p}..{:p}",
                 start.to_ptr::<u8>(),
                 end.to_ptr::<u8>()
-            );
+            );*/
             while start < end {
                 unsafe {
                     let frame = start;
@@ -136,12 +163,13 @@ impl Heap {
                                 continue;
                             }
                             log!(
+                                //  crate::get_vm().verbose_alloc;
                                 "Found GC pointer {:p} at {:p}",
                                 (*start.to_mut_ptr::<Address>()).to_ptr::<u8>(),
                                 start.to_ptr::<u8>(),
                             );
                             cell.header_mut().mark_non_atomic();
-                            mark_stack.push(*start.to_mut_ptr::<Address>());
+                            mark_stack.push(*start.to_mut_ptr::<Ref<Obj>>());
                             start = start.add_ptr(1);
                             continue;
                         }
@@ -155,11 +183,11 @@ impl Heap {
             let vm = crate::get_vm();
             let mut frame = vm.top_call_frame;
             while !frame.is_null() {
-                let f = unsafe {&mut *frame};
+                let f = unsafe { &mut *frame };
                 for reg in f.regs.iter() {
                     if reg.is_cell() {
                         if !reg.as_cell().header().is_marked_non_atomic() {
-                            mark_stack.push(Address::from_ptr(reg.as_cell().ptr.as_ptr()));
+                            mark_stack.push(reg.as_cell());
                         }
                     }
                 }
@@ -168,14 +196,26 @@ impl Heap {
                     let value = f.args.offset(i as _);
                     if value.is_cell() {
                         if !value.as_cell().header().is_marked_non_atomic() {
-                            mark_stack.push(Address::from_ptr(value.as_cell().ptr.as_ptr()));
+                            value.as_cell().header_mut().mark_non_atomic();
+                            mark_stack.push(value.as_cell());
                         }
                     }
                 }
                 if f.this.is_cell() {
                     if !f.this.as_cell().header().is_marked_non_atomic() {
-                        mark_stack.push(Address::from_ptr(f.this.as_cell().ptr.as_ptr()));
+                        f.this.as_cell().header_mut().mark_non_atomic();
+                        mark_stack.push(f.this.as_cell());
                     }
+                }
+                if f.callee.is_cell() {
+                    if !f.callee.as_cell().header().is_marked_non_atomic() {
+                        f.callee.as_cell().header_mut().mark_non_atomic();
+                        mark_stack.push(f.callee.as_cell());
+                    }
+                }
+                if let Some(mut cb) = f.code_block {
+                    cb.header.mark_non_atomic();
+                    mark_stack.push(cb.cast());
                 }
                 frame = f.caller;
             }
@@ -183,22 +223,26 @@ impl Heap {
         mark_stack
     }
     pub fn collect(&mut self, sp: Address) {
+        log!("start gc after {} allocated bytes ", self.allocated);
         let mut mark_stack = self.collect_roots(sp);
         // marking
         {
             while let Some(cell_addr) = mark_stack.pop() {
-                let mut cell: Ref<Obj> = Ref {
-                    ptr: unsafe { std::ptr::NonNull::new_unchecked(cell_addr.to_mut_ptr()) },
-                };
+                let mut cell: Ref<Obj> = cell_addr;
+                /*log!(
+                    "Trace '{}' at {:p}",
+                    crate::runtime::val_str(crate::value::Value::from(cell)),
+                    cell.ptr.as_ptr()
+                );*/
 
-                cell.header_mut().mark_non_atomic();
                 if let Some(trace) = cell.vtable.trace_fn {
-                    trace(cell, &mut |mut object| {
-                        if object.header().is_marked_non_atomic() {
+                    trace(cell, &mut |mut object| unsafe {
+                        let object = object as *mut Ref<Obj>;
+                        if (*object).header().is_marked_non_atomic() {
                             return;
                         }
-                        object.header_mut().mark_non_atomic();
-                        mark_stack.push(Address::from_ptr(object.raw()));
+                        (*object).header_mut().mark_non_atomic();
+                        mark_stack.push(*object);
                     });
                 }
             }
@@ -211,16 +255,18 @@ impl Heap {
                 let mut del = 0;
                 {
                     for i in 0..len {
-                        if (&mut *sc[i]).sweep() {
+                        /*if (&mut *sc[i]).sweep() {
                             del += 1;
                             std::ptr::drop_in_place(sc[i]);
                             std::alloc::dealloc(
                                 sc[i].cast(),
                                 std::alloc::Layout::from_size_align_unchecked(16 * 1024, 16 * 1024),
                             );
+                            log!("RIP {:p}", sc[i]);
                         } else if del > 0 {
                             sc.swap(i - del, i);
-                        }
+                        }*/
+                        //(&mut *sc[i]).sweep();
                     }
                 }
                 if del > 0 {
@@ -228,5 +274,9 @@ impl Heap {
                 }
             }
         }
+        if self.allocated >= self.threshold {
+            self.threshold = (self.allocated as f64 / 0.7) as usize;
+        }
+        crate::get_vm().stop_world = false;
     }
 }

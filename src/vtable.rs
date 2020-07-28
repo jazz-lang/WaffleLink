@@ -3,7 +3,7 @@ use crate::value::Value;
 use crate::*;
 #[repr(C)]
 pub struct VTable {
-    pub trace_fn: Option<fn(Ref<Obj>, &mut dyn FnMut(Ref<Obj>))>,
+    pub trace_fn: Option<fn(Ref<Obj>, &mut dyn FnMut(*const Ref<Obj>))>,
     pub lookup_fn: Option<fn(&VM, Ref<Obj>, Value) -> WaffleResult>,
     pub index_fn: Option<fn(&VM, Ref<Obj>, usize) -> WaffleResult>,
     pub set_fn: Option<fn(&VM, Ref<Obj>, Value, Value) -> WaffleResult>,

@@ -46,12 +46,13 @@ pub fn array_set(_: &VM, this: Ref<Obj>, key: Value, value: Value) -> WaffleResu
     }
 }
 
-pub fn trace_array(arr: Ref<Obj>, trace: &mut dyn FnMut(Ref<Obj>)) {
+pub fn trace_array(arr: Ref<Obj>, trace: &mut dyn FnMut(*const Ref<Obj>)) {
     let arr = arr.cast::<Array>();
+    debug_assert!(arr.vtable as *const VTable == &ARRAY_VTBL as *const _);
     for i in 0..arr.len() {
         let item = arr.get_at(i);
         if item.is_cell() {
-            trace(item.as_cell());
+            trace(item.as_cell_ref());
         }
     }
 }
@@ -67,15 +68,15 @@ fn determine_array_size(obj: Ref<Obj>) -> usize {
 }
 
 pub static STRING_VTBL: VTable = VTable {
-    element_size: std::mem::size_of::<char>(),
+    element_size: std::mem::size_of::<WaffleString>(),
     instance_size: 0,
     parent: None,
     lookup_fn: None,
     index_fn: None,
-    calc_size_fn: Some(determine_array_size),
+    calc_size_fn: None,
     apply_fn: None,
     destroy_fn: None,
     set_fn: None,
-    trace_fn: Some(trace_array),
+    trace_fn: None,
     set_index_fn: None,
 };

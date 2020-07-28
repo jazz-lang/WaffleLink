@@ -15,30 +15,42 @@ impl HeapBlock {
     pub fn sweep(&mut self) -> bool {
         let mut all_free = true;
         let mut free_list: *mut FreeListEntry = std::ptr::null_mut();
+        let mut seen = HashSet::new();
         self.for_each_cell_mut(|this, cell_addr| unsafe {
             if this.is_marked(cell_addr) {
                 let mut cell = Ref {
                     ptr: std::ptr::NonNull::new_unchecked(cell_addr.to_mut_ptr::<Obj>()),
                 };
-                if cell.header().is_marked_non_atomic() {
+                if seen.contains(&(cell.ptr.as_ptr() as usize)) {
+                    panic!();
+                }
+                seen.insert(cell.ptr.as_ptr() as usize);
+                if cell.header().is_marked_non_atomic()
+                    || cell.vtable as *const _ == &crate::bytecode::CB_VTBL as *const _
+                {
+                    //let c = crate::runtime::val_str(crate::value::Value::from(cell));
+                    //log!("Keep '{}' at {:p}", c, cell.ptr);
                     cell.header_mut().unmark_non_atomic();
                     all_free = false;
                 } else {
+                    cell.header_mut().unmark_non_atomic();
                     this.unmark(cell_addr);
+                    let c = crate::runtime::val_str(crate::value::Value::from(cell));
                     if let Some(destroy_fn) = cell.vtable.destroy_fn {
                         destroy_fn(cell);
                     }
                     std::ptr::write_bytes(cell_addr.to_mut_ptr::<u8>(), 0, this.cell_size);
                     if free_list.is_null() {
-                        log!("Initialize free list with {:p}", cell.raw());
+                        log!("Initialize free list with {:p} ('{}')", cell.raw(), c);
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = std::ptr::null_mut();
                     } else {
                         let next = free_list;
                         free_list = cell.raw() as *mut _;
                         (&mut *free_list).next = next as *mut _;
-                        log!("Sweep {:p} to free list {:p}", cell.raw(), next);
+                        log!("Sweep {:p} to free list {:p} ('{}')", cell.raw(), next, c);
                     }
+                    crate::get_vm().heap.allocated -= this.cell_size;
                 }
             } else {
                 let next = free_list;
@@ -48,7 +60,7 @@ impl HeapBlock {
             }
         });
         self.free_list = free_list;
-        true
+        all_free
     }
     pub fn allocate(&mut self) -> Address {
         let addr = if self.cursor.offset(self.cell_size)
@@ -58,11 +70,11 @@ impl HeapBlock {
         {
             let c = self.cursor;
             self.cursor = self.cursor.offset(self.cell_size);
-            log!(
+            /*log!(
                 "Bump allocate {:p}->{:p}",
                 c.to_ptr::<()>(),
                 self.cursor.to_ptr::<()>()
-            );
+            );*/
             c
         } else {
             if self.free_list.is_null() {

@@ -180,12 +180,7 @@ impl<'a> JIT<'a> {
         5
     }
 }
-#[cfg(target_pointer_width = "64")]
-impl<'a> JIT<'a> {
-    pub fn put_register(&mut self, reg: u8, src: Reg) {
-        self.masm.store64(src, Self::address_for_reg(reg));
-    }
-}
+
 #[cfg(target_pointer_width = "32")]
 impl<'a> JIT<'a> {
     pub fn payload_address_for_reg(reg: u8) -> Mem {
