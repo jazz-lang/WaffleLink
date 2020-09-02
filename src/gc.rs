@@ -5,15 +5,13 @@
 //! # Features
 //! - Non moving GC
 //! - Generational
-//! - Easy to use (no write barriers,safepoints etc)
+//! - Write barriers protected for fast GC cycles.
 //!
 //!
 //! # How it works?
 //! CakeGC is non-moving so many users might ask how does it work like generational?
 //! Answer is pretty easy: we maintain two singly linked lists, one for young generation heap
 //! and second one is for old generation and when sweeping we promote young to old.
-//! Also there is no write barriers needed for this GC to work because it is not incremental
-//! and will visit all references inside GC value, this might be slow but it works.
 
 use crate::timer::Timer;
 use core::sync::atomic::Ordering;
@@ -62,41 +60,65 @@ impl Header {
     }
 
     pub fn is_marked(&self) -> bool {
-        (self.flags & 0x80) != 0
+        self.vtable.bit_is_set(2)
+        //(self.flags & 0x80) != 0
     }
 
     pub fn test_and_mark(&mut self) -> bool {
         if self.is_marked() {
             false
         } else {
-            self.flags |= 0x80;
+            self.vtable.set_bit(2);
+            //self.flags |= 0x80;
             true
         }
     }
 
     pub fn mark(&mut self) {
-        self.flags |= 0x80;
+        self.vtable.set_bit(2);
+        //self.flags |= 0x80;
     }
 
     pub fn unmark(&mut self) {
-        self.flags ^= 0x80;
+        self.vtable.clear(2);
+        //self.flags ^= 0x80;
     }
     pub fn test_soft_mark(&mut self) -> bool {
-        if (self.flags & 0x40) != 0 {
+        /*if (self.flags & 0x40) != 0 {
             false
         } else {
             self.flags |= 0x40;
             true
+        }*/
+        if self.is_soft_marked() {
+            false
+        } else {
+            self.vtable.set_bit(1);
+            true
         }
     }
     pub fn is_soft_marked(&self) -> bool {
-        (self.flags & 0x40) != 0
+        //(self.flags & 0x40) != 0
+        self.vtable.bit_is_set(1)
     }
     pub fn clear_soft_mark(&mut self) {
         if self.is_soft_marked() {
-            self.flags ^= 0x40;
+            self.vtable.clear(1);
+            //self.flags ^= 0x40;
         }
     }
+
+    /*pub fn is_remembered(&self) -> bool {
+        self.next.bit_is_set(0)
+    }
+
+    pub fn set_remembered(&mut self)  {
+        self.next.set_bit(0)
+    }
+
+    pub fn clear_remembered(&mut self) {
+        self.next.clear(0)
+    }*/
 }
 
 #[repr(C)]
@@ -223,9 +245,10 @@ impl Heap {
         new_value: Handle<U>,
     ) {
         unsafe {
-            let raw = &*holder.gc_ptr();
-            if raw.header.is_old() {
+            let raw = &mut *holder.gc_ptr();
+            if raw.header.is_old() && raw.header.test_soft_mark() {
                 let raw2 = &*new_value.gc_ptr();
+                
                 if raw2.header.is_young() {
                     self.remembered.push(holder.gc_ptr() as *mut _);
                 }
@@ -305,7 +328,7 @@ impl Heap {
             self.graylist.push_back(root.obj);
         });
         self.process_remembered();
-        self.process_grey();
+        self.process_gray();
         if self.gc_ty == GcType::Minor {
             let mut head = self.young;
             self.young = core::ptr::null_mut();
@@ -461,7 +484,8 @@ impl Heap {
             while let Some(old) = self.remembered.pop() {
                 unsafe {
                     let old_ref = &mut *old;
-                    if old_ref.header.test_soft_mark() {
+                    if old_ref.header.is_soft_marked() {
+                       
                         self.cur_stats.remembered += 1;
                         old_ref.trait_object().visit_references(&mut |item| {
                             let item_ref = &mut *(item as *mut GcBox<()>);
@@ -472,18 +496,28 @@ impl Heap {
                             }
                         });
                         self.blacklist.push(old);
+                    } else {
+                        unreachable!();
                     }
                 }
             }
         } else {
             // in major collection empty remembered set.
-            self.remembered.clear();
+            self.remembered.drain(..).for_each(|x| {
+                unsafe {
+                    (&mut*x).header.clear_soft_mark();
+                }
+            })
         }
     }
-    fn process_grey(&mut self) {
+    fn process_gray(&mut self) {
         while let Some(value) = self.graylist.pop_front() {
             let val = unsafe { &mut *value };
             if !self.in_current_space(value) {
+                if val.header.test_soft_mark() {
+                    self.blacklist.push(value);
+                    self.visit_value(val);
+                }
                 continue;
             }
 
@@ -690,7 +724,7 @@ pub struct Handle<T: GcObject> {
 }
 
 impl<T: GcObject> Handle<T> {
-    pub fn gc_ptr(&self) -> *const GcBox<()> {
+    pub fn gc_ptr(&self) -> *mut GcBox<()> {
         self.ptr.cast::<_>().as_ptr()
     }
     pub fn ptr_eq(this: Self, other: Self) -> bool {

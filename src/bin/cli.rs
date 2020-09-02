@@ -1,6 +1,5 @@
-#[cfg(feature = "mimalloc")]
 use mimalloc::MiMalloc;
-#[cfg(feature = "mimalloc")]
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -21,7 +20,7 @@ impl Drop for Foo {
 use wafflelink::timer::Timer;
 fn main() {
     let mut timer = Timer::new(true);
-    let mut heap = Heap::new(true, !false);
+    let mut heap = Heap::new(true, true);
     let mut root = heap.allocate(Foo { next: None });
 
     for _ in 0..1000 {
@@ -34,7 +33,8 @@ fn main() {
     }
 
     heap.collect_garbage();
-
+    //drop(root);
+    heap.collect_garbage_force(GcType::Major);
     heap.dump_summary(timer.stop());
     println!("{:p}", &root);
 }
