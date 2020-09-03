@@ -354,13 +354,19 @@ impl Heap {
         } else {
             let mut head = self.old;
             self.old = core::ptr::null_mut();
+            let mut last = core::ptr::null_mut();
             while !head.is_null() {
                 let val = unsafe { &mut *head };
                 let next = val.header.next.untagged();
                 debug_assert!(!val.header.is_soft_marked());
                 if val.header.is_marked() {
+                    
                     val.header.unmark();
+                    last = head;
                 } else {
+                    unsafe {
+                        (&mut*last).header.next = TaggedPointer::new(next);
+                    }
                     let size = val.trait_object().size() + core::mem::size_of::<Header>();
                     self.major_size -= size;
                     self.cur_stats.sweeped += 1;
@@ -369,6 +375,7 @@ impl Heap {
                         core::ptr::drop_in_place(val.trait_object());
                     }
                 }
+                
                 head = next;
             }
         }
@@ -516,7 +523,9 @@ impl Heap {
             if !self.in_current_space(value) {
                 if val.header.test_soft_mark() {
                     self.blacklist.push(value);
-                    self.visit_value(val);
+                    if self.gc_ty == GcType::Major {
+                        self.visit_value(val);
+                    }
                 }
                 continue;
             }

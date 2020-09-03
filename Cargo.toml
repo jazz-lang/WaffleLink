@@ -9,7 +9,9 @@ edition = "2018"
 [dependencies]
 mimalloc = {version = "0.1", optional = false}
 time = "0.2"
+once_cell = "1.4"
 bit-set = "0.5.2"
+intrusive-collections = "0.9"
 [[bin]]
 name = "cli"
 

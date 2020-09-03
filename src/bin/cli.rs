@@ -3,38 +3,22 @@ use mimalloc::MiMalloc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-use wafflelink::gc::*;
-
-struct Foo {
-    next: Option<Handle<Self>>,
-}
-
-impl GcObject for Foo {
-    fn visit_references(&self, _trace: &mut dyn FnMut(*const GcBox<()>)) {
-        self.next.visit_references(_trace);
-    }
-}
-impl Drop for Foo {
-    fn drop(&mut self) {}
-}
-use wafflelink::timer::Timer;
+use wafflelink::heap::segregated_storage::*;
 fn main() {
-    let mut timer = Timer::new(true);
-    let mut heap = Heap::new(true, true);
-    let mut root = heap.allocate(Foo { next: None });
+    unsafe {
+        println!("size classes \n{:#?}", *SIZE_CLASSES);
+        let mut block = &mut *Block::boxed(index_to_size_class(5));
 
-    for _ in 0..1000 {
-        let v2 = heap.allocate(Foo { next: None });
-
-        let val = heap.allocate(Foo { next: None });
-
-        heap.write_barrier(root.to_heap(), val.to_heap());
-        root.next = Some(val.to_heap());
+        let p1 = block.allocate();
+        let p2 = block.allocate();
+        let p3 = block.allocate();
+        block.mark(p1);
+        block.mark(p3);
+        println!(
+            "{} {} {}",
+            block.is_marked(p1),
+            block.is_marked(p2),
+            block.is_marked(p3)
+        );
     }
-
-    heap.collect_garbage();
-    //drop(root);
-    heap.collect_garbage_force(GcType::Major);
-    heap.dump_summary(timer.stop());
-    println!("{:p}", &root);
 }
