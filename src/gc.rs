@@ -364,9 +364,11 @@ impl Heap {
                     val.header.unmark();
                     last = head;
                 } else {
+                    if last.is_null() == false {
                     unsafe {
                         (&mut*last).header.next = TaggedPointer::new(next);
                     }
+                }
                     let size = val.trait_object().size() + core::mem::size_of::<Header>();
                     self.major_size -= size;
                     self.cur_stats.sweeped += 1;
@@ -390,7 +392,7 @@ impl Heap {
         let cstats = self.cur_stats.clone();
         if cur_gc == GcType::Minor && self.major_size >= self.major_threshold {
             self.gc_ty = GcType::Major;
-            self.collect_garbage();
+            //self.collect_garbage();
         }
         if cur_gc == GcType::Minor && self.young_size >= self.young_threshold {
             self.young_threshold = (self.young_size as f64 * 0.75) as usize;
@@ -422,6 +424,8 @@ impl Heap {
         assert!(self.graylist.is_empty());
         assert!(self.remembered.is_empty());
     }
+    
+
     pub fn dump_summary(&self, runtime: f32) {
         let stats = &self.stats;
         let (mutator, gc) = stats.percentage(runtime);

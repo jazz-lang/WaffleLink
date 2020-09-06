@@ -1,20 +1,17 @@
 use super::object::*;
-use crate::heap::*;
-use bit_set::*;
-use intrusive_collections::{intrusive_adapter, SinglyLinkedList, SinglyLinkedListLink};
-
+use super::*;
+use bit_set::BitSet;
 pub struct BlockDirectory {
     cell_size: usize,
     blocks: Vec<*mut Block>,
-
     freelist: FreeList,
 }
 
 impl BlockDirectory {
-    pub const fn new(cell_size: usize) -> Self {
+    pub fn new(cell_size: usize) -> Self {
         Self {
             cell_size,
-            blocks: Vec::new(),
+            blocks: Vec::with_capacity(4),
             freelist: FreeList::new(),
         }
     }
@@ -42,7 +39,7 @@ impl BlockDirectory {
     pub fn allocate(&mut self) -> Address {
         let candidate = self.freelist.take();
         if candidate.is_null() {
-            candidate
+            self.allocate_slow_case()
         } else {
             return candidate;
         }
@@ -55,11 +52,12 @@ impl BlockDirectory {
             }
         }
     }
-    pub fn find_block_for_allocation(&self) -> Option<*mut Block> {
+    pub fn find_blocks_for_allocation(&self) -> Vec<*mut Block> {
         self.blocks
             .iter()
-            .find(|x| unsafe { !(&***x).full || (&***x).is_empty })
+            .filter(|x| unsafe { !(&***x).full || (&***x).is_empty })
             .copied()
+            .collect()
     }
     pub fn try_allocate_in(&mut self, block: *mut Block) -> Address {
         let b = unsafe { &mut *block };
@@ -73,12 +71,29 @@ impl BlockDirectory {
     }
 
     pub fn try_allocate_without_gc(&mut self) -> Address {
-        loop {
+        /*loop {
             let block = self.find_block_for_allocation();
             if block.is_none() {
                 break;
             }
             let result = self.try_allocate_in(block.unwrap());
+            if result.is_non_null() {
+                return result;
+            }
+        }*/
+        /*for block in self.find_blocks_for_allocation() {
+            let result = self.try_allocate_in(block);
+            if result.is_non_null() {
+                return result;
+            }
+        }*/
+        let mut this = unsafe { &mut *(self as *mut Self) };
+        for block in this
+            .blocks
+            .iter()
+            .filter(|x| unsafe { (&***x).is_empty || !(&***x).full })
+        {
+            let result = self.try_allocate_in(*block);
             if result.is_non_null() {
                 return result;
             }
@@ -107,7 +122,7 @@ impl FreeList {
         if self.head.is_null() {
             return self.head;
         }
-        let next = unsafe { self.head.to_mut_ptr::<Address>().read() };
+        let next = unsafe { self.head.to_mut_ptr::<Address>().offset(1).read() };
         let prev = self.head;
         self.head = next;
         prev
@@ -115,7 +130,7 @@ impl FreeList {
 
     pub fn add(&mut self, addr: Address) {
         unsafe {
-            addr.to_mut_ptr::<Address>().write(self.head);
+            addr.to_mut_ptr::<Address>().offset(1).write(self.head);
             self.head = addr;
         }
     }
@@ -141,7 +156,7 @@ pub const fn size_class_to_index(sz: usize) -> usize {
     (sz + SIZE_STEP - 1) / SIZE_STEP
 }
 
-pub const BLOCK_SIZE: usize = 1024 * 32;
+pub const BLOCK_SIZE: usize = 1024 * 16;
 
 /// A per block object map.
 pub struct ObjectMap {
@@ -203,30 +218,42 @@ pub struct Block {
     sz: usize,
     pub freelisted: bool,
     pub is_empty: bool,
+    pub directory: *mut BlockDirectory,
     pub full: bool,
 }
 
 impl Block {
     pub fn boxed(cell_size: usize) -> *mut Self {
         unsafe {
-            let mut mem = alloc(Layout::from_size_align(BLOCK_SIZE, BLOCK_SIZE).unwrap());
+            let mem = super::aligned_alloc(BLOCK_SIZE, BLOCK_SIZE);
+
             let mut mem = mem.cast::<Self>();
-            mem.write(Block {
-                is_empty: true,
-                full: false,
-                freelist: FreeList::new(),
-                marks: Some(ObjectMap::new()),
-                sz: cell_size,
-                freelisted: true,
-            });
-            let mut block = &mut *mem;
+            mem.cast::<u8>()
+                .offset(END_ATOM as _)
+                .cast::<Block>()
+                .write(Block {
+                    is_empty: true,
+                    directory: core::ptr::null_mut(),
+                    full: false,
+                    freelist: FreeList::new(),
+                    marks: Some(ObjectMap::new()),
+                    sz: cell_size,
+                    freelisted: true,
+                });
+            let mut block = &mut *mem.cast::<u8>().offset(END_ATOM as _).cast::<Block>();
             let mut cur = block.start();
+            let start = cur;
             let end = block.end();
             while cur < end {
+                (&mut *cur.to_mut_ptr::<GcBox<()>>()).zap(1);
+                assert!((&mut *cur.to_mut_ptr::<GcBox<()>>()).is_zapped());
+
                 block.freelist.add(cur);
                 cur = cur.offset(cell_size);
             }
-            mem
+            let x: u64 = core::mem::transmute([0, 1u32]);
+
+            mem.cast::<u8>().offset(END_ATOM as _).cast::<Block>()
         }
     }
     pub fn allocate(&mut self) -> Address {
@@ -240,14 +267,20 @@ impl Block {
         }
     }
     pub fn start(&self) -> Address {
-        Address::from(align_usize(self as *const Self as usize, 16))
+        unsafe {
+            Address::from_ptr(
+                Address::from_ptr(self)
+                    .to_ptr::<u8>()
+                    .offset(-(END_ATOM as isize)),
+            )
+        }
     }
 
     pub fn mark(&mut self, addr: Address) {
         self.marks.as_mut().unwrap().set_object(addr.to_mut_ptr());
     }
 
-    pub fn unmakr(&mut self, addr: Address) {
+    pub fn unmark(&mut self, addr: Address) {
         self.marks.as_mut().unwrap().unset_object(addr.to_mut_ptr());
     }
 
@@ -256,7 +289,7 @@ impl Block {
     }
 
     pub fn end(&self) -> Address {
-        Address::from_ptr(self).offset(BLOCK_SIZE)
+        Address::from_ptr(self)
     }
 
     pub fn prepare_for_mark(&mut self) {
@@ -280,6 +313,7 @@ impl Block {
         let end = self.end();
         self.is_empty = true;
         let mut count = 0;
+
         while cur < end {
             if self.marks.as_ref().unwrap().is_object(cur.to_mut_ptr()) {
                 cur = cur.offset(self.sz);
@@ -388,7 +422,7 @@ pub static SIZE_CLASS_FOR_SIZE_STEP: once_cell::sync::Lazy<[usize; NUM_SIZE_CLAS
         arr
     });
 pub struct SegregatedSpace {
-    directories: Vec<BlockDirectory>,
+    directories: Vec<*mut BlockDirectory>,
 }
 
 impl SegregatedSpace {
@@ -410,13 +444,13 @@ impl SegregatedSpace {
 
     pub fn shrink(&mut self) {
         for directory in self.directories.iter_mut() {
-            directory.shrink();
+            unsafe { &mut **directory }.shrink();
         }
     }
 
     pub fn sweep(&mut self) {
         for directory in self.directories.iter_mut() {
-            directory.sweep();
+            unsafe { &mut **directory }.sweep();
         }
     }
 }
@@ -425,10 +459,74 @@ impl Drop for Block {
     fn drop(&mut self) {
         unsafe {
             self.marks.take(); // "safe" drop for `marks`.
-            dealloc(
-                self as *mut Self as *mut u8,
-                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE),
-            );
+            super::aligned_free(self as *mut Self as *mut _);
         }
+    }
+}
+
+pub struct SegregatedAllocator {
+    allocator_for_size_step: [*mut BlockDirectory; NUM_SIZE_CLASSES],
+    space: SegregatedSpace,
+}
+
+impl SegregatedAllocator {
+    pub fn new() -> Self {
+        Self {
+            allocator_for_size_step: [core::ptr::null_mut(); NUM_SIZE_CLASSES],
+            space: SegregatedSpace::new(),
+        }
+    }
+    pub fn free_block(&mut self, block: *mut Block) {
+        unsafe {
+            let b = &mut *block;
+            (&mut *b.directory).blocks.retain(|x| *x != block);
+        }
+    }
+
+    pub fn allocate(&mut self, size: usize) -> Address {
+        if let Some(alloc) = self.allocator_for(size) {
+            alloc.allocate()
+        } else {
+            Address::null()
+        }
+    }
+
+    pub fn allocator_for(&mut self, size: usize) -> Option<&mut BlockDirectory> {
+        if size <= LARGE_CUTOFF {
+            let result = self.allocator_for_size_step[size_class_to_index(size)];
+            if result.is_null() {
+                Some(self.allocator_for_slow(size))
+            } else {
+                Some(unsafe { &mut *result })
+            }
+        } else {
+            None
+        }
+    }
+    fn allocator_for_slow(&mut self, size: usize) -> &mut BlockDirectory {
+        let index = size_class_to_index(size);
+        let size_class = SIZE_CLASS_FOR_SIZE_STEP[index];
+        let candidate = self.allocator_for_size_step[index];
+
+        if candidate.is_null() == false {
+            return unsafe { &mut *candidate };
+        }
+        let mut directory = Box::new(BlockDirectory::new(size_class));
+        let raw: *mut BlockDirectory = &mut *directory;
+        self.space.directories.push(raw);
+
+        let mut index = size_class_to_index(size_class);
+        loop {
+            if SIZE_CLASS_FOR_SIZE_STEP[index] != size_class {
+                break;
+            }
+
+            self.allocator_for_size_step[index] = raw;
+            if index == 0 {
+                break;
+            }
+            index -= 1;
+        }
+        unsafe { &mut *Box::into_raw(directory) }
     }
 }

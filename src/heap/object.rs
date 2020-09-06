@@ -18,7 +18,7 @@ impl Header {}
 
 #[repr(C)]
 pub struct GcBox<T: GcObject> {
-    header: Header,
+    pub header: Header,
     value: T,
 }
 
@@ -255,18 +255,11 @@ impl RootList {
 pub type GCObjectRef = *mut GcBox<()>;
 
 impl<T: GcObject> GcBox<T> {
-    pub fn zap(&self, reason: u32) {
-        unsafe {
-            let cell_words = self as *const Self as *mut u32;
-            cell_words.offset(0).write(0);
-            cell_words.offset(1).write(reason);
-        }
+    pub fn zap(&mut self, reason: u32) {
+        self.header.vtable = TaggedPointer::null();
     }
 
     pub fn is_zapped(&self) -> bool {
-        unsafe {
-            let this = self as *const Self as *const u32;
-            this.read() == 0
-        }
+        self.header.vtable.is_null()
     }
 }
