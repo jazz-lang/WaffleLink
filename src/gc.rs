@@ -5,13 +5,15 @@
 //! # Features
 //! - Non moving GC
 //! - Generational
-//! - Write barriers protected for fast GC cycles.
+//! - Easy to use (no write barriers,safepoints etc)
 //!
 //!
 //! # How it works?
 //! CakeGC is non-moving so many users might ask how does it work like generational?
 //! Answer is pretty easy: we maintain two singly linked lists, one for young generation heap
 //! and second one is for old generation and when sweeping we promote young to old.
+//! Also there is no write barriers needed for this GC to work because it is not incremental
+//! and will visit all references inside GC value, this might be slow but it works.
 
 use crate::timer::Timer;
 use core::sync::atomic::Ordering;
@@ -60,65 +62,41 @@ impl Header {
     }
 
     pub fn is_marked(&self) -> bool {
-        self.vtable.bit_is_set(2)
-        //(self.flags & 0x80) != 0
+        (self.flags & 0x80) != 0
     }
 
     pub fn test_and_mark(&mut self) -> bool {
         if self.is_marked() {
             false
         } else {
-            self.vtable.set_bit(2);
-            //self.flags |= 0x80;
+            self.flags |= 0x80;
             true
         }
     }
 
     pub fn mark(&mut self) {
-        self.vtable.set_bit(2);
-        //self.flags |= 0x80;
+        self.flags |= 0x80;
     }
 
     pub fn unmark(&mut self) {
-        self.vtable.clear(2);
-        //self.flags ^= 0x80;
+        self.flags ^= 0x80;
     }
     pub fn test_soft_mark(&mut self) -> bool {
-        /*if (self.flags & 0x40) != 0 {
+        if (self.flags & 0x40) != 0 {
             false
         } else {
             self.flags |= 0x40;
             true
-        }*/
-        if self.is_soft_marked() {
-            false
-        } else {
-            self.vtable.set_bit(1);
-            true
         }
     }
     pub fn is_soft_marked(&self) -> bool {
-        //(self.flags & 0x40) != 0
-        self.vtable.bit_is_set(1)
+        (self.flags & 0x40) != 0
     }
     pub fn clear_soft_mark(&mut self) {
         if self.is_soft_marked() {
-            self.vtable.clear(1);
-            //self.flags ^= 0x40;
+            self.flags ^= 0x40;
         }
     }
-
-    /*pub fn is_remembered(&self) -> bool {
-        self.next.bit_is_set(0)
-    }
-
-    pub fn set_remembered(&mut self)  {
-        self.next.set_bit(0)
-    }
-
-    pub fn clear_remembered(&mut self) {
-        self.next.clear(0)
-    }*/
 }
 
 #[repr(C)]
@@ -245,10 +223,9 @@ impl Heap {
         new_value: Handle<U>,
     ) {
         unsafe {
-            let raw = &mut *holder.gc_ptr();
-            if raw.header.is_old() && raw.header.test_soft_mark() {
+            let raw = &*holder.gc_ptr();
+            if raw.header.is_old() {
                 let raw2 = &*new_value.gc_ptr();
-                
                 if raw2.header.is_young() {
                     self.remembered.push(holder.gc_ptr() as *mut _);
                 }
@@ -354,21 +331,13 @@ impl Heap {
         } else {
             let mut head = self.old;
             self.old = core::ptr::null_mut();
-            let mut last = core::ptr::null_mut();
             while !head.is_null() {
                 let val = unsafe { &mut *head };
                 let next = val.header.next.untagged();
                 debug_assert!(!val.header.is_soft_marked());
                 if val.header.is_marked() {
-                    
                     val.header.unmark();
-                    last = head;
                 } else {
-                    if last.is_null() == false {
-                    unsafe {
-                        (&mut*last).header.next = TaggedPointer::new(next);
-                    }
-                }
                     let size = val.trait_object().size() + core::mem::size_of::<Header>();
                     self.major_size -= size;
                     self.cur_stats.sweeped += 1;
@@ -377,7 +346,6 @@ impl Heap {
                         core::ptr::drop_in_place(val.trait_object());
                     }
                 }
-                
                 head = next;
             }
         }
@@ -392,7 +360,7 @@ impl Heap {
         let cstats = self.cur_stats.clone();
         if cur_gc == GcType::Minor && self.major_size >= self.major_threshold {
             self.gc_ty = GcType::Major;
-            //self.collect_garbage();
+            self.collect_garbage();
         }
         if cur_gc == GcType::Minor && self.young_size >= self.young_threshold {
             self.young_threshold = (self.young_size as f64 * 0.75) as usize;
@@ -424,8 +392,6 @@ impl Heap {
         assert!(self.graylist.is_empty());
         assert!(self.remembered.is_empty());
     }
-    
-
     pub fn dump_summary(&self, runtime: f32) {
         let stats = &self.stats;
         let (mutator, gc) = stats.percentage(runtime);
@@ -495,8 +461,7 @@ impl Heap {
             while let Some(old) = self.remembered.pop() {
                 unsafe {
                     let old_ref = &mut *old;
-                    if old_ref.header.is_soft_marked() {
-                       
+                    if old_ref.header.test_soft_mark() {
                         self.cur_stats.remembered += 1;
                         old_ref.trait_object().visit_references(&mut |item| {
                             let item_ref = &mut *(item as *mut GcBox<()>);
@@ -507,18 +472,12 @@ impl Heap {
                             }
                         });
                         self.blacklist.push(old);
-                    } else {
-                        unreachable!();
                     }
                 }
             }
         } else {
             // in major collection empty remembered set.
-            self.remembered.drain(..).for_each(|x| {
-                unsafe {
-                    (&mut*x).header.clear_soft_mark();
-                }
-            })
+            self.remembered.clear();
         }
     }
     fn process_gray(&mut self) {
@@ -527,9 +486,7 @@ impl Heap {
             if !self.in_current_space(value) {
                 if val.header.test_soft_mark() {
                     self.blacklist.push(value);
-                    if self.gc_ty == GcType::Major {
-                        self.visit_value(val);
-                    }
+                    self.visit_value(val);
                 }
                 continue;
             }
@@ -737,7 +694,7 @@ pub struct Handle<T: GcObject> {
 }
 
 impl<T: GcObject> Handle<T> {
-    pub fn gc_ptr(&self) -> *mut GcBox<()> {
+    pub fn gc_ptr(&self) -> *const GcBox<()> {
         self.ptr.cast::<_>().as_ptr()
     }
     pub fn ptr_eq(this: Self, other: Self) -> bool {
