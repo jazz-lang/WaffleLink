@@ -11,21 +11,54 @@ pub trait GcObject {
 }
 
 pub struct Header {
-    pub vtable: TaggedPointer<()>,
+    pub vtable: *mut (),
+    pub next: *mut GcBox<()>,
 }
 
-impl Header {}
+impl Header {
+    pub fn vtable(&self) -> *mut () {
+        (self.vtable as usize & (!0x03)) as *mut _
+    }
 
-#[repr(C)]
+    pub fn tag(&self) -> u8 {
+        (self.vtable as usize & 0x03) as u8
+    }
+
+    pub fn set_vtable(&mut self, vtable: *mut ()) {
+        self.vtable = (vtable as usize | self.tag() as usize) as *mut ();
+    }
+
+    pub fn set_tag(&mut self, tag: u8) {
+        self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
+    }
+
+    pub fn next(&self) -> *mut () {
+        (self.next as usize & (!0x03)) as *mut _
+    }
+
+    pub fn next_tag(&self) -> u8 {
+        (self.next as usize & 0x03) as u8
+    }
+
+    pub fn set_next(&mut self, next: *mut ()) {
+        self.next = (next as usize | self.next_tag() as usize) as *mut _;
+    }
+
+    pub fn set_next_tag(&mut self, tag: u8) {
+        self.next = (self.next() as usize | tag as usize) as *mut _;
+    }
+}
+
+#[repr(C, packed)]
 pub struct GcBox<T: GcObject> {
     pub header: Header,
-    value: T,
+    pub value: T,
 }
 
 #[repr(C)]
-struct TraitObject {
-    data: *mut (),
-    vtable: *mut (),
+pub struct TraitObject {
+    pub data: *mut (),
+    pub vtable: *mut (),
 }
 
 impl<T: GcObject> GcBox<T> {
@@ -33,7 +66,7 @@ impl<T: GcObject> GcBox<T> {
         unsafe {
             core::mem::transmute(TraitObject {
                 data: &self.value as *const _ as *mut _,
-                vtable: self.header.vtable.untagged(),
+                vtable: self.header.vtable(),
             })
         }
     }
@@ -256,7 +289,7 @@ pub type GCObjectRef = *mut GcBox<()>;
 
 impl<T: GcObject> GcBox<T> {
     pub fn zap(&mut self, reason: u32) {
-        self.header.vtable = TaggedPointer::null();
+        self.header.vtable = 0 as *mut ();
     }
 
     pub fn is_zapped(&self) -> bool {
