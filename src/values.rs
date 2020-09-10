@@ -159,7 +159,7 @@ impl Value {
     pub fn is_true(self) -> bool {
         self.tag() == BOOL_TAG as u32 && self.payload() != 0
     }
-
+    #[inline]
     pub fn is_false(self) -> bool {
         self.tag() == BOOL_TAG as u32 && self.payload() == 0
     }

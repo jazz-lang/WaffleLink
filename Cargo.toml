@@ -9,6 +9,9 @@ edition = "2018"
 [dependencies]
 libmimalloc-sys = {version = "0.1",features=["extended"]}
 time = "0.2"
+bit-set=  '0.5'
+bit-vec = "0.6"
+intrusive-collections = "0.9"
 [[bin]]
 name = "cli"
 
