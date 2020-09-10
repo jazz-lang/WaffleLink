@@ -1,9 +1,26 @@
+//! # CakeGC
+//!
+//! Generational Mark&Sweep garbage collector.
+//!
+//!
+//!
+//!
+//!
+//!
+//!  
+
+// all these modules is for future use in incremental GC
+/*
 pub mod block_directory;
 pub mod block_directory_bits;
 pub mod freelist;
 pub mod local_allocator;
 pub mod markedblock;
+*/
+
 pub mod object;
+#[cfg(feature = "pmarking")]
+pub mod pmarking;
 use object::*;
 use std::collections::VecDeque;
 
@@ -27,20 +44,31 @@ pub struct TGC {
     mi_heap: *mut libmimalloc_sys::mi_heap_t,
     stack_begin: *const usize,
     stack_end: *const usize,
+
+    #[cfg(feature = "pmarking")]
+    pool: scoped_threadpool::Pool,
+    #[cfg(feature = "pmarking")]
+    num_cpus: usize,
+    pmark: bool,
 }
 
 const GC_VERBOSE_LOG: bool = true;
 const GC_LOG: bool = true;
 
 impl TGC {
-    pub fn new(begin: *const usize) -> Self {
+    pub fn new(begin: *const usize, n_cpus: Option<usize>, pmark: bool) -> Self {
         Self {
+            #[cfg(feature = "pmarking")]
+            num_cpus: n_cpus.unwrap_or(num_cpus::get() / 2),
+            #[cfg(feature = "pmarking")]
+            pool: scoped_threadpool::Pool::new(n_cpus.unwrap_or(num_cpus::get() / 2) as u32),
             eden_allowed_size: 8 * 1024,
             eden_size: 0,
             eden: 0 as *mut _,
             old: 0 as *mut _,
             old_allowed_size: 16 * 1024,
             old_size: 0,
+            pmark,
             gc_ty: GC_NONE,
             roots: RootList::new(),
             graystack: Default::default(),
@@ -156,18 +184,73 @@ impl TGC {
     }
 
     fn mark_from_roots(&mut self) {
-        if GC_LOG {
-            eprintln!("--mark from roots");
-        }
+        #[cfg(feature = "pmarking")]
+        {
+            if self.pmark {
+                if GC_LOG {
+                    eprintln!(
+                        "--start parallel marking\n---thread count={}",
+                        self.pool.thread_count()
+                    );
+                    let mut roots = vec![];
+                    self.roots.walk(&mut |root| unsafe {
+                        roots.push(Address::from_ptr((&*root).obj));
+                    });
 
-        let this = unsafe { &mut *(self as *mut Self) };
-        this.roots.walk(&mut |root| unsafe {
-            self.graystack.push_back((&*root).obj);
-        });
-        if GC_LOG {
-            eprintln!("--process gray stack");
+                    let mut count = 0;
+                    let blacklist_recv = pmarking::start(&roots, &mut self.pool, self.gc_ty);
+                    if GC_LOG {
+                        eprintln!("---pmarking finished, processing blacklist");
+                    }
+                    while let Ok(addr) = blacklist_recv.recv() {
+                        count += 1;
+                        if GC_LOG {
+                            eprintln!("---received blacklisted object {}", addr);
+                        }
+                        unsafe {
+                            addr.to_mut_obj().header.set_tag(0);
+                        }
+                    }
+                    if GC_LOG {
+                        if count == 0 {
+                            eprintln!("---No objects from old gen was blacklisted");
+                        }
+                        eprintln!("--marking finished")
+                    }
+                }
+            } else {
+                if GC_LOG {
+                    eprintln!("--mark from roots");
+                }
+
+                let this = unsafe { &mut *(self as *mut Self) };
+                this.roots.walk(&mut |root| unsafe {
+                    self.graystack.push_back((&*root).obj);
+                });
+                if GC_LOG {
+                    eprintln!("--process gray stack");
+                }
+                self.process_gray();
+            }
         }
-        self.process_gray();
+        #[cfg(not(feature = "pmarking"))]
+        {
+            if self.pmark {
+                panic!("WaffleLink compiled without support for parallel marking!");
+            }
+            if GC_LOG {
+                eprintln!("--mark from roots");
+            }
+
+            let this = unsafe { &mut *(self as *mut Self) };
+            this.roots.walk(&mut |root| unsafe {
+                self.graystack.push_back((&*root).obj);
+            });
+            if GC_LOG {
+                eprintln!("--process gray stack");
+            }
+            self.process_gray();
+        }
     }
     #[inline(never)]
     pub fn collect_garbage(&mut self, stack_end: *const usize) {
@@ -280,5 +363,118 @@ impl TGC {
                 }
             }
         }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Address(usize);
+
+impl Address {
+    #[inline(always)]
+    pub fn from(val: usize) -> Address {
+        Address(val)
+    }
+
+    #[inline(always)]
+    pub fn offset_from(self, base: Address) -> usize {
+        debug_assert!(self >= base);
+
+        self.to_usize() - base.to_usize()
+    }
+
+    #[inline(always)]
+    pub fn offset(self, offset: usize) -> Address {
+        Address(self.0 + offset)
+    }
+
+    #[inline(always)]
+    pub fn sub(self, offset: usize) -> Address {
+        Address(self.0 - offset)
+    }
+
+    #[inline(always)]
+    pub fn add_ptr(self, words: usize) -> Address {
+        Address(self.0 + words * core::mem::size_of::<usize>())
+    }
+
+    #[inline(always)]
+    pub fn sub_ptr(self, words: usize) -> Address {
+        Address(self.0 - words * core::mem::size_of::<usize>())
+    }
+
+    #[inline(always)]
+    pub fn to_mut_obj(self) -> &'static mut GcBox<()> {
+        unsafe { &mut *self.to_mut_ptr::<_>() }
+    }
+
+    #[inline(always)]
+    pub fn to_obj(self) -> &'static GcBox<()> {
+        unsafe { &*self.to_mut_ptr::<_>() }
+    }
+
+    #[inline(always)]
+    pub fn to_usize(self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub fn from_ptr<T>(ptr: *const T) -> Address {
+        Address(ptr as usize)
+    }
+
+    #[inline(always)]
+    pub fn to_ptr<T>(&self) -> *const T {
+        self.0 as *const T
+    }
+
+    #[inline(always)]
+    pub fn to_mut_ptr<T>(&self) -> *mut T {
+        self.0 as *const T as *mut T
+    }
+
+    #[inline(always)]
+    pub fn null() -> Address {
+        Address(0)
+    }
+
+    #[inline(always)]
+    pub fn is_null(self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline(always)]
+    pub fn is_non_null(self) -> bool {
+        self.0 != 0
+    }
+}
+use std::cmp::Ordering;
+use std::fmt;
+impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x{:x}", self.to_usize())
+    }
+}
+
+impl fmt::Debug for Address {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x{:x}", self.to_usize())
+    }
+}
+
+impl PartialOrd for Address {
+    fn partial_cmp(&self, other: &Address) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Address {
+    fn cmp(&self, other: &Address) -> Ordering {
+        self.to_usize().cmp(&other.to_usize())
+    }
+}
+
+impl From<usize> for Address {
+    fn from(val: usize) -> Address {
+        Address(val)
     }
 }

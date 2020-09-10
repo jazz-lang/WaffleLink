@@ -1,4 +1,5 @@
 use crate::gc::TaggedPointer;
+use std::sync::atomic::{AtomicUsize, Ordering};
 pub trait GcObject {
     /// Returns size of current object. This is usually just `size_of_val(self)` but in case
     /// when you need dynamically sized type e.g array then this should return something like
@@ -16,6 +17,13 @@ pub struct Header {
 }
 
 impl Header {
+    pub fn vtable_atomic(&self) -> &AtomicUsize {
+        unsafe { std::mem::transmute(&self.vtable) }
+    }
+    pub fn next_atomic(&self) -> &AtomicUsize {
+        unsafe { std::mem::transmute(&self.next) }
+    }
+
     pub fn vtable(&self) -> *mut () {
         (self.vtable as usize & (!0x03)) as *mut _
     }
@@ -31,7 +39,56 @@ impl Header {
     pub fn set_tag(&mut self, tag: u8) {
         self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
     }
-
+    pub fn atomic_test_and_set_tag(&mut self, tag: u8) -> bool {
+        let mut current = self.vtable();
+        loop {
+            if current as usize & 0x03 == tag as usize {
+                return true;
+            }
+            let new = (current as usize | tag as usize) as *mut ();
+            let res = self.vtable_atomic().compare_exchange_weak(
+                current as _,
+                new as _,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+            match res {
+                Ok(_) => break,
+                Err(x) => {
+                    current = x as *mut ();
+                }
+            }
+        }
+        false
+    }
+    pub fn atomic_test_and_set_next_tag(&mut self, tag: u8) -> bool {
+        let mut current = self.next();
+        loop {
+            if current as usize & 0x03 == tag as usize {
+                return true;
+            }
+            let new = (current as usize | tag as usize) as *mut ();
+            let res = self.next_atomic().compare_exchange_weak(
+                current as _,
+                new as _,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+            match res {
+                Ok(_) => break,
+                Err(x) => {
+                    current = x as *mut ();
+                }
+            }
+        }
+        false
+    }
+    pub fn atomic_tag(&self) -> u8 {
+        (self.vtable_atomic().load(Ordering::Relaxed) & 0x03) as u8
+    }
+    pub fn atomic_next_tag(&self) -> u8 {
+        (self.next_atomic().load(Ordering::Relaxed) & 0x03) as u8
+    }
     pub fn next(&self) -> *mut () {
         (self.next as usize & (!0x03)) as *mut _
     }

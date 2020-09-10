@@ -23,10 +23,10 @@ use wafflelink::timer::Timer;
 fn main() {
     let mut timer = Timer::new(true);
     let mut s = 0;
-    let mut heap = TGC::new(&s);
+    let mut heap = TGC::new(&s, None, true);
     let mut root = heap.allocate(Foo { next: None });
 
-    for _ in 0..1000 {
+    for _ in 0..20 {
         let v2 = heap.allocate(Foo { next: None });
 
         let val = heap.allocate(Foo { next: None });
@@ -37,7 +37,7 @@ fn main() {
     let end = 0;
     heap.collect_garbage(&end);
     drop(root);
-    heap.collect_garbage(&end);
+    //heap.collect_garbage(&end);
     //heap.collect_garbage_force(GcType::Major);
 
     //heap.dump_summary(timer.stop());

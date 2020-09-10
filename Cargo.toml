@@ -12,6 +12,16 @@ time = "0.2"
 bit-set=  '0.5'
 bit-vec = "0.6"
 intrusive-collections = "0.9"
+rand = "0.7"
+num_cpus = {version = "1.13.*",optional = true }
+scoped_threadpool = {version = "0.1.*",optional = true }
+parking_lot = {version = "0.11",optional = true}
+threadpool = {version = "1.8.*",optional = true}
+crossbeam-deque = {version="0.7.*",optional = true}
+flume = {version = "0.7",optional = true}
 [[bin]]
 name = "cli"
 
+[features]
+pmarking = ["num_cpus","scoped_threadpool","parking_lot","threadpool","crossbeam-deque","flume"]
+default = ["pmarking"]
