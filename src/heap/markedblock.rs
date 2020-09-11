@@ -1,7 +1,7 @@
+use super::bitmap::BitMap;
 use super::block_directory::*;
 use super::freelist::*;
 use super::object::*;
-use bit_set::*;
 /// A marked block is a page-aligned container for heap-allocated objects.
 /// Objects are allocated within cells of the marked block. For a given
 /// marked block, all cells have the same size. Objects smaller than the
@@ -24,46 +24,6 @@ const_assert!(PAYLOAD_SIZE == (BLOCK_SIZE - core::mem::size_of::<Footer>()) & !(
 
 pub type Atom = [u8; ATOM_SIZE];
 
-/// A per block object map.
-struct ObjectMap {
-    set: BitSet<u32>,
-}
-
-impl ObjectMap {
-    /// Create a new `ObjectMap`.
-    fn new() -> ObjectMap {
-        ObjectMap {
-            set: BitSet::with_capacity(BLOCK_SIZE / ATOM_SIZE),
-        }
-    }
-
-    /// Set the address as a valid object.
-    fn set_object(&mut self, atom_n: u32) {
-        self.set.insert(atom_n as _);
-    }
-
-    /// Unset the address as a valid object.
-    fn unset_object(&mut self, atom_n: u32) {
-        self.set.remove(atom_n as _);
-    }
-
-    /// Return `true` is the address is a valid object.
-    fn is_set(&self, atom_n: u32) -> bool {
-        self.set.contains(atom_n as _)
-    }
-
-    /// Update this `ObjectMap` with the difference of this `ObjectMap` and
-    /// the other.
-    fn difference(&mut self, other: &ObjectMap) {
-        self.set.difference_with(&other.set);
-    }
-
-    /// Clear all entries.
-    fn clear(&mut self) {
-        self.set.clear();
-    }
-}
-
 #[repr(C)]
 pub struct MarkedBlockHandle {
     pub atoms_per_cell: u32,
@@ -80,8 +40,8 @@ pub struct Footer {
     handle: &'static mut MarkedBlockHandle,
     marking_version: u32,
     newly_allocated_version: u32,
-    marks: ObjectMap,
-    newly_allocated: ObjectMap,
+    marks: BitMap,
+    newly_allocated: BitMap,
 }
 
 impl MarkedBlock {
@@ -106,8 +66,8 @@ impl MarkedBlock {
             *(&mut *block).footer() = Footer {
                 handle,
                 marking_version: 0,
-                marks: ObjectMap::new(),
-                newly_allocated: ObjectMap::new(),
+                marks: BitMap::new(),
+                newly_allocated: BitMap::new(),
                 newly_allocated_version: 0,
             };
             &mut *raw
@@ -144,11 +104,17 @@ impl MarkedBlock {
             return false;
         }
         crate::utils::atomics::load_load_fence();
-        self.footer().marks.is_set(self.atom_number(p))
+        self.footer().marks.get(self.atom_number(p) as _)
     }
 
     pub fn is_marked(&self, p: *const ()) -> bool {
-        self.footer().marks.is_set(self.atom_number(p))
+        self.footer().marks.get(self.atom_number(p) as _)
+    }
+
+    pub fn test_and_set_marked(&self, p: *const ()) -> bool {
+        self.footer()
+            .marks
+            .concurrent_test_and_set(self.atom_number(p) as _)
     }
 }
 
@@ -234,7 +200,7 @@ impl MarkedBlockHandle {
             let mut is_empty = true;
             let mut i = 0;
             while i < self.end_atom {
-                if self.block_footer().marks.is_set(i) {
+                if self.block_footer().marks.get(i as _) {
                     is_empty = false;
                     continue;
                 }

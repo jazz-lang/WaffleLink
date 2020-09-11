@@ -10,11 +10,14 @@
 //!  
 
 // all these modules is for future use in incremental GC
+pub mod bitmap;
 pub mod block_directory;
 pub mod block_directory_bits;
 pub mod freelist;
 pub mod local_allocator;
 pub mod markedblock;
+pub mod markedspace;
+pub mod precise_allocation;
 
 pub mod object;
 #[cfg(feature = "pmarking")]

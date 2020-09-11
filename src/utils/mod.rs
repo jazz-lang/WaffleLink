@@ -1,5 +1,6 @@
 pub mod atomics;
 pub mod fast_bitvec;
+pub mod uniset;
 pub trait Bool {
     const RES: bool;
 }

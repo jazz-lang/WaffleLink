@@ -21,7 +21,7 @@ impl Drop for Foo {
 }
 use wafflelink::timer::Timer;
 fn main() {
-    let mut timer = Timer::new(true);
+    /*let mut timer = Timer::new(true);
     let mut s = 0;
     let mut heap = TGC::new(&s, None, true);
     let mut root = heap.allocate(Foo { next: None });
@@ -40,5 +40,6 @@ fn main() {
     //heap.collect_garbage(&end);
     //heap.collect_garbage_force(GcType::Major);
 
-    //heap.dump_summary(timer.stop());
+    //heap.dump_summary(timer.stop());*/
+    println!("{}", markedblock::FOOTER_SIZE);
 }

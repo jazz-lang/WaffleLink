@@ -9,7 +9,6 @@ edition = "2018"
 [dependencies]
 libmimalloc-sys = {version = "0.1",features=["extended"]}
 time = "0.2"
-bit-set=  '0.5'
 bit-vec = "0.6"
 intrusive-collections = "0.9"
 rand = "0.7"
@@ -25,3 +24,8 @@ name = "cli"
 [features]
 pmarking = ["num_cpus","scoped_threadpool","parking_lot","threadpool","crossbeam-deque","flume"]
 default = ["pmarking"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 'z'
