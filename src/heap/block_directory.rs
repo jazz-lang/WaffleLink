@@ -15,7 +15,7 @@ fn find_bit(bv: &BitVec, x: usize, bit: bool) -> usize {
 }
 
 pub struct BlockDirectory {
-    blocks: Vec<*mut MarkedBlockHandle>,
+    pub blocks: Vec<*mut MarkedBlockHandle>,
     free_block_indicies: Vec<u32>,
     cell_size: usize,
     /// After you do something to a block based on one of these cursors, you clear the bit in the

@@ -41,5 +41,5 @@ fn main() {
     //heap.collect_garbage_force(GcType::Major);
 
     //heap.dump_summary(timer.stop());*/
-    println!("{}", markedblock::FOOTER_SIZE);
+    *markedspace::SIZE_CLASSES_FOR_SIZE_STEP;
 }

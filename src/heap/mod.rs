@@ -7,7 +7,7 @@
 //!
 //!
 //!
-//!  
+//!
 
 // all these modules is for future use in incremental GC
 pub mod bitmap;
@@ -477,5 +477,20 @@ impl Ord for Address {
 impl From<usize> for Address {
     fn from(val: usize) -> Address {
         Address(val)
+    }
+}
+
+pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
+    (x + (divisor - 1)) & !(divisor - 1)
+}
+
+pub struct Heap {
+    pub(crate) object_space: markedspace::MarkedSpace,
+}
+impl Heap {
+    pub fn new() -> Self {
+        Self {
+            object_space: markedspace::MarkedSpace::new(),
+        }
     }
 }

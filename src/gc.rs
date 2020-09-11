@@ -378,7 +378,6 @@ impl Heap {
         if self.cycle_stats {
             eprintln!(
                 "{:?} cycle finished in {}ms({}ns): \n Sweeped={}\n Freed={} \n Remembered={} \n Promoted={}",
-                
                 cur_gc,end.whole_milliseconds(),
                 end.whole_nanoseconds(),
                 cstats.sweeped,

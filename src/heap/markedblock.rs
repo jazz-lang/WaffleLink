@@ -74,6 +74,20 @@ impl MarkedBlock {
         }
     }
 
+    pub fn reset_allocated(&self) {
+        self.footer().newly_allocated.clear_all();
+        self.footer().newly_allocated_version = super::markedspace::NULL_VERSION;
+    }
+    pub fn reset_marks(&self, marking_version: u32) {
+        if self.footer().marking_version != crate::vm().heap().object_space.marking_version {
+            self.footer().marks.clear_all();
+        }
+        self.footer().marking_version = 0;
+    }
+
+    pub fn are_marks_stale(&self) -> bool {
+        self.footer().marking_version != crate::vm().heap().object_space.marking_version
+    }
     pub fn atoms(&self) -> *mut Atom {
         self as *const Self as *mut _
     }
@@ -107,8 +121,12 @@ impl MarkedBlock {
         self.footer().marks.get(self.atom_number(p) as _)
     }
 
-    pub fn is_marked(&self, p: *const ()) -> bool {
+    pub fn is_marked_dep(&self, p: *const ()) -> bool {
         self.footer().marks.get(self.atom_number(p) as _)
+    }
+
+    pub fn is_marked(&self,p: *const ()) -> bool {
+        self.is_markedv(crate::vm().heap().object_space.marking_version, p)
     }
 
     pub fn test_and_set_marked(&self, p: *const ()) -> bool {

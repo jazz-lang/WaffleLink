@@ -1,5 +1,9 @@
 use super::object::GcBox;
+use intrusive_collections::{intrusive_adapter, LinkedListLink, UnsafeRef};
+use std::alloc::{alloc, dealloc, Layout};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+intrusive_adapter!(pub PreciseAllocationNode = UnsafeRef<PreciseAllocation> : PreciseAllocation {link: LinkedListLink});
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
 /// Wafflelink has a good malloc that already knows what to do for large allocations. The GC shouldn't
 /// have to think about such things. That's where PreciseAllocation comes in. We will allocate large
@@ -7,11 +11,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// when a *mut GcBox is a PreciseAllocation because it will have the ATOM_SIZE / 2 bit set.
 #[repr(C)]
 pub struct PreciseAllocation {
-    cell_size: usize,
+    pub link: LinkedListLink,
+    pub cell_size: usize,
     pub is_marked: AtomicBool,
     pub index_in_space: u32,
     pub is_newly_allocated: bool,
     pub adjusted_alignment: bool,
+    pub has_valid_cell: bool,
 }
 
 impl PreciseAllocation {
@@ -87,4 +93,69 @@ impl PreciseAllocation {
     pub fn is_live(&self) -> bool {
         self.is_marked() || self.is_newly_allocated
     }
+
+    pub fn flip(&self) {
+        self.clear_marked();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.is_marked() && !self.is_newly_allocated
+    }
+
+    pub fn sweep(&mut self) {
+        if self.has_valid_cell && !self.is_live() {
+            unsafe {
+                let cell = self.cell();
+                std::ptr::drop_in_place((&mut *cell).trait_object());
+            }
+            self.has_valid_cell = false;
+        }
+    }
+
+    pub fn try_create(size: usize, index_in_space: u32) -> *mut Self {
+        let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
+        unsafe {
+            let mut space = alloc(
+                Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)
+                    .unwrap(),
+            );
+            let mut adjusted_alignment = false;
+            if !is_aligned_for_precise_allocation(space) {
+                space = space.offset(Self::HALF_ALIGNMENT as _);
+                adjusted_alignment = true;
+            }
+
+            space.cast::<Self>().write(Self {
+                link: LinkedListLink::new(),
+                adjusted_alignment,
+                is_marked: AtomicBool::new(false),
+                is_newly_allocated: true,
+                has_valid_cell: true,
+                cell_size: size,
+                index_in_space,
+            });
+
+            space.cast()
+        }
+    }
+    pub fn cell_size(&self) -> usize {
+        self.cell_size
+    }
+    pub fn destroy(&mut self) {
+        let adjusted_alignment_allocation_size =
+            Self::header_size() + self.cell_size + Self::HALF_ALIGNMENT;
+        let base = self.base_pointer();
+        unsafe {
+            dealloc(
+                base.cast(),
+                Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)
+                    .unwrap(),
+            );
+        }
+    }
+}
+
+pub fn is_aligned_for_precise_allocation(mem: *mut u8) -> bool {
+    let allocable_ptr = mem as usize;
+    (allocable_ptr & (PreciseAllocation::ALIGNMENT - 1)) != 0
 }

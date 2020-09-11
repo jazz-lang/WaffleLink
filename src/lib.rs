@@ -51,3 +51,24 @@ pub mod timer;
 pub mod utils;
 pub mod values;
 pub mod vm;
+
+pub struct VM {
+    heap: std::cell::UnsafeCell<heap::Heap>,
+}
+
+pub static VM_INSTANCE: once_cell::sync::Lazy<VM> = once_cell::sync::Lazy::new(|| VM {
+    heap: std::cell::UnsafeCell::new(heap::Heap::new()),
+});
+
+impl VM {
+    pub fn heap(&self) -> &mut heap::Heap {
+        unsafe { &mut *self.heap.get() }
+    }
+}
+
+unsafe impl Send for VM {}
+unsafe impl Sync for VM {}
+
+pub fn vm() -> &'static VM {
+    &*VM_INSTANCE
+}
