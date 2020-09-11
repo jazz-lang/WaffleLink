@@ -30,14 +30,15 @@ pub struct BlockDirectory {
 }
 
 impl BlockDirectory {
+    pub fn cell_size(&self) -> usize {
+        self.cell_size
+    }
     pub fn find_empty_block_to_seal(&mut self) -> *mut MarkedBlockHandle {
-        let empty_cursor = find_bit(&self.bits, self.empty_cursor as _, true);
-        self.empty_cursor = empty_cursor as _;
-        if empty_cursor >= self.blocks.len() {
-            0 as *mut MarkedBlockHandle
-        } else {
-            self.blocks[empty_cursor]
-        }
+        self.blocks
+            .iter()
+            .find(|x| unsafe { (&***x).empty })
+            .copied()
+            .unwrap_or(0 as *mut _)
     }
 
     pub fn find_block_for_allocation(
@@ -61,6 +62,57 @@ impl BlockDirectory {
             block.empty = false;
             block.can_allocate = true;
             return *res.1;
+        }
+    }
+
+    pub fn find_blocks_for_allocation(
+        &mut self,
+        local: &mut LocalAllocator,
+        mut and_then: impl FnMut(&mut LocalAllocator, *mut MarkedBlockHandle) -> *mut (),
+    ) -> *mut () {
+        for block in self.blocks.iter().filter(|block| unsafe {
+            (&***block).empty || ((&***block).can_allocate && !(&***block).empty)
+        }) {
+            let res = and_then(local, *block);
+            if res.is_null() {
+                continue;
+            }
+            return res;
+        }
+        0 as *mut ()
+    }
+    pub fn find_blocks_to_seal(&mut self, mut and_then: impl FnMut(*mut MarkedBlockHandle)) {
+        self.blocks
+            .iter()
+            .filter(|block| unsafe { (&***block).empty })
+            .for_each(|block| {
+                and_then(*block);
+            })
+    }
+    pub fn remove_block(&mut self, p: &mut MarkedBlockHandle) {
+        self.blocks[p.index as usize] = 0 as *mut _;
+        self.free_block_indicies.push(p.index);
+        p.did_remove_from_directory();
+    }
+    pub fn create_block(&mut self) -> &'static mut MarkedBlockHandle {
+        let handle = MarkedBlock::create();
+        handle
+    }
+    pub fn add_block(&mut self, p: *mut MarkedBlockHandle) {
+        unsafe {
+            let mut handle = &mut *p;
+            let mut index;
+            if let Some(ix) = self.free_block_indicies.pop() {
+                self.blocks[ix as usize] = p;
+                index = ix;
+            } else {
+                index = self.blocks.len() as u32;
+                self.blocks.push(p);
+            }
+
+            // This is the point at which the block learns of its cell_size()
+            handle.did_add_to_directory(self as *mut _, index);
+            handle.empty = true;
         }
     }
 }

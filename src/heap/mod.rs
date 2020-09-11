@@ -10,13 +10,11 @@
 //!  
 
 // all these modules is for future use in incremental GC
-/*
 pub mod block_directory;
 pub mod block_directory_bits;
 pub mod freelist;
 pub mod local_allocator;
 pub mod markedblock;
-*/
 
 pub mod object;
 #[cfg(feature = "pmarking")]
@@ -52,8 +50,8 @@ pub struct TGC {
     pmark: bool,
 }
 
-const GC_VERBOSE_LOG: bool = true;
-const GC_LOG: bool = true;
+pub const GC_VERBOSE_LOG: bool = true;
+pub const GC_LOG: bool = true;
 
 impl TGC {
     pub fn new(begin: *const usize, n_cpus: Option<usize>, pmark: bool) -> Self {

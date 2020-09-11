@@ -1,3 +1,7 @@
+//! # Bump'n'pop
+//!
+//! Hybrid bump-pointer/free-list allocator.
+
 #[repr(C)]
 pub struct FreeCell {
     preserved_bits: u64,
@@ -68,6 +72,10 @@ impl FreeList {
 
         false
     }
+    pub fn allocation_will_fail(&self) -> bool {
+        self.head.is_null() || self.remaining == 0
+    }
+
     pub fn allocate(&mut self, mut slow_path: impl FnMut() -> *mut ()) -> *mut () {
         let mut remaining = self.remaining;
         if remaining != 0 {
@@ -78,7 +86,7 @@ impl FreeList {
                 as *mut ();
         }
         let result = self.head;
-
+        #[cold]
         if result.is_null() {
             return slow_path();
         }
