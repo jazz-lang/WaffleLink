@@ -1,9 +1,3 @@
-#[cfg(feature = "mimalloc")]
-use mimalloc::MiMalloc;
-#[cfg(feature = "mimalloc")]
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
 use object::*;
 use wafflelink::heap::*;
 
@@ -28,9 +22,6 @@ fn main() {
     let mut bv1 = FastBitVector::new();
     bv1.resize(64);
     bv1.set_at(30, true);
-    bv |= bv1;
-    println!("{:?}", bv);
-    bv.for_each_clear_bit(|bit| {
-        println!("{}", bit);
-    });
+    let ored = bv.or(&bv1);
+    eprintln!("{:?}", ored)
 }

@@ -13,7 +13,7 @@ fn find_bit(bv: &BitVec, x: usize, bit: bool) -> usize {
 
     bv.len()
 }
-
+use parking_lot::Mutex;
 pub struct BlockDirectory {
     pub blocks: Vec<*mut MarkedBlockHandle>,
     free_block_indicies: Vec<u32>,
@@ -23,22 +23,32 @@ pub struct BlockDirectory {
     /// this number is bound by capacity of Vec blocks, which must be within u32.
     empty_cursor: u32,
     unswept_cursor: u32,
-
+    bitvector_lock: Mutex<()>,
+    local_allocators_lock: Mutex<()>,
     next_directory: *mut Self,
     local_allocators: LinkedList<LocalAllocator>,
-    bits: BitVec,
+    bits: block_directory_bits::BlockDirectoryBits,
 }
-
+use block_directory_bits::*;
 impl BlockDirectory {
     pub fn cell_size(&self) -> usize {
         self.cell_size
     }
     pub fn find_empty_block_to_seal(&mut self) -> *mut MarkedBlockHandle {
-        self.blocks
-            .iter()
-            .find(|x| unsafe { (&***x).empty })
-            .copied()
-            .unwrap_or(0 as *mut _)
+        /*self.blocks
+        .iter()
+        .find(|x| unsafe { (&***x).empty })
+        .copied()
+        .unwrap_or(0 as *mut _)*/
+        self.empty_cursor = self
+            .bits
+            .empty()
+            .base
+            .find_bit(self.empty_cursor as _, true) as u32;
+        if self.empty_cursor >= self.blocks.len() as u32 {
+            return core::ptr::null_mut();
+        }
+        self.blocks[self.empty_cursor as usize]
     }
 
     pub fn find_block_for_allocation(

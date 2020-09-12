@@ -313,6 +313,30 @@ impl<'a, W: Words> ops::Not for &'a FastBitVectorImpl<W> {
         }
     }
 }
+
+impl<W: Words, U: Words> ops::BitOr<U> for FastBitVectorImpl<W> {
+    type Output = FastBitVectorImpl<FastBitVectorOrWords<W, U>>;
+    fn bitor(self, rhs: U) -> Self::Output {
+        FastBitVectorImpl {
+            words: FastBitVectorOrWords {
+                left: self.words,
+                right: rhs,
+            },
+        }
+    }
+}
+impl<W: Words, U: Words> ops::BitAnd<U> for FastBitVectorImpl<W> {
+    type Output = FastBitVectorImpl<FastBitVectorAndWords<W, U>>;
+    fn bitand(self, rhs: U) -> Self::Output {
+        FastBitVectorImpl {
+            words: FastBitVectorAndWords {
+                left: self.words,
+                right: rhs,
+            },
+        }
+    }
+}
+
 impl<'a, W: Words> Words for &'a mut W {
     type ViewType = W::ViewType;
     fn get_word_mut(&mut self, n: usize) -> &mut u32 {
@@ -572,6 +596,23 @@ impl FastBitVector {
         }
         true
     }
+
+    pub fn or<U: Words>(&self, other: &U) -> FastBitVector {
+        let mut bvec = FastBitVector::new();
+        bvec.resize(self.num_bits());
+        for i in 0..self.num_bits() {
+            *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) | other.get_word(i);
+        }
+        bvec
+    }
+    pub fn and<U: Words>(&self, other: &U) -> FastBitVector {
+        let mut bvec = FastBitVector::new();
+        bvec.resize(self.num_bits());
+        for i in 0..self.num_bits() {
+            *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) & other.get_word(i);
+        }
+        bvec
+    }
 }
 
 impl<W: Words> ops::BitOrAssign<W> for FastBitVector {
@@ -675,5 +716,60 @@ impl ops::BitOrAssign<bool> for FastBitReference {
         if !rhs {
             *self ^= rhs;
         }
+    }
+}
+
+pub struct FastBitVectorOrWords<T: Words, U: Words> {
+    left: T,
+    right: U,
+}
+
+impl<T: Words, U: Words> Words for FastBitVectorOrWords<T, U> {
+    fn get_num_bits(&self) -> usize {
+        self.left.get_num_bits()
+    }
+
+    type ViewType = Self;
+
+    fn get_word(&self, n: usize) -> u32 {
+        self.left.get_word(n) | self.right.get_word(n)
+    }
+    fn get_word_mut(&mut self, _: usize) -> &mut u32 {
+        unreachable!()
+    }
+
+    fn word_view(&self) -> &Self::ViewType {
+        self
+    }
+
+    fn word_view_mut(&mut self) -> &mut Self::ViewType {
+        self
+    }
+}
+pub struct FastBitVectorAndWords<T: Words, U: Words> {
+    left: T,
+    right: U,
+}
+
+impl<T: Words, U: Words> Words for FastBitVectorAndWords<T, U> {
+    fn get_num_bits(&self) -> usize {
+        self.left.get_num_bits()
+    }
+
+    type ViewType = Self;
+
+    fn get_word(&self, n: usize) -> u32 {
+        self.left.get_word(n) & self.right.get_word(n)
+    }
+    fn get_word_mut(&mut self, _: usize) -> &mut u32 {
+        unreachable!()
+    }
+
+    fn word_view(&self) -> &Self::ViewType {
+        self
+    }
+
+    fn word_view_mut(&mut self) -> &mut Self::ViewType {
+        self
     }
 }

@@ -126,7 +126,7 @@ impl<K: DirectoryBit> Default for BlockDirectoryBitVectorWordView<K> {
 pub type BlockDirectoryBitVectorView<K> = FastBitVectorImpl<BlockDirectoryBitVectorWordView<K>>;
 
 pub struct BlockDirectoryBitVectorRef<K: DirectoryBit> {
-    base: BlockDirectoryBitVectorView<K>,
+    pub base: BlockDirectoryBitVectorView<K>,
 }
 
 impl<K: DirectoryBit> BlockDirectoryBitVectorRef<K> {
@@ -387,5 +387,17 @@ impl BlockDirectoryBits {
             func(index, segment);
             index += 1;
         }
+    }
+}
+
+impl<K: DirectoryBit> ops::Deref for BlockDirectoryBitVectorRef<K> {
+    type Target = BlockDirectoryBitVectorView<K>;
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+impl<K: DirectoryBit> ops::DerefMut for BlockDirectoryBitVectorRef<K> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
     }
 }
