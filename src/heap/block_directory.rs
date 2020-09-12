@@ -14,20 +14,45 @@ fn find_bit(bv: &BitVec, x: usize, bit: bool) -> usize {
     bv.len()
 }
 use parking_lot::Mutex;
+macro_rules! for_each_bit_vector {
+    ($self: expr,$bits: ident,$f: expr) => {
+        let this = $self;
+
+        let mut $bits = $self.bits.live();
+        $f;
+        let mut $bits = ($self.bits.empty());
+        $f;
+        let mut $bits = ($self.bits.allocated());
+        $f;
+        let mut $bits = ($self.bits.can_allocate_but_not_empty());
+        $f;
+        let mut $bits = ($self.bits.destructible());
+        $f;
+        let mut $bits = ($self.bits.eden());
+        $f;
+        let mut $bits = ($self.bits.unswept());
+        $f;
+        let mut $bits = ($self.bits.marking_not_empty());
+        $f;
+        let mut $bits = ($self.bits.marking_retired());
+        $f;
+    };
+}
+
 pub struct BlockDirectory {
     pub blocks: Vec<*mut MarkedBlockHandle>,
-    free_block_indicies: Vec<u32>,
-    cell_size: usize,
+    pub free_block_indicies: Vec<u32>,
+    pub cell_size: usize,
     /// After you do something to a block based on one of these cursors, you clear the bit in the
     /// corresponding bitvector and leave the cursor where it was. We can use u32 instead of usize since
     /// this number is bound by capacity of Vec blocks, which must be within u32.
-    empty_cursor: u32,
-    unswept_cursor: u32,
-    bitvector_lock: Mutex<()>,
-    local_allocators_lock: Mutex<()>,
-    next_directory: *mut Self,
-    local_allocators: LinkedList<LocalAllocator>,
-    bits: block_directory_bits::BlockDirectoryBits,
+    pub empty_cursor: u32,
+    pub unswept_cursor: u32,
+    pub bitvector_lock: Mutex<()>,
+    pub local_allocators_lock: Mutex<()>,
+    pub next_directory: *mut Self,
+    pub local_allocators: LinkedList<LocalAllocator>,
+    pub bits: block_directory_bits::BlockDirectoryBits,
 }
 use block_directory_bits::*;
 impl BlockDirectory {
@@ -56,52 +81,58 @@ impl BlockDirectory {
         allocator: &mut LocalAllocator,
     ) -> *mut MarkedBlockHandle {
         loop {
-            let res = self.blocks.iter().enumerate().find(|(ix, block)| unsafe {
-                if (&***block).empty || (&***block).can_allocate {
-                    true
-                } else {
-                    false
-                }
-            });
-            if res.is_none() {
+            allocator.alloc_cursor = (self
+                .bits
+                .can_allocate_but_not_empty()
+                .or(&*self.bits.empty()))
+            .find_bit(allocator.alloc_cursor as _, true) as _;
+            if allocator.alloc_cursor >= self.blocks.len() as u32 {
                 return 0 as *mut _;
             }
-            let res = res.unwrap();
-            allocator.alloc_cursor = res.0 as _;
-            let block = unsafe { &mut **res.1 };
-            block.empty = false;
-            block.can_allocate = true;
-            return *res.1;
+            let block_index = allocator.alloc_cursor;
+            allocator.alloc_cursor += 1;
+            let result = self.blocks[block_index as usize];
+            self.bits
+                .set_is_can_allocate_but_not_empty(block_index as _, true);
+            return result;
         }
+    }
+    pub fn resume_allocating(&mut self) {
+        self.local_allocators.iter_mut().for_each(|local| {
+            local.resume_allocating();
+        });
     }
 
-    pub fn find_blocks_for_allocation(
-        &mut self,
-        local: &mut LocalAllocator,
-        mut and_then: impl FnMut(&mut LocalAllocator, *mut MarkedBlockHandle) -> *mut (),
-    ) -> *mut () {
-        for block in self.blocks.iter().filter(|block| unsafe {
-            (&***block).empty || ((&***block).can_allocate && !(&***block).empty)
-        }) {
-            let res = and_then(local, *block);
-            if res.is_null() {
-                continue;
-            }
-            return res;
-        }
-        0 as *mut ()
+    pub fn stop_allocating_for_good(&mut self) {
+        self.local_allocators.iter_mut().for_each(|local| {
+            local.stop_allocating_for_good();
+        });
+        let lock = self.local_allocators_lock.lock();
+        self.local_allocators.clear();
+        drop(lock);
     }
-    pub fn find_blocks_to_seal(&mut self, mut and_then: impl FnMut(*mut MarkedBlockHandle)) {
-        self.blocks
-            .iter()
-            .filter(|block| unsafe { (&***block).empty })
-            .for_each(|block| {
-                and_then(*block);
-            })
+    pub fn stop_allocating(&mut self) {
+        self.local_allocators.iter_mut().for_each(|local| {
+            local.stop_allocating_for_good();
+        });
+    }
+
+    pub fn prepare_for_allocation(&mut self) {
+        self.local_allocators
+            .iter_mut()
+            .for_each(|local| local.reset());
+        self.unswept_cursor = 0;
+        self.empty_cursor = 0;
+        self.bits.eden().clear_all();
     }
     pub fn remove_block(&mut self, p: &mut MarkedBlockHandle) {
         self.blocks[p.index as usize] = 0 as *mut _;
         self.free_block_indicies.push(p.index);
+        let lock = self.bitvector_lock.lock();
+        for_each_bit_vector!(&self, bits, {
+            bits.set_at(p.index as usize, false);
+        });
+        drop(lock);
         p.did_remove_from_directory();
     }
     pub fn create_block(&mut self) -> &'static mut MarkedBlockHandle {
@@ -117,12 +148,19 @@ impl BlockDirectory {
                 index = ix;
             } else {
                 index = self.blocks.len() as u32;
+                let old_cap = self.blocks.capacity();
                 self.blocks.push(p);
+                if self.blocks.capacity() != old_cap {
+                    let lock = self.bitvector_lock.lock();
+                    self.bits.resize(self.blocks.capacity());
+                }
             }
 
             // This is the point at which the block learns of its cell_size()
             handle.did_add_to_directory(self as *mut _, index);
             handle.empty = true;
+            self.bits.empty().set_at(index as _, true);
+            self.bits.live().set_at(index as _, true);
         }
     }
 }

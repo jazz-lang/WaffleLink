@@ -213,7 +213,24 @@ impl<W: Words> FastBitVectorImpl<W> {
         }
         true
     }
+    pub fn or<U: Words>(&self, other: &U) -> FastBitVector {
+        let mut bvec = FastBitVector::new();
+        bvec.resize(self.num_bits());
 
+        for i in 0..self.array_length() {
+            *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) | other.get_word(i);
+        }
+        bvec
+    }
+    pub fn and<U: Words>(&self, other: &U) -> FastBitVector {
+        let mut bvec = FastBitVector::new();
+        bvec.resize(self.num_bits());
+
+        for i in 0..self.array_length() {
+            *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) & other.get_word(i);
+        }
+        bvec
+    }
     pub fn unsafe_words(&self) -> &W {
         &self.words
     }
@@ -600,7 +617,8 @@ impl FastBitVector {
     pub fn or<U: Words>(&self, other: &U) -> FastBitVector {
         let mut bvec = FastBitVector::new();
         bvec.resize(self.num_bits());
-        for i in 0..self.num_bits() {
+
+        for i in 0..self.array_len() {
             *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) | other.get_word(i);
         }
         bvec
@@ -608,7 +626,8 @@ impl FastBitVector {
     pub fn and<U: Words>(&self, other: &U) -> FastBitVector {
         let mut bvec = FastBitVector::new();
         bvec.resize(self.num_bits());
-        for i in 0..self.num_bits() {
+
+        for i in 0..self.array_len() {
             *bvec.unsafe_words_mut().get_word_mut(i) = self.get_word(i) & other.get_word(i);
         }
         bvec

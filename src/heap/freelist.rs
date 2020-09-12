@@ -35,7 +35,17 @@ impl FreeList {
             original_size: 0,
         }
     }
-
+    pub fn for_each(&self, mut func: impl FnMut(*mut ())) {
+        if self.remaining != 0 {
+            let mut remaining = self.remaining;
+            while remaining != 0 {
+                unsafe {
+                    func((self.payload_end as isize - remaining as isize) as *mut ());
+                }
+                remaining -= self.cell_size();
+            }
+        }
+    }
     pub fn clear(&mut self) {
         self.head = 0 as *mut _;
         self.payload_end = 0;

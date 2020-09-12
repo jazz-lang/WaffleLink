@@ -39,6 +39,7 @@ pub struct MarkedBlockHandle {
 pub struct Footer {
     handle: &'static mut MarkedBlockHandle,
     marking_version: u32,
+    lock: parking_lot::Mutex<()>,
     newly_allocated_version: u32,
     marks: BitMap,
     newly_allocated: BitMap,
@@ -65,6 +66,7 @@ impl MarkedBlock {
             let block = handle.block;
             *(&mut *block).footer() = Footer {
                 handle,
+                lock: parking_lot::Mutex::new(()),
                 marking_version: 0,
                 marks: BitMap::new(),
                 newly_allocated: BitMap::new(),
@@ -125,7 +127,7 @@ impl MarkedBlock {
         self.footer().marks.get(self.atom_number(p) as _)
     }
 
-    pub fn is_marked(&self,p: *const ()) -> bool {
+    pub fn is_marked(&self, p: *const ()) -> bool {
         self.is_markedv(crate::vm().heap().object_space.marking_version, p)
     }
 
@@ -240,6 +242,66 @@ impl MarkedBlockHandle {
                     self.cell_size()
                 );
             }
+        }
+    }
+
+    pub fn stop_allocating(&mut self, freelist: &mut FreeList) {
+        let lock = self.block().footer().lock.lock();
+        if !self.is_freelisted {
+            return;
+        }
+        self.block_footer().newly_allocated.clear_all();
+        self.block_footer().newly_allocated_version =
+            crate::vm().heap().object_space.newly_allocated_version;
+
+        self.for_each_cell(|_, cell| {
+            self.block_footer()
+                .newly_allocated
+                .set(self.block().atom_number(cell.cast()) as _);
+        });
+        freelist.for_each(|cell| unsafe {
+            let c = &mut *(cell as *mut GcBox<()>);
+            c.zap(2);
+            self.block_footer()
+                .newly_allocated
+                .clear(self.block().atom_number(cell) as _);
+        });
+        self.is_freelisted = false;
+    }
+    pub fn last_chance_to_finalize(&mut self) {
+        self.block_footer().marking_version = crate::vm().heap().object_space.marking_version;
+        self.block_footer().newly_allocated.clear_all();
+        self.block_footer().marks.clear_all();
+        self.block_footer().newly_allocated_version =
+            crate::vm().heap().object_space.newly_allocated_version;
+        self.sweep(&mut FreeList::new(0), self.empty);
+    }
+
+    pub fn resume_allocating(&mut self, freelist: &mut FreeList) {
+        let lock = self.block().footer().lock.lock();
+
+        if self.has_any_newly_allocated() {
+            freelist.clear(); // This means we had already exhausted the block when we stopped allocation.
+            return;
+        }
+        self.sweep(freelist, self.empty);
+    }
+
+    pub fn is_newly_allocated_stale(&self) -> bool {
+        self.block_footer().newly_allocated_version
+            != crate::vm().heap().object_space.newly_allocated_version
+    }
+
+    pub fn has_any_newly_allocated(&self) -> bool {
+        !self.is_newly_allocated_stale()
+    }
+
+    pub fn for_each_cell(&self, mut func: impl FnMut(usize, *mut GcBox<()>)) {
+        let mut i = 0;
+        while i < self.end_atom {
+            let cell = unsafe { self.block().atoms().offset(i as _).cast::<GcBox<()>>() };
+            func(i as _, cell);
+            i += self.atoms_per_cell;
         }
     }
 }

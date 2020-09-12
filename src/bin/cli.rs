@@ -22,6 +22,6 @@ fn main() {
     let mut bv1 = FastBitVector::new();
     bv1.resize(64);
     bv1.set_at(30, true);
-    let ored = bv.or(&bv1);
-    eprintln!("{:?}", ored)
+    let ored = bv.and(&bv1);
+    eprintln!("bv1:\n{:?}\nbv2:\n{:?}\n{:?}", bv, bv1, ored)
 }
