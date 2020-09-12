@@ -2,7 +2,6 @@ use super::block_directory::*;
 use super::markedblock::*;
 use super::precise_allocation::*;
 use super::*;
-use intrusive_collections::{LinkedList, UnsafeRef};
 use std::collections::HashSet;
 use std::collections::LinkedList as List;
 pub type HeapVersion = u32;
@@ -235,20 +234,20 @@ impl MarkedSpace {
 
         self.newly_allocated_version = next_version(self.newly_allocated_version);
 
-
-        for i in self.precise_allocations_offset_for_this_collection as usize..self.precise_allocations.len() {
+        for i in self.precise_allocations_offset_for_this_collection as usize
+            ..self.precise_allocations.len()
+        {
             unsafe {
-                (&mut*self.precise_allocations[i as usize]).is_newly_allocated = false;
+                (&mut *self.precise_allocations[i as usize]).is_newly_allocated = false;
             }
         }
 
         self.directories.iter().for_each(|directory| {
             directory.blocks.iter().for_each(|block| {
-                let b = unsafe {&mut **block};
-               // TODO
+                let b = unsafe { &mut **block };
+                // TODO
             });
         });
-
 
         self.is_marking = false;
     }

@@ -1,4 +1,3 @@
-use super::object::*;
 use super::Address;
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};

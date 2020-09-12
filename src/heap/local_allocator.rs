@@ -1,7 +1,7 @@
 use super::*;
 use block_directory::*;
 use freelist::*;
-use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink, UnsafeRef};
+use intrusive_collections::{intrusive_adapter, LinkedListLink, UnsafeRef};
 use markedblock::*;
 intrusive_adapter!(pub LAdapter = UnsafeRef<LocalAllocator> : LocalAllocator {link :LinkedListLink});
 pub struct LocalAllocator {

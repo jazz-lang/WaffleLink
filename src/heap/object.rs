@@ -1,4 +1,3 @@
-use crate::gc::TaggedPointer;
 use std::sync::atomic::{AtomicUsize, Ordering};
 pub trait GcObject {
     /// Returns size of current object. This is usually just `size_of_val(self)` but in case
