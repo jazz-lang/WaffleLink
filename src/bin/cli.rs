@@ -1,5 +1,5 @@
 use object::*;
-use wafflelink::heap::*;
+use wafflelink::gc::*;
 
 struct Foo {
     next: Option<Handle<Self>>,
@@ -16,12 +16,22 @@ impl Drop for Foo {
 use wafflelink::utils::fast_bitvec::*;
 
 fn main() {
-    let mut bv = FastBitVector::new();
-    bv.resize(64);
-    bv.atomic_set_and_check(34, true);
-    let mut bv1 = FastBitVector::new();
-    bv1.resize(64);
-    bv1.set_at(30, true);
-    let ored = bv.and(&bv1);
-    eprintln!("bv1:\n{:?}\nbv2:\n{:?}\n{:?}", bv, bv1, ored)
+    let begin = 0;
+    let mut gc = TGC::new(&begin, Some(3), true);
+
+    let mut roots: Root<Vec<Handle<i32>>> = gc.allocate(vec![]);
+    for _ in 0..1000 {
+        roots.push(gc.allocate(0).to_heap());
+    }
+    let mut roots2: Root<Vec<Handle<i32>>> = gc.allocate(vec![]);
+    for _ in 0..1000 {
+        roots2.push(gc.allocate(2).to_heap());
+    }
+    let gc_start = std::time::Instant::now();
+    gc.collect_garbage(&0);
+    let end = gc_start.elapsed();
+    println!("GC done in {}ns", end.as_nanos());
+    drop(roots);
+
+    gc.collect_garbage(&1);
 }

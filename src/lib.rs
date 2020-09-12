@@ -51,7 +51,7 @@ pub mod timer;
 pub mod utils;
 pub mod values;
 pub mod vm;
-
+/*
 pub struct VM {
     heap: std::cell::UnsafeCell<heap::Heap>,
 }
@@ -72,3 +72,4 @@ unsafe impl Sync for VM {}
 pub fn vm() -> &'static VM {
     &*VM_INSTANCE
 }
+*/

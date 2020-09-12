@@ -1,6 +1,6 @@
 use crate::gc::*;
-
+use object::*;
 pub struct VirtualMachine {
-    heap: Heap,
+    heap: TGC,
     stack: Root<Vec<u64>>,
 }

@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 /// Executes marking in NUM_CPUS threads
-pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Receiver<Address> {
+pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) {
     let number_workers = threadpool.thread_count() as usize;
     let mut workers = Vec::with_capacity(number_workers);
     let mut stealers = Vec::with_capacity(number_workers);
@@ -26,13 +26,12 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
     }
 
     let terminator = Terminator::new(number_workers);
-    let (snd, recv) = flume::unbounded();
+
     threadpool.scoped(|scoped| {
         for (task_id, worker) in workers.into_iter().enumerate() {
             let injector = &injector;
             let stealers = &stealers;
             let terminator = &terminator;
-            let blacklist = snd.clone();
 
             scoped.execute(move || {
                 let mut task = MarkingTask {
@@ -42,7 +41,7 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
                     injector,
                     stealers,
                     terminator,
-                    blacklist,
+
                     marked: 0,
                     gc_ty,
                 };
@@ -51,8 +50,6 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
             });
         }
     });
-
-    recv
 }
 unsafe impl Send for MarkingTask<'_> {}
 unsafe impl Send for Segment {}
@@ -117,7 +114,6 @@ struct MarkingTask<'a> {
     injector: &'a Injector<Address>,
     stealers: &'a [Stealer<Address>],
     terminator: &'a Terminator,
-    blacklist: flume::Sender<Address>,
     marked: usize,
     gc_ty: u8,
 }
@@ -197,21 +193,22 @@ impl<'a> MarkingTask<'a> {
                 };
 
                 let object = object_addr.to_mut_obj();
-                if object.header.tag() < 1 {
-                    if object.header.next_tag() != self.gc_ty {
-                        if object.header.atomic_next_tag() != 2 {
-                            object.header.atomic_test_and_set_next_tag(2);
-                            self.blacklist.send(object_addr).unwrap();
-                            object.trait_object().visit_references(&mut |item| {
-                                self.push(Address::from_ptr(item));
-                            });
-                            continue;
-                        }
+                if object.header.grey_to_black() {
+                    if super::GC_VERBOSE_LOG {
+                        eprintln!("---thread #{}: mark {:p}", self.task_id, object);
                     }
-                    object.header.atomic_test_and_set_tag(1);
+                    
+                    debug_assert!(object.header.tag() == super::GC_BLACK);
                     object.trait_object().visit_references(&mut |item| {
-                        self.push(Address::from_ptr(item));
+                        let object = item as *mut super::GcBox<()>;
+                        let obj = &mut*object;
+                        if obj.header.white_to_grey() {
+                            //obj.header.atomic_test_and_set_tag(super::GC_GRAY);
+                            self.push(Address::from_ptr(item));
+                        }
                     });
+                } else {
+                    debug_assert!(object.header.tag() == super::GC_BLACK);
                 }
             }
         }
@@ -246,46 +243,46 @@ impl<'a> MarkingTask<'a> {
 
 const SEGMENT_SIZE: usize = 64;
 
-struct Segment {
+pub struct Segment {
     data: Vec<Address>,
 }
 
 impl Segment {
-    fn new() -> Segment {
+    pub fn new() -> Segment {
         Segment {
             data: Vec::with_capacity(SEGMENT_SIZE),
         }
     }
 
-    fn empty() -> Segment {
+    pub fn empty() -> Segment {
         Segment { data: Vec::new() }
     }
 
-    fn with(addr: Address) -> Segment {
+    pub fn with(addr: Address) -> Segment {
         let mut segment = Segment::new();
         segment.data.push(addr);
 
         segment
     }
 
-    fn has_capacity(&self) -> bool {
+    pub fn has_capacity(&self) -> bool {
         self.data.len() < SEGMENT_SIZE
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
-    fn push(&mut self, addr: Address) {
+    pub fn push(&mut self, addr: Address) {
         debug_assert!(self.has_capacity());
         self.data.push(addr);
     }
 
-    fn pop(&mut self) -> Option<Address> {
+    pub fn pop(&mut self) -> Option<Address> {
         self.data.pop()
     }
 
-    fn len(&mut self) -> usize {
+    pub fn len(&mut self) -> usize {
         self.data.len()
     }
 }

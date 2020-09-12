@@ -15,890 +15,430 @@
 //! Also there is no write barriers needed for this GC to work because it is not incremental
 //! and will visit all references inside GC value, this might be slow but it works.
 
-use crate::timer::Timer;
-use core::sync::atomic::Ordering;
-pub type GCObjectRef = *mut GcBox<()>;
-/// Cast reference to atomic type
-#[macro_export]
-macro_rules! as_atomic {
-    ($val: expr,$t: ty) => {
-        &*($val as *const _ as *const $t)
-    };
-
-    (ref $val: expr,$t: ty) => {
-        unsafe { &*(&$val as *const _ as *const $t) }
-    };
-}
-pub trait GcObject {
-    /// Returns size of current object. This is usually just `size_of_val(self)` but in case
-    /// when you need dynamically sized type e.g array then this should return something like
-    /// `size_of(Base) + length * size_of(Value)`
-    fn size(&self) -> usize {
-        core::mem::size_of_val(self)
-    }
-
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
-}
-
-pub struct Header {
-    pub vtable: TaggedPointer<()>,
-    pub next: TaggedPointer<GcBox<()>>,
-    pub flags: u8,
-}
-
-impl Header {
-    pub fn is_old(&self) -> bool {
-        self.vtable.bit_is_set(0)
-    }
-    pub fn set_old(&mut self) {
-        self.vtable.set_bit(0);
-    }
-
-    pub fn set_young(&mut self) {
-        self.vtable.clear(0);
-    }
-    pub fn is_young(&self) -> bool {
-        !self.is_old()
-    }
-
-    pub fn is_marked(&self) -> bool {
-        (self.flags & 0x80) != 0
-    }
-
-    pub fn test_and_mark(&mut self) -> bool {
-        if self.is_marked() {
-            false
-        } else {
-            self.flags |= 0x80;
-            true
-        }
-    }
-
-    pub fn mark(&mut self) {
-        self.flags |= 0x80;
-    }
-
-    pub fn unmark(&mut self) {
-        self.flags ^= 0x80;
-    }
-    pub fn test_soft_mark(&mut self) -> bool {
-        if (self.flags & 0x40) != 0 {
-            false
-        } else {
-            self.flags |= 0x40;
-            true
-        }
-    }
-    pub fn is_soft_marked(&self) -> bool {
-        (self.flags & 0x40) != 0
-    }
-    pub fn clear_soft_mark(&mut self) {
-        if self.is_soft_marked() {
-            self.flags ^= 0x40;
-        }
-    }
-}
-
-#[repr(C)]
-pub struct GcBox<T: GcObject> {
-    header: Header,
-    value: T,
-}
-
-#[repr(C)]
-struct TraitObject {
-    data: *mut (),
-    vtable: *mut (),
-}
-
-impl<T: GcObject> GcBox<T> {
-    pub fn trait_object(&self) -> &mut dyn GcObject {
-        unsafe {
-            core::mem::transmute(TraitObject {
-                data: &self.value as *const _ as *mut _,
-                vtable: self.header.vtable.untagged(),
-            })
-        }
-    }
-}
-
-impl<T: GcObject> GcObject for Root<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
-        self.to_heap().visit_references(trace);
-    }
-}
-
-impl GcObject for () {}
+pub mod cmarking;
+pub mod object;
+pub mod pagealloc;
+#[cfg(feature = "pmarking")]
+pub mod pmarking;
+use object::*;
 use std::collections::VecDeque;
-pub struct Heap {
-    generational: bool,
-    /// Singly linked list of young objects
-    young: *mut GcBox<()>,
-    /// Singly linked list of old objects
-    old: *mut GcBox<()>,
-    /// After major_threshold we start major GC
-    major_threshold: usize,
-    /// Currently allocated major objects
-    major_size: usize,
-    /// Currently allocated young objects
-    young_size: usize,
-    /// After young_threshold we start minor GC
-    young_threshold: usize,
-    /// Remembred set of old objects, used in generational mode.
-    remembered: Vec<*mut GcBox<()>>,
-    blacklist: std::vec::Vec<*mut GcBox<()>>,
-    graylist: VecDeque<*mut GcBox<()>>,
-    gc_ty: GcType,
+
+pub const GC_WHITE: u8 = 0;
+pub const GC_BLACK: u8 = 2;
+pub const GC_GRAY: u8 = 1;
+pub const GC_NEW: u8 = 0;
+pub const GC_OLD: u8 = 1;
+pub const GC_NONE: u8 = 2;
+pub struct TGC {
+    eden: *mut GcBox<()>,
+    eden_size: usize,
+    eden_allowed_size: usize,
     roots: RootList,
-    stats: CollectionStats,
-    verbose: bool,
-    cycle_stats: bool,
-    cur_stats: CycleStats,
-}
-pub struct RootInner {
-    rc: u32,
-    pub obj: *mut GcBox<()>,
+    gc_ty: u8,
+    graystack: VecDeque<*mut GcBox<()>>,
+    blacklist: Vec<*mut GcBox<()>>,
+    mi_heap: *mut libmimalloc_sys::mi_heap_t,
+    stack_begin: *const usize,
+    stack_end: *const usize,
+
+    #[cfg(feature = "pmarking")]
+    pool: scoped_threadpool::Pool,
+    #[cfg(feature = "pmarking")]
+    num_cpus: usize,
+    pmark: bool,
 }
 
-/// Rooted value. All GC allocated values wrapped in `Root<T>` will be scanned by GC for
-/// references. You can use this type like regular `Rc` but please try to minimize it's usage
-/// because GC allocates some heap memory for managing roots.
-pub struct Root<T: GcObject> {
-    inner: *mut RootInner,
-    _marker: core::marker::PhantomData<T>,
-}
+pub const GC_VERBOSE_LOG: bool = true;
+pub const GC_LOG: bool = true;
 
-pub struct RootList {
-    roots: Vec<*mut RootInner>,
-}
-use std::{boxed::Box, vec::Vec};
-impl RootList {
-    pub fn new() -> Self {
+impl TGC {
+    pub fn new(begin: *const usize, n_cpus: Option<usize>, pmark: bool) -> Self {
         Self {
-            roots: Vec::with_capacity(4),
-        }
-    }
-    pub fn root<T: GcObject>(&mut self, o: *mut GcBox<T>) -> Root<T> {
-        let root = Box::into_raw(Box::new(RootInner {
-            rc: 1,
-            obj: o.cast(),
-        }));
-        self.roots.push(root);
-        Root {
-            inner: root,
-            _marker: Default::default(),
-        }
-    }
-    pub fn unroot<T: GcObject>(&mut self, r: Root<T>) {
-        drop(r)
-    }
-
-    pub(crate) fn walk(&mut self, walk: &mut dyn FnMut(*const RootInner)) {
-        /*let mut cur = self.roots;
-        while cur.is_non_null() {
-            walk(cur);
-            cur = cur.next;
-        }*/
-
-        self.roots.retain(|x| unsafe {
-            if (&**x).rc == 0 {
-                let _ = std::boxed::Box::from_raw(*x);
-                false
-            } else {
-                walk(*x);
-                true
-            }
-        });
-    }
-}
-
-impl Heap {
-    pub fn collect_garbage_force(&mut self, ty: GcType) {
-        self.gc_ty = ty;
-        self.collect_garbage();
-    }
-    pub fn write_barrier<T: GcObject, U: GcObject>(
-        &mut self,
-        holder: Handle<T>,
-        new_value: Handle<U>,
-    ) {
-        unsafe {
-            let raw = &*holder.gc_ptr();
-            if raw.header.is_old() {
-                let raw2 = &*new_value.gc_ptr();
-                if raw2.header.is_young() {
-                    self.remembered.push(holder.gc_ptr() as *mut _);
-                }
-            }
-        }
-    }
-
-    pub fn new(verbose: bool, cycle_stats: bool) -> Self {
-        Self {
-            cycle_stats,
-            generational: true,
-            young: core::ptr::null_mut(),
-            old: core::ptr::null_mut(),
-            graylist: Default::default(),
-            blacklist: Default::default(),
-            major_size: 0,
-            cur_stats: Default::default(),
-            stats: CollectionStats::new(),
-            major_threshold: 32 * 1024,
-            young_size: 0,
-            young_threshold: 8 * 1024,
-            gc_ty: GcType::None,
-            remembered: Default::default(),
+            #[cfg(feature = "pmarking")]
+            num_cpus: n_cpus.unwrap_or(num_cpus::get() / 2),
+            #[cfg(feature = "pmarking")]
+            pool: scoped_threadpool::Pool::new(n_cpus.unwrap_or(num_cpus::get() / 2) as u32),
+            eden_allowed_size: 8 * 1024,
+            eden_size: 0,
+            eden: 0 as *mut _,
+            pmark,
+            gc_ty: GC_NONE,
             roots: RootList::new(),
-            verbose,
+            graystack: Default::default(),
+            blacklist: Vec::new(),
+            mi_heap: unsafe { libmimalloc_sys::mi_heap_new() },
+            stack_begin: begin,
+            stack_end: begin,
         }
     }
-    pub fn should_collect(&self) -> bool {
-        self.gc_ty != GcType::None
-            || self.young_size >= self.young_threshold
-            || self.major_threshold >= self.major_threshold
-    }
-    pub fn root<T: GcObject>(&mut self, handle: Handle<T>) -> Root<T> {
-        self.roots.root(handle.gc_ptr() as *mut _)
-    }
-    pub fn allocate<T: GcObject>(&mut self, val: T) -> Root<T> {
+    fn mark(&mut self, object: *mut GcBox<()>) {
         unsafe {
-            let alloc_size = val.size() + core::mem::size_of::<Header>();
-            if alloc_size + self.young_size >= self.young_threshold {
-                self.collect_garbage();
+            let obj = &mut *object;
+            if obj.header.tag() == GC_GRAY {
+                obj.header.set_tag(GC_BLACK);
+                obj.trait_object().visit_references(&mut |reference| {
+                    self.mark_object(reference as *mut _);
+                });
             }
-            let alignment = 16;
-            let layout = std::alloc::Layout::from_size_align_unchecked(alloc_size, alignment)
-                .align_to(8)
-                .unwrap();
-            let mem = std::alloc::alloc_zeroed(layout).cast::<GcBox<T>>();
-            mem.write(GcBox {
-                header: Header {
-                    next: TaggedPointer::null(),
-                    vtable: TaggedPointer::new({
-                        core::mem::transmute::<_, TraitObject>(&val as &dyn GcObject).vtable
-                    }),
-                    flags: 0,
-                },
-                value: val,
-            });
-
-            self.push_young(mem.cast());
-            let root = self.roots.root(mem);
-            root
         }
     }
 
-    pub fn collect_garbage(&mut self) {
-        let mut timer = Timer::new(self.verbose);
-        let start = time::Instant::now();
-        if self.gc_ty == GcType::None {
-            self.gc_ty = GcType::Minor;
-        }
-        if self.verbose {
-            //println!("{:?} GC cycle started", self.gc_ty);
-        }
-        let this = self as *const Self as *mut Self;
-        let this = unsafe { &mut *this };
-        this.roots.walk(&mut |root| unsafe {
-            let root = &*root;
-            self.graylist.push_back(root.obj);
-        });
-        self.process_remembered();
-        self.process_gray();
-        if self.gc_ty == GcType::Minor {
-            let mut head = self.young;
-            self.young = core::ptr::null_mut();
-            while !head.is_null() {
-                let val = unsafe { &mut *head };
-                let next = val.header.next.untagged();
-
-                if val.header.is_marked() {
-                    val.header.unmark();
-                    self.cur_stats.promoted += 1;
-                    self.promote(head);
-                } else {
-                    let size = val.trait_object().size() + core::mem::size_of::<Header>();
-                    self.young_size -= size;
-                    self.cur_stats.sweeped += 1;
-                    self.cur_stats.freed += size;
-                    unsafe {
-                        core::ptr::drop_in_place(val.trait_object());
-                    }
+    fn mark_object(&mut self, object: *mut GcBox<()>) {
+        //panic!();
+        unsafe {
+            let obj = &mut *object;
+            if obj.header.white_to_grey() {
+                if GC_VERBOSE_LOG && GC_LOG {
+                    eprintln!("---mark {:p}", object);
                 }
-                head = next;
-            }
-        } else {
-            let mut head = self.old;
-            self.old = core::ptr::null_mut();
-            while !head.is_null() {
-                let val = unsafe { &mut *head };
-                let next = val.header.next.untagged();
-                debug_assert!(!val.header.is_soft_marked());
-                if val.header.is_marked() {
-                    val.header.unmark();
-                } else {
-                    let size = val.trait_object().size() + core::mem::size_of::<Header>();
-                    self.major_size -= size;
-                    self.cur_stats.sweeped += 1;
-                    self.cur_stats.freed += size;
-                    unsafe {
-                        core::ptr::drop_in_place(val.trait_object());
-                    }
-                }
-                head = next;
+                self.graystack.push_back(object);
             }
         }
+    }
 
-        for item in self.blacklist.drain(..) {
+    fn sweep(&mut self, eden: bool) {
+        let mut count = 0;
+        let mut freed = 0;
+
+        if GC_LOG {
+            eprintln!("--begin eden sweep");
+        }
+        let mut previous: *mut GcBox<()> = core::ptr::null_mut();
+        let mut object = self.eden;
+
+        while object.is_null() == false {
             unsafe {
-                (&mut *item).header.clear_soft_mark();
+                let obj = &mut *object;
+                let next = obj.header.next();
+                let size = obj.trait_object().size() + core::mem::size_of::<Header>();
+
+                if obj.header.tag() == GC_BLACK {
+                    obj.header.set_tag(GC_WHITE);
+                    //obj.header.set_next(self.old.cast());
+
+                    //obj.header.set_next_tag(1);
+                    previous = object;
+                } else {
+                    #[cfg(debug_assertions)]
+                    {
+                        assert!(obj.header.tag() != GC_GRAY);
+                    }
+                    let unreached = object;
+                    if previous.is_null() {
+                        self.eden = next.cast();
+                    } else {
+                        (&mut *previous).header.next = object;
+                    }
+                    freed += size;
+                    self.eden_size -= size;
+                    if GC_LOG && GC_VERBOSE_LOG {
+                        eprintln!("---sweep {:p} size={}", unreached, size);
+                    }
+                    core::ptr::drop_in_place(obj.trait_object());
+                    libmimalloc_sys::mi_free(unreached.cast());
+                    count += 1;
+                }
+                object = next.cast();
             }
         }
 
-        let cur_gc = self.gc_ty;
-        let cstats = self.cur_stats.clone();
-        if cur_gc == GcType::Minor && self.major_size >= self.major_threshold {
-            self.gc_ty = GcType::Major;
-            self.collect_garbage();
+        if GC_LOG {
+            eprintln!("--sweeped {} object(s) ({} bytes)", count, freed);
         }
-        if cur_gc == GcType::Minor && self.young_size >= self.young_threshold {
-            self.young_threshold = (self.young_size as f64 * 0.75) as usize;
+    }
+
+    fn mark_from_roots(&mut self) {
+        #[cfg(feature = "pmarking")]
+        {
+            if self.pmark {
+                if GC_LOG {
+                    eprintln!(
+                        "--start parallel marking\n---thread count={}",
+                        self.pool.thread_count()
+                    );
+                    let mut roots = vec![];
+                    self.roots.walk(&mut |root| unsafe {
+                        if GC_VERBOSE_LOG {
+                            eprintln!("---root {:p}", (&*root).obj);
+                        }
+                        let obj = (&*root).obj;
+                        if (&*obj).header.tag() == GC_WHITE {
+                            (&mut*obj).header.set_tag(GC_GRAY);
+                            roots.push(Address::from_ptr((&*root).obj));
+                        }
+                    });
+
+                    let mut count = 0;
+                    pmarking::start(&roots, &mut self.pool, self.gc_ty);
+                    if GC_LOG {
+                        eprintln!("--parallel marking finished");
+                    }
+                }
+            } else {
+                if GC_LOG {
+                    eprintln!("--mark from roots");
+                }
+
+                let this = unsafe { &mut *(self as *mut Self) };
+                this.roots.walk(&mut |root| unsafe {
+                    if GC_VERBOSE_LOG {
+                        eprintln!("---root {:p}", (&*root).obj);
+                    }
+                    self.mark_object((&*root).obj);
+                });
+                if GC_LOG {
+                    eprintln!("--process gray stack");
+                }
+                self.process_gray();
+            }
         }
-        if cur_gc == GcType::Major && self.major_size >= self.major_threshold {
-            self.major_threshold = (self.major_size as f64 * 0.55) as usize;
+        #[cfg(not(feature = "pmarking"))]
+        {
+            if self.pmark {
+                panic!("WaffleLink compiled without support for parallel marking!");
+            }
+            if GC_LOG {
+                eprintln!("--mark from roots");
+            }
+
+            let this = unsafe { &mut *(self as *mut Self) };
+            this.roots.walk(&mut |root| unsafe {
+                self.mark_object((&*root).obj);
+            });
+            if GC_LOG {
+                eprintln!("--process gray stack");
+            }
+            self.process_gray();
         }
-        self.gc_ty = GcType::None;
-        self.blacklist.shrink_to_fit();
-        let end = start.elapsed();
-        if self.verbose {
-            let duration = timer.stop();
-            self.stats.add(duration);
+    }
+    #[inline(never)]
+    pub fn collect_garbage(&mut self, stack_end: *const usize) {
+        if self.gc_ty == GC_NONE {
+            self.gc_ty = GC_NEW;
         }
-        if self.cycle_stats {
+        self.stack_end = stack_end;
+        if GC_LOG {
             eprintln!(
-                "{:?} cycle finished in {}ms({}ns): \n Sweeped={}\n Freed={} \n Remembered={} \n Promoted={}",
-                cur_gc,end.whole_milliseconds(),
-                end.whole_nanoseconds(),
-                cstats.sweeped,
-                formatted_size(cstats.freed),
-                cstats.remembered,
-                cstats.promoted
+                "--GC begin, heap size {}(threshold {})",
+                self.eden_size, self.eden_allowed_size
             );
         }
-        self.cur_stats = Default::default();
-        assert!(self.blacklist.is_empty());
-        assert!(self.graylist.is_empty());
-        assert!(self.remembered.is_empty());
-    }
-    pub fn dump_summary(&self, runtime: f32) {
-        let stats = &self.stats;
-        let (mutator, gc) = stats.percentage(runtime);
-
-        println!("GC stats: total={:.1}", runtime);
-        println!("GC stats: mutator={:.1}", stats.mutator(runtime));
-        println!("GC stats: collection={:.1}", stats.pause());
-
-        println!("");
-        println!("GC stats: collection-count={}", stats.collections());
-        println!("GC stats: collection-pauses={}", stats.pauses());
-
-        println!(
-            "GC summary: {:.1}ms collection ({}), {:.1}ms mutator, {:.1}ms total ({}% mutator, {}% GC)",
-            stats.pause(),
-            stats.collections(),
-            stats.mutator(runtime),
-            runtime,
-            mutator,
-            gc,
-        );
-    }
-
-    pub fn in_current_space(&self, obj: GCObjectRef) -> bool {
-        if self.gc_ty == GcType::Major {
-            unsafe { (&*obj).header.is_old() }
-        } else {
-            unsafe { (&*obj).header.is_young() }
-        }
-    }
-
-    fn push_young(&mut self, obj: GCObjectRef) {
-        let o = unsafe { &mut *obj };
-        self.young_size += o.trait_object().size() + core::mem::size_of::<Header>();
-        o.header.next = TaggedPointer::new(self.young);
-        o.header.set_young();
-        self.young = obj;
-    }
-    fn push_old(&mut self, obj: GCObjectRef) {
-        let o = unsafe { &mut *obj };
-        self.major_size += o.trait_object().size() + core::mem::size_of::<Header>();
-
-        o.header.next = TaggedPointer::new(self.old);
-        o.header.set_old();
-        self.old = obj;
-    }
-    fn promote(&mut self, obj: GCObjectRef) -> bool {
-        let o = unsafe { &mut *obj };
-        if o.header.is_young() {
-            self.push_old(obj);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn visit_value(&mut self, val: &mut GcBox<()>) {
-        let object = val.trait_object();
-
-        object.visit_references(&mut |item| {
-            self.graylist.push_back(item as *mut _);
-        });
-    }
-    fn process_remembered(&mut self) {
-        if self.gc_ty == GcType::Minor {
-            // in young space collection push all references from old to young to graylist.
-            while let Some(old) = self.remembered.pop() {
-                unsafe {
-                    let old_ref = &mut *old;
-                    if old_ref.header.test_soft_mark() {
-                        self.cur_stats.remembered += 1;
-                        old_ref.trait_object().visit_references(&mut |item| {
-                            let item_ref = &mut *(item as *mut GcBox<()>);
-                            if item_ref.header.is_old() {
-                                return;
-                            } else {
-                                self.graylist.push_back(item as *mut _);
-                            }
-                        });
-                        self.blacklist.push(old);
-                    }
+        self.mark_from_roots();
+        let before = self.eden_size;
+        self.sweep(self.gc_ty == GC_NEW);
+        let freed = before - self.eden_size;
+        if before as f64 * 0.5 <= freed as f64 {
+            unsafe {
+                if GC_LOG {
+                    eprintln!("--mi heap collect {} <= {}", before as f64 * 0.65, freed);
                 }
+                libmimalloc_sys::mi_heap_collect(self.mi_heap, true);
             }
-        } else {
-            // in major collection empty remembered set.
-            self.remembered.clear();
         }
+        if self.eden_size >= self.eden_allowed_size {
+            self.eden_allowed_size = (self.eden_size as f64 / 0.75) as usize;
+        }
+        /*if self.old_size >= self.old_allowed_size {
+            self.old_allowed_size = (self.old_size as f64 / 0.5) as usize;
+        }*/
+        if GC_LOG {
+            eprintln!(
+                "--GC end, threshold {}\n---eden heap size before GC={}\n---eden heap size after GC={}",
+                self.eden_allowed_size, before, self.eden_size
+            );
+        }
+        self.gc_ty = GC_NONE;
+    }
+
+    pub fn allocate<T: GcObject>(&mut self, value: T) -> Root<T> {
+        let mut mem = unsafe {
+            libmimalloc_sys::mi_heap_malloc(
+                self.mi_heap,
+                value.size() + core::mem::size_of::<Header>(),
+            )
+        };
+        unsafe {
+            if self.eden_size > self.eden_allowed_size {
+                let stack = 0usize;
+                self.gc_ty = GC_NEW;
+                self.collect_garbage(&stack);
+            }
+            self.eden_size += value.size() + core::mem::size_of::<Header>();
+            let mem = mem.cast::<GcBox<T>>();
+            mem.write(GcBox {
+                header: Header {
+                    cell_state: std::sync::atomic::AtomicU8::new(GC_WHITE),
+                    vtable: core::mem::transmute::<_, TraitObject>(&value as &dyn GcObject).vtable,
+                    next: 0 as *mut _,
+                },
+                value,
+            });
+            (&mut *mem).header.set_tag(0);
+            (&mut *mem).header.set_next(self.eden.cast());
+            (&mut *mem).header.set_next_tag(0);
+            if GC_VERBOSE_LOG {
+                eprintln!("--allocate {:p}", mem);
+            }
+            self.eden = mem.cast();
+            self.roots.root(mem)
+        }
+    }
+    fn in_current_space(&self, val: &GcBox<()>) -> bool {
+        unsafe {
+            if self.gc_ty == GC_OLD {
+                val.header.next_tag() == 1
+            } else {
+                val.header.next_tag() == 0
+            }
+        }
+    }
+
+
+    fn visit_value(&mut self, obj: &mut GcBox<()>) {
+        obj.trait_object().visit_references(&mut |object| unsafe {
+            self.mark_object(object as *mut _);
+        })
     }
     fn process_gray(&mut self) {
-        while let Some(value) = self.graylist.pop_front() {
-            let val = unsafe { &mut *value };
-            if !self.in_current_space(value) {
-                if val.header.test_soft_mark() {
-                    self.blacklist.push(value);
-                    self.visit_value(val);
+        while let Some(item) = self.graystack.pop_front() {
+            unsafe {
+                let obj = &mut *item;
+                if obj.header.grey_to_black() {
+                    /*if !self.in_current_space(obj) {
+                        if obj.header.tag() != 2 {
+                            if GC_VERBOSE_LOG && GC_LOG {
+                                eprintln!("---blacklist {:p}", obj);
+                            }
+                            obj.header.set_tag(2);
+                            self.blacklist.push(item);
+                            self.visit_value(obj);
+                        }
+                        continue;
+                    }*/
+                    if GC_VERBOSE_LOG && GC_LOG {
+                        eprintln!("---mark {:p}", obj);
+                    }
+                    
+                    self.visit_value(obj);
                 }
-                continue;
-            }
-
-            if val.header.test_and_mark() {
-                self.visit_value(val);
             }
         }
     }
 }
 
-#[derive(PartialOrd, PartialEq, Copy, Clone, Debug)]
-pub enum GcType {
-    Minor,
-    Major,
-    None,
-}
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Address(usize);
 
-use core::hash::{Hash, Hasher};
-use core::ptr;
-use core::sync::atomic::AtomicPtr;
-
-/// The mask to use for untagging a pointer.
-const UNTAG_MASK: usize = (!0x7) as usize;
-
-/// Returns true if the pointer has the given bit set to 1.
-pub fn bit_is_set<T>(pointer: *mut T, bit: usize) -> bool {
-    let shifted = 1 << bit;
-
-    (pointer as usize & shifted) == shifted
-}
-
-/// Returns the pointer with the given bit set.
-pub fn with_bit<T>(pointer: *mut T, bit: usize) -> *mut T {
-    (pointer as usize | 1 << bit) as _
-}
-
-/// Returns the given pointer without any tags set.
-pub fn untagged<T>(pointer: *mut T) -> *mut T {
-    (pointer as usize & UNTAG_MASK) as _
-}
-
-/// Structure wrapping a raw, tagged pointer.
-#[derive(Debug)]
-pub struct TaggedPointer<T> {
-    pub raw: *mut T,
-}
-
-impl<T> TaggedPointer<T> {
-    /// Returns a new TaggedPointer without setting any bits.
-    pub fn new(raw: *mut T) -> TaggedPointer<T> {
-        TaggedPointer { raw }
+impl Address {
+    #[inline(always)]
+    pub fn from(val: usize) -> Address {
+        Address(val)
     }
 
-    /// Returns a new TaggedPointer with the given bit set.
-    pub fn with_bit(raw: *mut T, bit: usize) -> TaggedPointer<T> {
-        let mut pointer = Self::new(raw);
+    #[inline(always)]
+    pub fn offset_from(self, base: Address) -> usize {
+        debug_assert!(self >= base);
 
-        pointer.set_bit(bit);
-
-        pointer
-    }
-    pub fn clear(&mut self, bit: usize) {
-        let shifted = 1 << bit;
-        self.raw = (self.raw as usize & !shifted) as *mut T;
-    }
-    /// Returns a null pointer.
-    pub fn null() -> TaggedPointer<T> {
-        TaggedPointer {
-            raw: ptr::null::<T>() as *mut T,
-        }
+        self.to_usize() - base.to_usize()
     }
 
-    /// Returns the wrapped pointer without any tags.
-    pub fn untagged(self) -> *mut T {
-        self::untagged(self.raw)
+    #[inline(always)]
+    pub fn offset(self, offset: usize) -> Address {
+        Address(self.0 + offset)
     }
 
-    /// Returns a new TaggedPointer using the current pointer but without any
-    /// tags.
-    pub fn without_tags(self) -> Self {
-        Self::new(self.untagged())
+    #[inline(always)]
+    pub fn sub(self, offset: usize) -> Address {
+        Address(self.0 - offset)
     }
 
-    /// Returns true if the given bit is set.
-    pub fn bit_is_set(self, bit: usize) -> bool {
-        self::bit_is_set(self.raw, bit)
+    #[inline(always)]
+    pub fn add_ptr(self, words: usize) -> Address {
+        Address(self.0 + words * core::mem::size_of::<usize>())
     }
 
-    /// Sets the given bit.
-    pub fn set_bit(&mut self, bit: usize) {
-        self.raw = with_bit(self.raw, bit);
+    #[inline(always)]
+    pub fn sub_ptr(self, words: usize) -> Address {
+        Address(self.0 - words * core::mem::size_of::<usize>())
     }
 
-    /// Returns true if the current pointer is a null pointer.
+    #[inline(always)]
+    pub fn to_mut_obj(self) -> &'static mut GcBox<()> {
+        unsafe { &mut *self.to_mut_ptr::<_>() }
+    }
+
+    #[inline(always)]
+    pub fn to_obj(self) -> &'static GcBox<()> {
+        unsafe { &*self.to_mut_ptr::<_>() }
+    }
+
+    #[inline(always)]
+    pub fn to_usize(self) -> usize {
+        self.0
+    }
+
+    #[inline(always)]
+    pub fn from_ptr<T>(ptr: *const T) -> Address {
+        Address(ptr as usize)
+    }
+
+    #[inline(always)]
+    pub fn to_ptr<T>(&self) -> *const T {
+        self.0 as *const T
+    }
+
+    #[inline(always)]
+    pub fn to_mut_ptr<T>(&self) -> *mut T {
+        self.0 as *const T as *mut T
+    }
+
+    #[inline(always)]
+    pub fn null() -> Address {
+        Address(0)
+    }
+
+    #[inline(always)]
     pub fn is_null(self) -> bool {
-        self.untagged().is_null()
+        self.0 == 0
     }
 
-    /// Returns an immutable to the pointer's value.
-    pub fn as_ref<'a>(self) -> Option<&'a T> {
-        unsafe { self.untagged().as_ref() }
-    }
-
-    /// Returns a mutable reference to the pointer's value.
-    pub fn as_mut<'a>(self) -> Option<&'a mut T> {
-        unsafe { self.untagged().as_mut() }
-    }
-
-    /// Atomically swaps the internal pointer with another one.
-    ///
-    /// This boolean returns true if the pointer was swapped, false otherwise.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn compare_and_swap(&self, current: *mut T, other: *mut T) -> bool {
-        self.as_atomic()
-            .compare_and_swap(current, other, Ordering::AcqRel)
-            == current
-    }
-
-    /// Atomically replaces the current pointer with the given one.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn atomic_store(&self, other: *mut T) {
-        self.as_atomic().store(other, Ordering::Release);
-    }
-
-    /// Atomically loads the pointer.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn atomic_load(&self) -> *mut T {
-        self.as_atomic().load(Ordering::Acquire)
-    }
-
-    /// Checks if a bit is set using an atomic load.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::trivially_copy_pass_by_ref))]
-    pub fn atomic_bit_is_set(&self, bit: usize) -> bool {
-        Self::new(self.atomic_load()).bit_is_set(bit)
-    }
-
-    fn as_atomic(&self) -> &AtomicPtr<T> {
-        unsafe { &*(self as *const TaggedPointer<T> as *const AtomicPtr<T>) }
+    #[inline(always)]
+    pub fn is_non_null(self) -> bool {
+        self.0 != 0
     }
 }
-
-impl<T> PartialEq for TaggedPointer<T> {
-    fn eq(&self, other: &TaggedPointer<T>) -> bool {
-        self.raw == other.raw
-    }
-}
-
-impl<T> Eq for TaggedPointer<T> {}
-
-// These traits are implemented manually as "derive" doesn't handle the generic
-// "T" argument very well.
-impl<T> Clone for TaggedPointer<T> {
-    fn clone(&self) -> TaggedPointer<T> {
-        TaggedPointer::new(self.raw)
-    }
-}
-
-impl<T> Copy for TaggedPointer<T> {}
-
-impl<T> Hash for TaggedPointer<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.raw.hash(state);
-    }
-}
-
-impl<T: Hash + GcObject> Hash for Handle<T> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        (**self).hash(state);
-    }
-}
-
-impl<T: PartialEq + GcObject> PartialEq for Handle<T> {
-    fn eq(&self, other: &Self) -> bool {
-        (**self).eq(&**other)
-    }
-}
-
-impl<T: Eq + GcObject> Eq for Handle<T> {}
-impl<T: PartialOrd + GcObject> PartialOrd for Handle<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        (**self).partial_cmp(&**other)
-    }
-}
-impl<T: Ord + GcObject> Ord for Handle<T> {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        (**self).cmp(&**other)
-    }
-}
-
-use std::fmt::{self, Formatter};
-
-impl<T: fmt::Display + GcObject> fmt::Display for Handle<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", **self)
-    }
-}
-impl<T: fmt::Debug + GcObject> fmt::Debug for Handle<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", **self)
-    }
-}
-pub struct Handle<T: GcObject> {
-    ptr: core::ptr::NonNull<GcBox<T>>,
-}
-
-impl<T: GcObject> Handle<T> {
-    pub fn gc_ptr(&self) -> *const GcBox<()> {
-        self.ptr.cast::<_>().as_ptr()
-    }
-    pub fn ptr_eq(this: Self, other: Self) -> bool {
-        this.ptr == other.ptr
-    }
-    pub unsafe fn from_raw<U>(x: *const U) -> Self {
-        Self {
-            ptr: core::ptr::NonNull::new((x as *mut U).cast()).unwrap(),
-        }
-    }
-}
-impl<T: GcObject> Root<T> {
-    pub fn to_heap(&self) -> Handle<T> {
-        Handle {
-            ptr: unsafe {
-                core::ptr::NonNull::new_unchecked((&*self.inner).obj.cast::<GcBox<T>>() as *mut _)
-            },
-        }
-    }
-}
-impl<T: GcObject> core::ops::Deref for Handle<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &(&*self.ptr.as_ptr()).value }
-    }
-}
-
-impl<T: GcObject> core::ops::DerefMut for Handle<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut (&mut *self.ptr.as_ptr()).value }
-    }
-}
-
-impl<T: GcObject> Copy for Handle<T> {}
-impl<T: GcObject> Clone for Handle<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<'a, T: GcObject> core::ops::Deref for Root<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        let inner = unsafe { &*self.inner };
-        unsafe { &((&*inner.obj.cast::<GcBox<T>>()).value) }
-    }
-}
-
-impl<T: GcObject> core::ops::DerefMut for Root<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        let inner = unsafe { &mut *self.inner };
-        unsafe { &mut ((&mut *inner.obj.cast::<GcBox<T>>()).value) }
-    }
-}
-impl<T: GcObject> GcObject for Handle<T> {
-    fn visit_references(&self, visit: &mut dyn FnMut(*const GcBox<()>)) {
-        visit(self.gc_ptr());
-    }
-}
-impl<T: GcObject> Drop for Root<T> {
-    fn drop(&mut self) {
-        let inner = unsafe { &mut *self.inner };
-        inner.rc = inner.rc.wrapping_sub(1);
-    }
-}
-
-impl<T: GcObject> Clone for Root<T> {
-    fn clone(&self) -> Self {
-        let mut inn = unsafe { &mut *self.inner };
-        inn.rc += 1;
-        Self {
-            inner: self.inner,
-            _marker: Default::default(),
-        }
-    }
-}
-
-macro_rules! simple {
-    ($($t: ty)*) => {
-        $(
-        impl GcObject for $t {}
-        )*
-    };
-}
-
-simple!(
-    u8 u16 u32 u64 u128
-    i8 i16 i32 i64 i128
-    bool
-    f32 f64
-);
-
-impl<T: GcObject> GcObject for Vec<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
-        for elem in self.iter() {
-            elem.visit_references(trace);
-        }
-    }
-}
-
-impl<T: GcObject> GcObject for Option<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
-        if let Some(val) = self {
-            val.visit_references(trace);
-        }
-    }
-}
-
-#[derive(Default, Clone, Copy)]
-pub struct CycleStats {
-    marks: usize,
-    mismatch_marks: usize,
-    sweeped: usize,
-    freed: usize,
-    remembered: usize,
-    promoted: usize,
-}
-
-struct CollectionStats {
-    collections: usize,
-    total_pause: f32,
-    pauses: Vec<f32>,
-}
-
-impl CollectionStats {
-    fn new() -> CollectionStats {
-        CollectionStats {
-            collections: 0,
-            total_pause: 0f32,
-            pauses: Vec::new(),
-        }
-    }
-
-    fn add(&mut self, pause: f32) {
-        self.collections += 1;
-        self.total_pause += pause;
-        self.pauses.push(pause);
-    }
-
-    fn pause(&self) -> f32 {
-        self.total_pause
-    }
-
-    fn pauses(&self) -> AllNumbers {
-        AllNumbers(self.pauses.clone())
-    }
-
-    fn mutator(&self, runtime: f32) -> f32 {
-        runtime - self.total_pause
-    }
-
-    fn collections(&self) -> usize {
-        self.collections
-    }
-
-    fn percentage(&self, runtime: f32) -> (f32, f32) {
-        let gc_percentage = ((self.total_pause / runtime) * 100.0).round();
-        let mutator_percentage = 100.0 - gc_percentage;
-
-        (mutator_percentage, gc_percentage)
-    }
-}
-
-pub struct AllNumbers(Vec<f32>);
-
-impl fmt::Display for AllNumbers {
+use std::cmp::Ordering;
+use std::fmt;
+impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[")?;
-        let mut first = true;
-        for num in &self.0 {
-            if !first {
-                write!(f, ",")?;
-            }
-            write!(f, "{:.1}", num)?;
-            first = false;
-        }
-        write!(f, "]")
+        write!(f, "0x{:x}", self.to_usize())
     }
 }
-struct FormattedSize {
-    size: usize,
-}
 
-impl fmt::Display for FormattedSize {
+impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ksize = (self.size as f64) / 1024f64;
-
-        if ksize < 1f64 {
-            return write!(f, "{}B", self.size);
-        }
-
-        let msize = ksize / 1024f64;
-
-        if msize < 1f64 {
-            return write!(f, "{:.1}K", ksize);
-        }
-
-        let gsize = msize / 1024f64;
-
-        if gsize < 1f64 {
-            write!(f, "{:.1}M", msize)
-        } else {
-            write!(f, "{:.1}G", gsize)
-        }
+        write!(f, "0x{:x}", self.to_usize())
     }
 }
-fn formatted_size(size: usize) -> FormattedSize {
-    FormattedSize { size }
+
+impl PartialOrd for Address {
+    fn partial_cmp(&self, other: &Address) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Address {
+    fn cmp(&self, other: &Address) -> Ordering {
+        self.to_usize().cmp(&other.to_usize())
+    }
+}
+
+impl From<usize> for Address {
+    fn from(val: usize) -> Address {
+        Address(val)
+    }
+}
+
+pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
+    (x + (divisor - 1)) & !(divisor - 1)
 }

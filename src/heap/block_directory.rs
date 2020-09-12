@@ -52,7 +52,7 @@ pub struct BlockDirectory {
     pub local_allocators_lock: Mutex<()>,
     pub next_directory: *mut Self,
     pub local_allocators: LinkedList<LocalAllocator>,
-    pub bits: block_directory_bits::BlockDirectoryBits,
+    pub bits: BlockDirectoryBits,
 }
 use block_directory_bits::*;
 impl BlockDirectory {
