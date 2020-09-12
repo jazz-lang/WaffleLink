@@ -103,9 +103,9 @@ impl BitMap {
         unsafe {
             let mask = 1 << (n % BITS_IN_WORD);
             let index = n / BITS_IN_WORD;
-            let entry = unsafe {
-                &*(&self.bits[index] as *const usize as *const std::sync::atomic::AtomicUsize)
-            };
+            let entry =
+                &*(&self.bits[index] as *const usize as *const std::sync::atomic::AtomicUsize);
+
             (entry.load(Ordering::Relaxed) & mask) != 0
         }
     }

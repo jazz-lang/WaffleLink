@@ -19,27 +19,18 @@ impl GcObject for Foo {
 impl Drop for Foo {
     fn drop(&mut self) {}
 }
-use wafflelink::timer::Timer;
+use wafflelink::utils::fast_bitvec::*;
+
 fn main() {
-    /*let mut timer = Timer::new(true);
-    let mut s = 0;
-    let mut heap = TGC::new(&s, None, true);
-    let mut root = heap.allocate(Foo { next: None });
-
-    for _ in 0..20 {
-        let v2 = heap.allocate(Foo { next: None });
-
-        let val = heap.allocate(Foo { next: None });
-
-        //heap.write_barrier(root.to_heap(), val.to_heap());
-        root.next = Some(val.to_heap());
-    }
-    let end = 0;
-    heap.collect_garbage(&end);
-    drop(root);
-    //heap.collect_garbage(&end);
-    //heap.collect_garbage_force(GcType::Major);
-
-    //heap.dump_summary(timer.stop());*/
-    *markedspace::SIZE_CLASSES_FOR_SIZE_STEP;
+    let mut bv = FastBitVector::new();
+    bv.resize(64);
+    bv.atomic_set_and_check(34, true);
+    let mut bv1 = FastBitVector::new();
+    bv1.resize(64);
+    bv1.set_at(30, true);
+    bv |= bv1;
+    println!("{:?}", bv);
+    bv.for_each_clear_bit(|bit| {
+        println!("{}", bit);
+    });
 }

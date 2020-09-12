@@ -803,7 +803,7 @@ impl AtomicBitSet {
             position,
             self.cap
         );
-        //assert!(self.layers.len() == 1);
+        //assert!(self.layers.len() == 1);1`
         let mut set = true;
         for layer in &self.layers {
             let slot = position / BITS;
