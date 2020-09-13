@@ -2,14 +2,19 @@ use super::Address;
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
-use scoped_threadpool::Pool;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::Duration;
 
 /// Executes marking in NUM_CPUS threads
-pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Receiver<Address> {
-    let number_workers = threadpool.thread_count() as usize;
+pub fn start(
+    rootset: &[Address],
+    ncpus: usize,
+    threadpool: &mut threadpool::ThreadPool,
+    gc_ty: u8,
+) {
+    let number_workers = ncpus;
     let mut workers = Vec::with_capacity(number_workers);
     let mut stealers = Vec::with_capacity(number_workers);
     let injector = Injector::new();
@@ -26,14 +31,14 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
     }
 
     let terminator = Terminator::new(number_workers);
-    let (snd, recv) = flume::unbounded();
-    threadpool.scoped(|scoped| {
+
+    threadpool_scope::scope_with(threadpool, |scope| {
         for (task_id, worker) in workers.into_iter().enumerate() {
             let injector = &injector;
             let stealers = &stealers;
             let terminator = &terminator;
-            let snd = snd.clone();
-            scoped.execute(move || {
+
+            scope.execute(move || {
                 let mut task = MarkingTask {
                     task_id,
                     local: Segment::new(),
@@ -41,7 +46,8 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
                     injector,
                     stealers,
                     terminator,
-                    blacklist: snd,
+                    blacklist_local: vec![],
+
                     marked: 0,
                     gc_ty,
                 };
@@ -49,8 +55,10 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Re
                 task.run();
             });
         }
+        scope.join_all();
     });
-    recv
+
+    //println!("s {}ns", start.elapsed().as_nanos());
 }
 unsafe impl Send for MarkingTask<'_> {}
 unsafe impl Send for Segment {}
@@ -116,8 +124,8 @@ struct MarkingTask<'a> {
     stealers: &'a [Stealer<Address>],
     terminator: &'a Terminator,
     marked: usize,
-    blacklist: flume::Sender<Address>,
     gc_ty: u8,
+    blacklist_local: Vec<Address>,
 }
 
 impl<'a> MarkingTask<'a> {
@@ -186,9 +194,14 @@ impl<'a> MarkingTask<'a> {
     fn run(&mut self) {
         unsafe {
             loop {
+                //let start = std::time::Instant::now();
                 let object_addr = if let Some(addr) = self.pop() {
                     addr
                 } else if self.terminator.try_terminate() {
+                    while let Some(item) = self.blacklist_local.pop() {
+                        item.to_mut_obj().header.set_tag(super::GC_WHITE);
+                    }
+
                     break;
                 } else {
                     continue;
@@ -204,14 +217,17 @@ impl<'a> MarkingTask<'a> {
                                 self.push(Address::from_ptr(item));
                             }
                         });
-                        match self.blacklist.send(object_addr) {
+                        let start = std::time::Instant::now();
+                        self.blacklist_local.push(object_addr);
+                        /*match self.blacklist.send(object_addr) {
                             Ok(_) => (),
                             Err(_) => std::hint::unreachable_unchecked(), // no way channel is full (we use unbounded) or dropped (scoped threadpool)
-                        }
+                        }*/
+                        //eprintln!("blacklist in {}ns", start.elapsed().as_nanos());
                     }
                 } else if object.header.gray_to_black() {
                     if super::GC_VERBOSE_LOG {
-                        eprintln!("---thread #{}: mark {:p}", self.task_id, object);
+                        println!("---thread #{}: mark {:p}", self.task_id, object);
                     }
 
                     debug_assert!(object.header.tag() == super::GC_BLACK);
@@ -222,9 +238,12 @@ impl<'a> MarkingTask<'a> {
                             self.push(Address::from_ptr(item));
                         }
                     });
+                    self.marked += 1;
                 } else {
                     debug_assert!(object.header.tag() == super::GC_BLACK);
                 }
+                //let end = start.elapsed();
+                //println!("mark in {}ns", end.as_nanos());
             }
         }
     }

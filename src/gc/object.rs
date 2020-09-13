@@ -8,12 +8,16 @@ pub trait GcObject {
     }
 
     fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
+    fn finalize(&mut self) {
+        //eprintln!("dead {:p}", self);
+    }
 }
 
 pub struct Header {
     pub vtable: *mut (),
     pub next: *mut GcBox<()>,
     pub cell_state: u8,
+    pub is_old: bool,
 }
 
 impl Header {
@@ -28,7 +32,7 @@ impl Header {
     }
 
     pub fn vtable(&self) -> *mut () {
-        (self.vtable as usize & (!0x03)) as *mut _
+        self.vtable
     }
 
     pub fn tag(&self) -> u8 {
@@ -91,6 +95,18 @@ impl Header {
             }
         }
         true
+        /*let current = self.tag();
+        if current != super::GC_WHITE || current == super::GC_GRAY {
+            return false;
+        }
+        self.cell_state()
+            .compare_exchange(
+                super::GC_WHITE,
+                super::GC_GRAY,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            )
+            .is_ok()*/
     }
     pub fn to_blue(&self) -> bool {
         let current = self.cell_state;
@@ -153,6 +169,18 @@ impl Header {
             }
         }
         true
+        /*let current = self.tag();
+        if current != super::GC_GRAY || current == super::GC_BLACK {
+            return false;
+        }
+        self.cell_state()
+            .compare_exchange(
+                super::GC_GRAY,
+                super::GC_BLACK,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            )
+            .is_ok()*/
     }
 
     pub fn atomic_test_and_set_next_tag(&mut self, tag: u8) -> bool {
@@ -268,7 +296,7 @@ impl<T: fmt::Debug + GcObject> fmt::Debug for Handle<T> {
     }
 }
 pub struct Handle<T: GcObject> {
-    ptr: core::ptr::NonNull<GcBox<T>>,
+    pub(super) ptr: core::ptr::NonNull<GcBox<T>>,
 }
 
 impl<T: GcObject> Handle<T> {
@@ -370,6 +398,10 @@ impl<T: GcObject> GcObject for Vec<T> {
             elem.visit_references(trace);
         }
     }
+
+    fn finalize(&mut self) {
+        eprintln!("ded vec {:p},raw parts={:p}", self, self.as_ptr());
+    }
 }
 
 impl<T: GcObject> GcObject for Option<T> {
@@ -445,5 +477,81 @@ impl<T: GcObject> GcBox<T> {
 
     pub fn is_zapped(&self) -> bool {
         self.header.vtable.is_null()
+    }
+}
+
+pub struct LocalScopeInner {
+    pub(crate) gc: *mut super::TGC,
+    pub(crate) locals: Vec<*mut GcBox<()>>,
+    pub(crate) dead: bool,
+}
+
+pub struct LocalScope {
+    pub(crate) inner: *mut LocalScopeInner,
+}
+
+impl LocalScope {
+    fn inner(&self) -> &mut LocalScopeInner {
+        unsafe { &mut *self.inner }
+    }
+    fn gc(&self) -> &mut super::TGC {
+        unsafe { &mut *self.inner().gc }
+    }
+    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<'a, T> {
+        let gc = self.gc();
+        let handle = gc.allocate_no_root(value);
+        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        Local {
+            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            _marker: Default::default(),
+        }
+    }
+
+    pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<'a, T> {
+        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        Local {
+            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            _marker: Default::default(),
+        }
+    }
+}
+
+pub struct Local<'a, T: GcObject> {
+    ptr: *mut *mut GcBox<()>,
+    _marker: core::marker::PhantomData<&'a T>,
+}
+
+impl<'a, T: GcObject> Local<'a, T> {
+    pub fn to_heap(&self) -> Handle<T> {
+        Handle {
+            ptr: core::ptr::NonNull::new(unsafe { self.ptr.read().cast() }).unwrap(),
+        }
+    }
+}
+
+impl<'a, T: GcObject> Drop for Local<'a, T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.ptr.write(core::ptr::null_mut());
+        }
+    }
+}
+
+impl Drop for LocalScope {
+    fn drop(&mut self) {
+        self.inner().locals.clear();
+        self.inner().dead = true;
+    }
+}
+
+impl<T: GcObject> std::ops::Deref for Local<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &(&*(&*self.ptr).cast::<GcBox<T>>()).value }
+    }
+}
+impl<T: GcObject> std::ops::DerefMut for Local<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut (&mut *(&mut *self.ptr).cast::<GcBox<T>>()).value }
     }
 }

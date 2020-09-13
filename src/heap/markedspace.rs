@@ -86,14 +86,14 @@ pub static SIZE_CLASSES_FOR_SIZE_STEP: once_cell::sync::Lazy<[usize; NUM_SIZE_CL
 pub fn size_classes() -> Vec<usize> {
     let mut result = vec![];
     if super::GC_LOG {
-        eprintln!("Block size: {}", BLOCK_SIZE);
-        eprintln!("Footer size: {}", FOOTER_SIZE);
+        println!("Block size: {}", BLOCK_SIZE);
+        println!("Footer size: {}", FOOTER_SIZE);
     }
 
     let mut add = |vec: &mut Vec<usize>, size_class| {
         let size_class = round_up_to_multiple_of(ATOM_SIZE, size_class);
         if super::GC_LOG {
-            eprintln!("--Adding MarkedSpace size class: {}", size_class);
+            println!("--Adding MarkedSpace size class: {}", size_class);
         }
         vec.push(size_class);
     };
@@ -105,7 +105,7 @@ pub fn size_classes() -> Vec<usize> {
     }
 
     if GC_LOG {
-        eprintln!("---Marked block payload size: {}", BLOCK_PAYLOAD);
+        println!("---Marked block payload size: {}", BLOCK_PAYLOAD);
     }
 
     for i in 0.. {
@@ -116,13 +116,13 @@ pub fn size_classes() -> Vec<usize> {
         }
         let size_class = round_up_to_multiple_of(SIZE_STEP, approximate_size);
         if GC_LOG {
-            eprintln!("---Size class: {}", size_class);
+            println!("---Size class: {}", size_class);
         }
 
         let cells_per_block = BLOCK_PAYLOAD / size_class;
         let possibly_better_size_class = (BLOCK_PAYLOAD / cells_per_block) & !(SIZE_STEP - 1);
         if GC_LOG {
-            eprintln!(
+            println!(
                 "---Possibly better size class: {}",
                 possibly_better_size_class
             );
@@ -130,7 +130,7 @@ pub fn size_classes() -> Vec<usize> {
         let original_wastage = BLOCK_PAYLOAD - cells_per_block * size_class;
         let new_wastage = (possibly_better_size_class - size_class) * cells_per_block;
         if GC_LOG {
-            eprintln!(
+            println!(
                 "---Original wastage: {}, new wastage: {}",
                 original_wastage, new_wastage
             );
@@ -141,7 +141,7 @@ pub fn size_classes() -> Vec<usize> {
         } else {
             possibly_better_size_class
         };
-        eprintln!("---Choosing size class: {}", better_size_class);
+        println!("---Choosing size class: {}", better_size_class);
         if better_size_class == *result.last().unwrap() {
             continue;
         }
@@ -155,7 +155,7 @@ pub fn size_classes() -> Vec<usize> {
     result.sort_unstable();
     result.dedup();
     if GC_LOG {
-        eprintln!("--Heap MarkedSpace size class dump: {:?}", result);
+        println!("--Heap MarkedSpace size class dump: {:?}", result);
     }
 
     result

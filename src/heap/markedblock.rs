@@ -189,7 +189,7 @@ impl MarkedBlockHandle {
                     (payload_end as isize - payload_begin as isize) as u32,
                 );
                 if super::GC_LOG {
-                    eprintln!(
+                    println!(
                         "--Quickly swept block {:p} with cell size {}",
                         self.block,
                         self.cell_size()
@@ -236,7 +236,7 @@ impl MarkedBlockHandle {
             }
 
             if super::GC_LOG {
-                eprintln!(
+                println!(
                     "Slowly swept block {:p} with cell size {}",
                     self.block,
                     self.cell_size()
