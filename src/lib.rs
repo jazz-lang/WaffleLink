@@ -46,7 +46,6 @@ macro_rules! const_assert {
     };
 }
 pub mod gc;
-pub mod heap;
 pub mod timer;
 pub mod utils;
 pub mod values;

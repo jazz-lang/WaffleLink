@@ -15,11 +15,15 @@
 //! Also there is no write barriers needed for this GC to work because it is not incremental
 //! and will visit all references inside GC value, this might be slow but it works.
 
+pub mod bitmap;
+pub mod block;
+
 pub mod cmarking;
 pub mod object;
 pub mod pagealloc;
 #[cfg(feature = "pmarking")]
 pub mod pmarking;
+pub mod precise_allocation;
 use object::*;
 use std::collections::VecDeque;
 /// GC didn't seen this object.
@@ -537,7 +541,7 @@ impl Address {
     }
 
     #[inline(always)]
-    pub fn to_usize(self) -> usize {
+    pub const fn to_usize(self) -> usize {
         self.0
     }
 
