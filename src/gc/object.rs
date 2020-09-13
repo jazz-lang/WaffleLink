@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize,AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 pub trait GcObject {
     /// Returns size of current object. This is usually just `size_of_val(self)` but in case
     /// when you need dynamically sized type e.g array then this should return something like
@@ -13,10 +13,13 @@ pub trait GcObject {
 pub struct Header {
     pub vtable: *mut (),
     pub next: *mut GcBox<()>,
-    pub cell_state: AtomicU8,
+    pub cell_state: u8,
 }
 
 impl Header {
+    pub fn cell_state(&self) -> &AtomicU8 {
+        unsafe { &*(&self.cell_state as *const u8 as *const AtomicU8) }
+    }
     pub fn vtable_atomic(&self) -> &AtomicUsize {
         unsafe { std::mem::transmute(&self.vtable) }
     }
@@ -29,7 +32,7 @@ impl Header {
     }
 
     pub fn tag(&self) -> u8 {
-        self.cell_state.load(Ordering::Relaxed)
+        self.cell_state().load(Ordering::Relaxed)
         //(self.vtable as usize & 0x03) as u8
     }
 
@@ -38,11 +41,11 @@ impl Header {
     }
 
     pub fn set_tag(&mut self, tag: u8) {
-        self.cell_state.store(tag,Ordering::Relaxed);
+        self.cell_state().store(tag, Ordering::Relaxed);
         //self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
     }
     pub fn atomic_test_and_set_tag(&mut self, tag: u8) -> bool {
-        let entry = &self.cell_state;
+        let entry = self.cell_state();
         debug_assert!(tag <= super::GC_BLACK);
         loop {
             let mut current = entry.load(Ordering::Relaxed);
@@ -58,36 +61,77 @@ impl Header {
             );
             match res {
                 Ok(_) => break,
-                _ => ()
+                _ => (),
             }
         }
         false
     }
 
-    pub fn white_to_grey(&self) -> bool {
+    pub fn white_to_gray(&self) -> bool {
         let mut current = self.tag();
-        
-        loop {if current != super::GC_WHITE {
-            return false;
-        }
+        let entry = self.cell_state();
+        loop {
+            if current != super::GC_WHITE {
+                return false;
+            }
             if current == super::GC_GRAY {
                 return false;
             }
 
-            match self.cell_state.compare_exchange_weak(current, super::GC_GRAY,Ordering::Relaxed,Ordering::Relaxed) {
+            match entry.compare_exchange_weak(
+                current,
+                super::GC_GRAY,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => break,
                 Err(e) => {
                     current = e;
                 }
-
             }
         }
         true
     }
-
-    pub fn grey_to_black(&self) -> bool {
+    pub fn to_blue(&self) -> bool {
+        let current = self.cell_state;
+        let entry = self.cell_state();
+        if current == super::GC_BLUE {
+            return false;
+        }
+        entry
+            .compare_exchange(
+                current,
+                super::GC_BLUE,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            )
+            .is_ok()
+    }
+    pub fn white_to_gray_unsync(&mut self) -> bool {
+        let current = self.cell_state;
+        if current != super::GC_WHITE {
+            return false;
+        }
+        if current == super::GC_WHITE {
+            return false;
+        }
+        self.cell_state = super::GC_GRAY;
+        true
+    }
+    pub fn gray_to_black_unsync(&mut self) -> bool {
+        let current = self.cell_state;
+        if current != super::GC_GRAY {
+            return false;
+        }
+        if current == super::GC_BLACK {
+            return false;
+        }
+        self.cell_state = super::GC_BLACK;
+        true
+    }
+    pub fn gray_to_black(&self) -> bool {
         let mut current = self.tag();
-        
+        let entry = self.cell_state();
         loop {
             if current != super::GC_GRAY {
                 return false;
@@ -96,12 +140,16 @@ impl Header {
                 return false;
             }
 
-            match self.cell_state.compare_exchange_weak(current, super::GC_BLACK,Ordering::Relaxed,Ordering::Relaxed) {
+            match entry.compare_exchange_weak(
+                current,
+                super::GC_BLACK,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
                 Ok(_) => break,
                 Err(e) => {
                     current = e;
                 }
-
             }
         }
         true

@@ -13,11 +13,11 @@ impl GcObject for Foo {
 impl Drop for Foo {
     fn drop(&mut self) {}
 }
-use wafflelink::utils::fast_bitvec::*;
 
 fn main() {
     let begin = 0;
-    let mut gc = TGC::new(&begin, Some(3), true);
+    println!("{}", core::mem::size_of::<GcBox<Foo>>());
+    let mut gc = TGC::new(&begin, Some(3), !true);
 
     let mut roots: Root<Vec<Handle<i32>>> = gc.allocate(vec![]);
     for _ in 0..1000 {

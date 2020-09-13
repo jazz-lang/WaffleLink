@@ -22,17 +22,28 @@ pub mod pagealloc;
 pub mod pmarking;
 use object::*;
 use std::collections::VecDeque;
-
+/// GC didn't seen this object.
 pub const GC_WHITE: u8 = 0;
+/// Object fields was visited
 pub const GC_BLACK: u8 = 2;
+/// Object is in graylist
 pub const GC_GRAY: u8 = 1;
+/// Old gen object
+pub const GC_BLUE: u8 = 3;
 pub const GC_NEW: u8 = 0;
 pub const GC_OLD: u8 = 1;
 pub const GC_NONE: u8 = 2;
+
+pub const GC_VERBOSE_LOG: bool = true;
+pub const GC_LOG: bool = true;
+
 pub struct TGC {
     eden: *mut GcBox<()>,
     eden_size: usize,
     eden_allowed_size: usize,
+    old: *mut GcBox<()>,
+    old_size: usize,
+    old_allowed_size: usize,
     roots: RootList,
     gc_ty: u8,
     graystack: VecDeque<*mut GcBox<()>>,
@@ -48,9 +59,6 @@ pub struct TGC {
     pmark: bool,
 }
 
-pub const GC_VERBOSE_LOG: bool = true;
-pub const GC_LOG: bool = true;
-
 impl TGC {
     pub fn new(begin: *const usize, n_cpus: Option<usize>, pmark: bool) -> Self {
         Self {
@@ -60,6 +68,9 @@ impl TGC {
             pool: scoped_threadpool::Pool::new(n_cpus.unwrap_or(num_cpus::get() / 2) as u32),
             eden_allowed_size: 8 * 1024,
             eden_size: 0,
+            old: 0 as *mut _,
+            old_allowed_size: 16 * 1024,
+            old_size: 0,
             eden: 0 as *mut _,
             pmark,
             gc_ty: GC_NONE,
@@ -71,23 +82,12 @@ impl TGC {
             stack_end: begin,
         }
     }
-    fn mark(&mut self, object: *mut GcBox<()>) {
-        unsafe {
-            let obj = &mut *object;
-            if obj.header.tag() == GC_GRAY {
-                obj.header.set_tag(GC_BLACK);
-                obj.trait_object().visit_references(&mut |reference| {
-                    self.mark_object(reference as *mut _);
-                });
-            }
-        }
-    }
 
     fn mark_object(&mut self, object: *mut GcBox<()>) {
         //panic!();
         unsafe {
             let obj = &mut *object;
-            if obj.header.white_to_grey() {
+            if obj.header.white_to_gray() {
                 if GC_VERBOSE_LOG && GC_LOG {
                     eprintln!("---mark {:p}", object);
                 }
@@ -100,45 +100,88 @@ impl TGC {
         let mut count = 0;
         let mut freed = 0;
 
-        if GC_LOG {
-            eprintln!("--begin eden sweep");
-        }
-        let mut previous: *mut GcBox<()> = core::ptr::null_mut();
-        let mut object = self.eden;
+        if eden {
+            if GC_LOG {
+                eprintln!("--begin eden sweep");
+            }
+            let mut object = self.eden;
+            self.eden_size = 0;
+            while object.is_null() == false {
+                unsafe {
+                    let obj = &mut *object;
+                    let next = obj.header.next();
+                    let size = obj.trait_object().size() + core::mem::size_of::<Header>();
 
-        while object.is_null() == false {
-            unsafe {
-                let obj = &mut *object;
-                let next = obj.header.next();
-                let size = obj.trait_object().size() + core::mem::size_of::<Header>();
-
-                if obj.header.tag() == GC_BLACK {
-                    obj.header.set_tag(GC_WHITE);
+                    if obj.header.tag() == GC_BLACK {
+                        obj.header.set_tag(GC_WHITE);
+                        obj.header.set_next(self.old.cast());
+                        self.old = obj as *mut _;
+                        if GC_VERBOSE_LOG {
+                            eprintln!("---promote {:p}", obj);
+                        }
+                        self.old_size += size;
                     //obj.header.set_next(self.old.cast());
 
                     //obj.header.set_next_tag(1);
-                    previous = object;
-                } else {
-                    #[cfg(debug_assertions)]
-                    {
-                        assert!(obj.header.tag() != GC_GRAY);
-                    }
-                    let unreached = object;
-                    if previous.is_null() {
-                        self.eden = next.cast();
+                    //previous = object;
                     } else {
-                        (&mut *previous).header.next = object;
+                        #[cfg(debug_assertions)]
+                        {
+                            assert!(obj.header.tag() != GC_GRAY);
+                        }
+                        let unreached = object;
+                        /*if previous.is_null() {
+                            self.eden = next.cast();
+                        } else {
+                            (&mut *previous).header.next = object;
+                        }*/
+                        freed += size;
+
+                        if GC_LOG && GC_VERBOSE_LOG {
+                            eprintln!("---sweep eden {:p} size={}", unreached, size);
+                        }
+                        core::ptr::drop_in_place(obj.trait_object());
+                        libmimalloc_sys::mi_free(unreached.cast());
+                        count += 1;
                     }
-                    freed += size;
-                    self.eden_size -= size;
-                    if GC_LOG && GC_VERBOSE_LOG {
-                        eprintln!("---sweep {:p} size={}", unreached, size);
-                    }
-                    core::ptr::drop_in_place(obj.trait_object());
-                    libmimalloc_sys::mi_free(unreached.cast());
-                    count += 1;
+                    object = next.cast();
                 }
-                object = next.cast();
+            }
+        } else {
+            if GC_LOG {
+                eprintln!("--begin old sweep");
+            }
+            unsafe {
+                let mut previous: *mut GcBox<()> = core::ptr::null_mut();
+                let mut object = self.old;
+                while !object.is_null() {
+                    let obj = &mut *object;
+                    let next = obj.header.next();
+                    let size = obj.trait_object().size() + core::mem::size_of::<Header>();
+                    if obj.header.tag() == GC_BLACK {
+                        obj.header.set_tag(GC_WHITE);
+                        previous = object;
+                    } else {
+                        #[cfg(debug_assertions)]
+                        {
+                            assert!(obj.header.tag() != GC_GRAY);
+                        }
+                        let unreached = object;
+                        if previous.is_null() {
+                            self.old = next.cast();
+                        } else {
+                            (&mut *previous).header.next = object;
+                        }
+                        freed += size;
+
+                        if GC_LOG && GC_VERBOSE_LOG {
+                            eprintln!("---sweep old {:p} size={}", unreached, size);
+                        }
+                        core::ptr::drop_in_place(obj.trait_object());
+                        libmimalloc_sys::mi_free(unreached.cast());
+                        count += 1;
+                    }
+                }
             }
         }
 
@@ -163,13 +206,16 @@ impl TGC {
                         }
                         let obj = (&*root).obj;
                         if (&*obj).header.tag() == GC_WHITE {
-                            (&mut*obj).header.set_tag(GC_GRAY);
+                            (&mut *obj).header.set_tag(GC_GRAY);
                             roots.push(Address::from_ptr((&*root).obj));
                         }
                     });
 
                     let mut count = 0;
-                    pmarking::start(&roots, &mut self.pool, self.gc_ty);
+                    let blacklisted = pmarking::start(&roots, &mut self.pool, self.gc_ty);
+                    while let Ok(item) = blacklisted.recv() {
+                        item.to_mut_obj().header.set_tag(GC_WHITE);
+                    }
                     if GC_LOG {
                         eprintln!("--parallel marking finished");
                     }
@@ -190,6 +236,11 @@ impl TGC {
                     eprintln!("--process gray stack");
                 }
                 self.process_gray();
+                while let Some(object) = self.blacklist.pop() {
+                    unsafe {
+                        (&mut *object).header.set_tag(GC_WHITE);
+                    }
+                }
             }
         }
         #[cfg(not(feature = "pmarking"))]
@@ -209,6 +260,11 @@ impl TGC {
                 eprintln!("--process gray stack");
             }
             self.process_gray();
+            while let Some(object) = self.blacklist.pop() {
+                unsafe {
+                    (&mut *object).header.set_tag(GC_WHITE);
+                }
+            }
         }
     }
     #[inline(never)]
@@ -226,6 +282,13 @@ impl TGC {
         self.mark_from_roots();
         let before = self.eden_size;
         self.sweep(self.gc_ty == GC_NEW);
+        if self.old_allowed_size <= self.old_size && self.gc_ty == GC_NEW {
+            if GC_LOG {
+                eprintln!("--starting old space GC");
+            }
+            self.gc_ty = GC_OLD;
+            self.collect_garbage(stack_end);
+        }
         let freed = before - self.eden_size;
         if before as f64 * 0.5 <= freed as f64 {
             unsafe {
@@ -235,16 +298,17 @@ impl TGC {
                 libmimalloc_sys::mi_heap_collect(self.mi_heap, true);
             }
         }
+
         if self.eden_size >= self.eden_allowed_size {
             self.eden_allowed_size = (self.eden_size as f64 / 0.75) as usize;
         }
-        /*if self.old_size >= self.old_allowed_size {
+        if self.old_size >= self.old_allowed_size {
             self.old_allowed_size = (self.old_size as f64 / 0.5) as usize;
-        }*/
+        }
         if GC_LOG {
             eprintln!(
-                "--GC end, threshold {}\n---eden heap size before GC={}\n---eden heap size after GC={}",
-                self.eden_allowed_size, before, self.eden_size
+                "--GC end, eden threshold {},old threshold {}\n",
+                self.eden_allowed_size, self.old_allowed_size
             );
         }
         self.gc_ty = GC_NONE;
@@ -267,7 +331,8 @@ impl TGC {
             let mem = mem.cast::<GcBox<T>>();
             mem.write(GcBox {
                 header: Header {
-                    cell_state: std::sync::atomic::AtomicU8::new(GC_WHITE),
+                    cell_state: GC_WHITE,
+                    //cell_state: std::sync::atomic::AtomicU8::new(GC_WHITE),
                     vtable: core::mem::transmute::<_, TraitObject>(&value as &dyn GcObject).vtable,
                     next: 0 as *mut _,
                 },
@@ -283,19 +348,9 @@ impl TGC {
             self.roots.root(mem)
         }
     }
-    fn in_current_space(&self, val: &GcBox<()>) -> bool {
-        unsafe {
-            if self.gc_ty == GC_OLD {
-                val.header.next_tag() == 1
-            } else {
-                val.header.next_tag() == 0
-            }
-        }
-    }
-
 
     fn visit_value(&mut self, obj: &mut GcBox<()>) {
-        obj.trait_object().visit_references(&mut |object| unsafe {
+        obj.trait_object().visit_references(&mut |object| {
             self.mark_object(object as *mut _);
         })
     }
@@ -303,22 +358,16 @@ impl TGC {
         while let Some(item) = self.graystack.pop_front() {
             unsafe {
                 let obj = &mut *item;
-                if obj.header.grey_to_black() {
-                    /*if !self.in_current_space(obj) {
-                        if obj.header.tag() != 2 {
-                            if GC_VERBOSE_LOG && GC_LOG {
-                                eprintln!("---blacklist {:p}", obj);
-                            }
-                            obj.header.set_tag(2);
-                            self.blacklist.push(item);
-                            self.visit_value(obj);
-                        }
-                        continue;
-                    }*/
+                if obj.header.next_tag() != self.gc_ty {
+                    if obj.header.to_blue() {
+                        self.visit_value(obj);
+                        self.blacklist.push(item);
+                    }
+                } else if obj.header.gray_to_black() {
                     if GC_VERBOSE_LOG && GC_LOG {
                         eprintln!("---mark {:p}", obj);
                     }
-                    
+
                     self.visit_value(obj);
                 }
             }

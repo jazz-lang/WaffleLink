@@ -3,12 +3,12 @@ use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use rand::distributions::{Distribution, Uniform};
 use rand::thread_rng;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::sync::Arc;
 use threadpool::ThreadPool;
 
-use super::pmarking::{Terminator,Segment};
+use super::pmarking::{Segment, Terminator};
 
 pub struct ConcMarkingTask {
     task_id: usize,
@@ -17,7 +17,7 @@ pub struct ConcMarkingTask {
     stealers: Arc<Vec<Stealer<Address>>>,
     worker: Worker<Address>,
     terminator: Arc<Terminator>,
-    marked: usize
+    marked: usize,
 }
 
 impl ConcMarkingTask {
@@ -84,13 +84,11 @@ impl ConcMarkingTask {
     }
 }
 
-
-use parking_lot::{Mutex,Condvar};
+use parking_lot::{Condvar, Mutex};
 
 pub struct ConcurrentMarking {
     wake: Condvar,
     lock: Mutex<()>,
     injector: Arc<Injector<Address>>,
-    pool: ThreadPool
+    pool: ThreadPool,
 }
-

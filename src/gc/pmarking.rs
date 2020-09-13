@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 /// Executes marking in NUM_CPUS threads
-pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) {
+pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) -> flume::Receiver<Address> {
     let number_workers = threadpool.thread_count() as usize;
     let mut workers = Vec::with_capacity(number_workers);
     let mut stealers = Vec::with_capacity(number_workers);
@@ -26,13 +26,13 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) {
     }
 
     let terminator = Terminator::new(number_workers);
-
+    let (snd, recv) = flume::unbounded();
     threadpool.scoped(|scoped| {
         for (task_id, worker) in workers.into_iter().enumerate() {
             let injector = &injector;
             let stealers = &stealers;
             let terminator = &terminator;
-
+            let snd = snd.clone();
             scoped.execute(move || {
                 let mut task = MarkingTask {
                     task_id,
@@ -41,7 +41,7 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) {
                     injector,
                     stealers,
                     terminator,
-
+                    blacklist: snd,
                     marked: 0,
                     gc_ty,
                 };
@@ -50,6 +50,7 @@ pub fn start(rootset: &[Address], threadpool: &mut Pool, gc_ty: u8) {
             });
         }
     });
+    recv
 }
 unsafe impl Send for MarkingTask<'_> {}
 unsafe impl Send for Segment {}
@@ -115,6 +116,7 @@ struct MarkingTask<'a> {
     stealers: &'a [Stealer<Address>],
     terminator: &'a Terminator,
     marked: usize,
+    blacklist: flume::Sender<Address>,
     gc_ty: u8,
 }
 
@@ -193,17 +195,30 @@ impl<'a> MarkingTask<'a> {
                 };
 
                 let object = object_addr.to_mut_obj();
-                if object.header.grey_to_black() {
+                if object.header.next_tag() != self.gc_ty {
+                    if object.header.to_blue() {
+                        object.trait_object().visit_references(&mut |item| {
+                            let object = item as *mut super::GcBox<()>;
+                            let obj = &mut *object;
+                            if obj.header.white_to_gray() {
+                                self.push(Address::from_ptr(item));
+                            }
+                        });
+                        match self.blacklist.send(object_addr) {
+                            Ok(_) => (),
+                            Err(_) => std::hint::unreachable_unchecked(), // no way channel is full (we use unbounded) or dropped (scoped threadpool)
+                        }
+                    }
+                } else if object.header.gray_to_black() {
                     if super::GC_VERBOSE_LOG {
                         eprintln!("---thread #{}: mark {:p}", self.task_id, object);
                     }
-                    
+
                     debug_assert!(object.header.tag() == super::GC_BLACK);
                     object.trait_object().visit_references(&mut |item| {
                         let object = item as *mut super::GcBox<()>;
-                        let obj = &mut*object;
-                        if obj.header.white_to_grey() {
-                            //obj.header.atomic_test_and_set_tag(super::GC_GRAY);
+                        let obj = &mut *object;
+                        if obj.header.white_to_gray() {
                             self.push(Address::from_ptr(item));
                         }
                     });
