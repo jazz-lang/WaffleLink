@@ -3,7 +3,7 @@ use intrusive_collections::{intrusive_adapter, LinkedListLink, UnsafeRef};
 use std::alloc::{alloc, dealloc, Layout};
 use std::sync::atomic::{AtomicBool, Ordering};
 
-intrusive_adapter!(pub PreciseAllocationNode = UnsafeRef<PreciseAllocation> : PreciseAllocation {link: LinkedListLink});
+//intrusive_adapter!(pub PreciseAllocationNode = UnsafeRef<PreciseAllocation> : PreciseAllocation {link: LinkedListLink});
 /// Precise allocation used for large objects (>= LARGE_CUTOFF).
 /// Wafflelink has a good malloc that already knows what to do for large allocations. The GC shouldn't
 /// have to think about such things. That's where PreciseAllocation comes in. We will allocate large
@@ -11,16 +11,23 @@ intrusive_adapter!(pub PreciseAllocationNode = UnsafeRef<PreciseAllocation> : Pr
 /// when a *mut GcBox is a PreciseAllocation because it will have the ATOM_SIZE / 2 bit set.
 #[repr(C)]
 pub struct PreciseAllocation {
-    pub link: LinkedListLink,
+    //pub link: LinkedListLink,
     pub cell_size: usize,
-    pub is_marked: AtomicBool,
+    pub is_marked: bool,
     pub index_in_space: u32,
-    pub is_newly_allocated: bool,
+    //pub is_newly_allocated: bool,
     pub adjusted_alignment: bool,
     pub has_valid_cell: bool,
 }
 
 impl PreciseAllocation {
+
+    pub fn mark_atomic(&self) -> &AtomicBool {
+        unsafe {
+            &*(&self.is_marked as *const bool as *const AtomicBool)
+        }
+    }
+
     pub const ALIGNMENT: usize = 16;
     pub const HALF_ALIGNMENT: usize = Self::ALIGNMENT / 2;
     pub fn is_precise(raw_ptr: *mut ()) -> bool {
@@ -37,36 +44,43 @@ impl PreciseAllocation {
     #[inline]
     pub fn base_pointer(&self) -> *mut () {
         if self.adjusted_alignment {
-            return unsafe {
-                (self as *const Self as *mut ()).offset(-(Self::HALF_ALIGNMENT as isize))
-            };
+            return 
+                ((self as *const Self as isize) - (Self::HALF_ALIGNMENT as isize)) as *mut ()
+            
         } else {
             self as *const Self as *mut ()
         }
     }
 
-    pub fn clear_marked(&self) {
-        self.is_marked.store(false, Ordering::Relaxed);
+    pub fn clear_marked(&mut self) {
+        self.is_marked = false;
+        //self.is_marked.store(false, Ordering::Relaxed);
     }
 
     pub fn is_marked(&self) -> bool {
-        self.is_marked.load(Ordering::Relaxed)
+        self.mark_atomic().load(Ordering::Relaxed)
     }
 
     pub fn test_and_set_marked(&self) -> bool {
         if self.is_marked() {
             return true;
         }
-        self.is_marked
+        self.mark_atomic()
             .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed)
             .is_ok()
     }
-    pub fn cell(&self) -> *mut GcBox<()> {
-        unsafe {
-            (self as *const Self as *mut ())
-                .offset(Self::header_size() as _)
-                .cast()
+
+    pub fn test_and_set_marked_unsync(&mut self) -> bool {
+        if self.is_marked {
+            return true;
         }
+
+        self.is_marked = true;
+        false
+    }
+    pub fn cell(&self) -> *mut GcBox<()> {
+        let addr = super::Address::from_ptr(self).offset(Self::header_size());
+        addr.to_mut_ptr()
     }
 
     pub fn above_lower_bound(&self, raw_ptr: *mut ()) -> bool {
@@ -82,8 +96,7 @@ impl PreciseAllocation {
         ptr <= (end as usize + 8) as *mut ()
     }
     pub const fn header_size() -> usize {
-        (core::mem::size_of::<Self>() + Self::HALF_ALIGNMENT - 1) & !(Self::HALF_ALIGNMENT - 1)
-            | Self::HALF_ALIGNMENT
+        ((core::mem::size_of::<PreciseAllocation>() + Self::HALF_ALIGNMENT - 1) & !(Self::HALF_ALIGNMENT - 1)) | Self::HALF_ALIGNMENT
     }
 
     pub fn contains(&self, raw_ptr: *mut ()) -> bool {
@@ -91,15 +104,15 @@ impl PreciseAllocation {
     }
 
     pub fn is_live(&self) -> bool {
-        self.is_marked() || self.is_newly_allocated
+        self.is_marked() //|| self.is_newly_allocated
     }
 
-    pub fn flip(&self) {
+    pub fn flip(&mut self) {
         self.clear_marked();
     }
 
     pub fn is_empty(&self) -> bool {
-        !self.is_marked() && !self.is_newly_allocated
+        !self.is_marked() //&& !self.is_newly_allocated
     }
 
     pub fn sweep(&mut self) {
@@ -116,25 +129,28 @@ impl PreciseAllocation {
         let adjusted_alignment_allocation_size = Self::header_size() + size + Self::HALF_ALIGNMENT;
         unsafe {
             let mut space = alloc(
-                Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)
+                Layout::from_size_align(adjusted_alignment_allocation_size, Self::HALF_ALIGNMENT)
                     .unwrap(),
             );
+            //let mut space = libc::malloc(adjusted_alignment_allocation_size);
             let mut adjusted_alignment = false;
             if !is_aligned_for_precise_allocation(space) {
                 space = space.offset(Self::HALF_ALIGNMENT as _);
                 adjusted_alignment = true;
+                assert!(is_aligned_for_precise_allocation(space));
             }
-
+            assert!(size != 0);
             space.cast::<Self>().write(Self {
-                link: LinkedListLink::new(),
+                //link: LinkedListLink::new(),
                 adjusted_alignment,
-                is_marked: AtomicBool::new(false),
-                is_newly_allocated: true,
+                is_marked: false,
+                //is_newly_allocated: true,
                 has_valid_cell: true,
                 cell_size: size,
                 index_in_space,
             });
-
+            
+            assert!((&*(&*space.cast::<Self>()).cell()).is_precise_allocation());
             space.cast()
         }
     }
@@ -146,6 +162,8 @@ impl PreciseAllocation {
             Self::header_size() + self.cell_size + Self::HALF_ALIGNMENT;
         let base = self.base_pointer();
         unsafe {
+            let cell = self.cell();
+            core::ptr::drop_in_place((&mut*cell).trait_object());
             dealloc(
                 base.cast(),
                 Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)
@@ -157,5 +175,5 @@ impl PreciseAllocation {
 
 pub fn is_aligned_for_precise_allocation(mem: *mut u8) -> bool {
     let allocable_ptr = mem as usize;
-    (allocable_ptr & (PreciseAllocation::ALIGNMENT - 1)) != 0
+    (allocable_ptr & (PreciseAllocation::ALIGNMENT - 1)) == 0
 }

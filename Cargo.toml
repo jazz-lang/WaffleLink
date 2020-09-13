@@ -14,18 +14,12 @@ intrusive-collections = "0.9"
 rand = "0.7"
 mimalloc = "0.1"
 once_cell = "1.4.1"
-num_cpus = {version = "1.13.*"}
-parking_lot = {version = "0.11"}
-threadpool = {version = "1.8.*"}
-threadpool_scope = "0.1"
-crossbeam-deque = {version="0.7.*"}
-flume = {git="https://github.com/zesterer/flume",branch="master",default-features = false}
+libc = "0.2"
 [[bin]]
 name = "cli"
 
 [features]
-pmarking = []
-default = ["pmarking"]
+default = []
 
 [profile.release]
 lto = "fat"

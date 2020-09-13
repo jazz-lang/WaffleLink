@@ -57,13 +57,13 @@ pub type Atom = [u8; ATOM_SIZE];
 
 pub struct BlockHeader {
     cell_size: u32,
-    freelist: FreeList,
-    /// If this set to true then we do not try to allocate from this block.
-    can_allocate: bool,
+    pub freelist: FreeList,
+    /// If this set to false then we do not try to allocate from this block.
+    pub can_allocate: bool,
     /// If true we didn't sweep this block
-    unswept: bool,
-    bitmap: bitmap::BitMap,
-    block: *mut Block,
+    pub unswept: bool,
+    pub bitmap: bitmap::BitMap,
+    pub block: *mut Block,
 }
 
 use std::alloc::{alloc, dealloc, Layout};
@@ -71,6 +71,9 @@ use std::alloc::{alloc, dealloc, Layout};
 pub struct Block {}
 
 impl Block {
+    pub fn from_cell(p: Address) -> *mut Self {
+        (p.to_usize() & (!(BLOCK_SIZE - 1))) as *mut Self
+    }
     pub fn new(cell_size: usize) -> &'static mut BlockHeader {
         unsafe {
             let memory =
@@ -83,11 +86,13 @@ impl Block {
                 freelist: FreeList::new(),
                 block: memory,
             });
+            let mut count = 0;
             (&*memory).header().for_each_cell(|cell| {
                 cell.to_mut_obj().zap(1);
+                count += 1;
                 (&mut *memory).header().freelist.free(cell);
             });
-            println!("{:p}", &(*memory).header());
+            println!("create {}",count);
             (&*memory).header()
         }
     }
@@ -160,12 +165,32 @@ impl BlockHeader {
         }
         addr
     }
-    pub fn sweep(&mut self) {
+    pub fn destroy(&mut self) {
+        unsafe {
+            dealloc(
+                self.block.cast(),
+                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE),
+            );
+        }
+    }
+
+    pub fn sweep(&mut self) -> bool {
+        
+        let mut is_empty = true;
         let mut freelist = FreeList::new();
+        let mut count = 0;
+        if GC_LOG {
+            eprintln!("--Sweep block {:p}, sie class: {}",self.block,self.cell_size);
+        }
+        let mut zcount = 0;
+        let mut freed = 0;
         self.for_each_cell(|cell| {
             let object = cell.to_mut_obj();
             if !self.is_marked(cell) {
+                count += 1;
                 if !object.is_zapped() {
+                    zcount += 1;
+                    freed += object.trait_object().size() + core::mem::size_of::<Header>();
                     unsafe {
                         core::ptr::drop_in_place(object.trait_object());
                     }
@@ -173,15 +198,28 @@ impl BlockHeader {
                 }
                 freelist.free(cell);
             } else {
+                is_empty = false;
                 debug_assert!(self.is_marked(cell));
             }
         });
+        if GC_LOG {
+            eprintln!("--sweeped {} objects ({} bytes)",zcount,freed);
+        }
+        self.unswept = false;
+        self.can_allocate = count != 0;
         self.freelist = freelist;
+        is_empty
     }
 
-    pub fn test_and_set_marked(&self, p: Address) -> bool {
-        self.bitmap
-            .concurrent_test_and_set(self.atom_number(p) as _)
+    pub fn test_and_set_marked(&mut self, p: Address) -> bool {
+        /*self.bitmap
+            .concurrent_test_and_set(self.atom_number(p) as _)*/
+        let n = self.atom_number(p) as usize;
+        if self.bitmap.get(n) {
+            return true;
+        }
+        self.bitmap.set(n);
+        false
     }
 
     pub fn is_marked(&self, p: Address) -> bool {

@@ -15,41 +15,40 @@ pub trait GcObject {
 
 pub struct Header {
     pub vtable: *mut (),
-    pub next: *mut GcBox<()>,
     pub cell_state: u8,
-    pub is_old: bool,
 }
 
 impl Header {
-    pub fn cell_state(&self) -> &AtomicU8 {
+    pub fn cell_state_atomic(&self) -> &AtomicU8 {
         unsafe { &*(&self.cell_state as *const u8 as *const AtomicU8) }
     }
     pub fn vtable_atomic(&self) -> &AtomicUsize {
         unsafe { std::mem::transmute(&self.vtable) }
     }
-    pub fn next_atomic(&self) -> &AtomicUsize {
-        unsafe { std::mem::transmute(&self.next) }
-    }
 
     pub fn vtable(&self) -> *mut () {
         self.vtable
     }
-
     pub fn tag(&self) -> u8 {
-        self.cell_state().load(Ordering::Relaxed)
+        (self.vtable as usize & 0x03) as u8
+    }
+    pub fn cell_state(&self) -> u8 {
+        self.cell_state_atomic().load(Ordering::Relaxed)
         //(self.vtable as usize & 0x03) as u8
     }
 
     pub fn set_vtable(&mut self, vtable: *mut ()) {
         self.vtable = (vtable as usize) as *mut ();
     }
-
     pub fn set_tag(&mut self, tag: u8) {
-        self.cell_state().store(tag, Ordering::Relaxed);
+        self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
+    }
+    pub fn set_cell_state(&mut self, tag: u8) {
+        self.cell_state_atomic().store(tag, Ordering::Relaxed);
         //self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
     }
     pub fn atomic_test_and_set_tag(&mut self, tag: u8) -> bool {
-        let entry = self.cell_state();
+        let entry = self.cell_state_atomic();
         debug_assert!(tag <= super::GC_BLACK);
         loop {
             let mut current = entry.load(Ordering::Relaxed);
@@ -73,7 +72,7 @@ impl Header {
 
     pub fn white_to_gray(&self) -> bool {
         let mut current = self.tag();
-        let entry = self.cell_state();
+        let entry = self.cell_state_atomic();
         loop {
             if current != super::GC_WHITE {
                 return false;
@@ -110,7 +109,7 @@ impl Header {
     }
     pub fn to_blue(&self) -> bool {
         let current = self.cell_state;
-        let entry = self.cell_state();
+        let entry = self.cell_state_atomic();
         if current == super::GC_BLUE {
             return false;
         }
@@ -147,7 +146,7 @@ impl Header {
     }
     pub fn gray_to_black(&self) -> bool {
         let mut current = self.tag();
-        let entry = self.cell_state();
+        let entry = self.cell_state_atomic();
         loop {
             if current != super::GC_GRAY {
                 return false;
@@ -183,48 +182,8 @@ impl Header {
             .is_ok()*/
     }
 
-    pub fn atomic_test_and_set_next_tag(&mut self, tag: u8) -> bool {
-        let mut current = self.next();
-        loop {
-            if current as usize & 0x03 == tag as usize {
-                return true;
-            }
-            let new = (current as usize | tag as usize) as *mut ();
-            let res = self.next_atomic().compare_exchange_weak(
-                current as _,
-                new as _,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            );
-            match res {
-                Ok(_) => break,
-                Err(x) => {
-                    current = x as *mut ();
-                }
-            }
-        }
-        false
-    }
     pub fn atomic_tag(&self) -> u8 {
         (self.vtable_atomic().load(Ordering::Relaxed) & 0x03) as u8
-    }
-    pub fn atomic_next_tag(&self) -> u8 {
-        (self.next_atomic().load(Ordering::Relaxed) & 0x03) as u8
-    }
-    pub fn next(&self) -> *mut () {
-        (self.next as usize & (!0x03)) as *mut _
-    }
-
-    pub fn next_tag(&self) -> u8 {
-        (self.next as usize & 0x03) as u8
-    }
-
-    pub fn set_next(&mut self, next: *mut ()) {
-        self.next = (next as usize | self.next_tag() as usize) as *mut _;
-    }
-
-    pub fn set_next_tag(&mut self, tag: u8) {
-        self.next = (self.next() as usize | tag as usize) as *mut _;
     }
 }
 
@@ -241,6 +200,20 @@ pub struct TraitObject {
 }
 
 impl<T: GcObject> GcBox<T> {
+    pub fn is_precise_allocation(&self) -> bool {
+        super::precise_allocation::PreciseAllocation::is_precise(self as *const _ as *mut _)
+    }
+
+    pub fn precise_allocation(&self) -> *mut super::precise_allocation::PreciseAllocation {
+        unsafe {
+            super::precise_allocation::PreciseAllocation::from_cell(self as *const _ as *mut _)
+        }
+    }
+
+    pub fn block(&self) -> *mut super::block::Block {
+        super::block::Block::from_cell(super::Address::from_ptr(self))
+    }
+
     pub fn trait_object(&self) -> &mut dyn GcObject {
         unsafe {
             core::mem::transmute(TraitObject {
@@ -251,11 +224,6 @@ impl<T: GcObject> GcBox<T> {
     }
 }
 
-impl<T: GcObject> GcObject for Root<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
-        self.to_heap().visit_references(trace);
-    }
-}
 use std::hash::{Hash, Hasher};
 
 impl GcObject for () {}
@@ -312,15 +280,13 @@ impl<T: GcObject> Handle<T> {
         }
     }
 }
-impl<T: GcObject> Root<T> {
-    pub fn to_heap(&self) -> Handle<T> {
-        Handle {
-            ptr: unsafe {
-                core::ptr::NonNull::new_unchecked((&*self.inner).obj.cast::<GcBox<T>>() as *mut _)
-            },
-        }
+
+impl<T: GcObject> GcObject for Handle<T> {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
+        trace(self.gc_ptr());
     }
 }
+
 impl<T: GcObject> core::ops::Deref for Handle<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -338,42 +304,6 @@ impl<T: GcObject> Copy for Handle<T> {}
 impl<T: GcObject> Clone for Handle<T> {
     fn clone(&self) -> Self {
         *self
-    }
-}
-impl<'a, T: GcObject> core::ops::Deref for Root<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        let inner = unsafe { &*self.inner };
-        unsafe { &((&*inner.obj.cast::<GcBox<T>>()).value) }
-    }
-}
-
-impl<T: GcObject> core::ops::DerefMut for Root<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        let inner = unsafe { &mut *self.inner };
-        unsafe { &mut ((&mut *inner.obj.cast::<GcBox<T>>()).value) }
-    }
-}
-impl<T: GcObject> GcObject for Handle<T> {
-    fn visit_references(&self, visit: &mut dyn FnMut(*const GcBox<()>)) {
-        visit(self.gc_ptr());
-    }
-}
-impl<T: GcObject> Drop for Root<T> {
-    fn drop(&mut self) {
-        let inner = unsafe { &mut *self.inner };
-        inner.rc = inner.rc.wrapping_sub(1);
-    }
-}
-
-impl<T: GcObject> Clone for Root<T> {
-    fn clone(&self) -> Self {
-        let mut inn = unsafe { &mut *self.inner };
-        inn.rc += 1;
-        Self {
-            inner: self.inner,
-            _marker: Default::default(),
-        }
     }
 }
 
@@ -411,62 +341,6 @@ impl<T: GcObject> GcObject for Option<T> {
         }
     }
 }
-pub struct RootInner {
-    rc: u32,
-    pub obj: *mut GcBox<()>,
-}
-
-/// Rooted value. All GC allocated values wrapped in `Root<T>` will be scanned by GC for
-/// references. You can use this type like regular `Rc` but please try to minimize it's usage
-/// because GC allocates some heap memory for managing roots.
-pub struct Root<T: GcObject> {
-    inner: *mut RootInner,
-    _marker: core::marker::PhantomData<T>,
-}
-
-pub struct RootList {
-    roots: Vec<*mut RootInner>,
-}
-use std::{boxed::Box, vec::Vec};
-impl RootList {
-    pub fn new() -> Self {
-        Self {
-            roots: Vec::with_capacity(4),
-        }
-    }
-    pub fn root<T: GcObject>(&mut self, o: *mut GcBox<T>) -> Root<T> {
-        let root = Box::into_raw(Box::new(RootInner {
-            rc: 1,
-            obj: o.cast(),
-        }));
-        self.roots.push(root);
-        Root {
-            inner: root,
-            _marker: Default::default(),
-        }
-    }
-    pub fn unroot<T: GcObject>(&mut self, r: Root<T>) {
-        drop(r)
-    }
-
-    pub(crate) fn walk(&mut self, walk: &mut dyn FnMut(*const RootInner)) {
-        /*let mut cur = self.roots;
-        while cur.is_non_null() {
-            walk(cur);
-            cur = cur.next;
-        }*/
-
-        self.roots.retain(|x| unsafe {
-            if (&**x).rc == 0 {
-                let _ = std::boxed::Box::from_raw(*x);
-                false
-            } else {
-                walk(*x);
-                true
-            }
-        });
-    }
-}
 
 pub type GCObjectRef = *mut GcBox<()>;
 
@@ -481,9 +355,9 @@ impl<T: GcObject> GcBox<T> {
 }
 
 pub struct LocalScopeInner {
-    pub(crate) gc: *mut super::TGC,
-    pub(crate) locals: Vec<*mut GcBox<()>>,
-    pub(crate) dead: bool,
+    pub gc: *mut dyn super::GarbageCollector,
+    pub locals: Vec<*mut GcBox<()>>,
+    pub dead: bool,
 }
 
 pub struct LocalScope {
@@ -494,12 +368,12 @@ impl LocalScope {
     fn inner(&self) -> &mut LocalScopeInner {
         unsafe { &mut *self.inner }
     }
-    fn gc(&self) -> &mut super::TGC {
+    fn gc(&self) -> &mut dyn super::GarbageCollector {
         unsafe { &mut *self.inner().gc }
     }
     pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<'a, T> {
         let gc = self.gc();
-        let handle = gc.allocate_no_root(value);
+        let handle = unsafe { super::gc_alloc_handle(gc, value) };
         self.inner().locals.push(handle.ptr.as_ptr().cast());
         Local {
             ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
@@ -522,6 +396,10 @@ pub struct Local<'a, T: GcObject> {
 }
 
 impl<'a, T: GcObject> Local<'a, T> {
+    pub fn new(scope: &mut LocalScope, value: T) -> Self {
+        scope.allocate(value)
+    }
+
     pub fn to_heap(&self) -> Handle<T> {
         Handle {
             ptr: core::ptr::NonNull::new(unsafe { self.ptr.read().cast() }).unwrap(),
