@@ -166,7 +166,9 @@ pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
 /// use BDWGC.
 ///  
 /// - GC must invoke `drop_in_place` on allocated `GcBox<T>` when object is dead.
-/// - GC should take care of synchronization if it needs it (e.g concurrent marking).
+/// - GC should take care of synchronization on it's own.
+///     Each GC operation that might stop the world or allocate should be guarded
+///     by mutex since one Isolate might try to allocate object in another Isolate.
 ///
 ///
 /// # GC overview
@@ -205,6 +207,9 @@ pub trait GarbageCollector {
     fn full(&mut self);
     /// Allocate `size` bytes and collect garbage if necessary.
     fn allocate(&mut self, size: usize) -> Address;
+    /// Allocate without GC.
+    fn allocate_no_gc(&mut self, size: usize) -> Address;
+
     /// Create new local scope.
     fn new_local_scope(&mut self) -> LocalScope;
 
@@ -214,6 +219,12 @@ pub trait GarbageCollector {
     /// Emit write barrier code.
     // TODO: When we will have JIT API this function should have proper signature
     fn emit_write_barrier(&self) {}
+    /// Disable GC.
+    fn defer_gc(&mut self);
+    /// Enable GC.
+    fn undefer_gc(&mut self);
+    /// Allow GC to collect roots from isolate.
+    fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate);
 }
 /// Heap is "wrapper" for `GarbageCollector`
 pub struct Heap {
@@ -270,5 +281,31 @@ pub unsafe fn gc_alloc_handle<T: GcObject>(gc: &mut dyn GarbageCollector, value:
 
     Handle {
         ptr: core::ptr::NonNull::new_unchecked(raw.to_mut_ptr()),
+    }
+}
+
+/// Deferrers GC when it is alive.
+#[repr(C)]
+pub struct DeferGC {
+    heap: *const Heap,
+}
+
+impl DeferGC {
+    /// Create new `DeferGC` instance and defer GC.
+    pub fn new(heap: *const Heap) -> Self {
+        unsafe {
+            let heap = &mut *(heap as *mut Heap);
+            heap.gc.defer_gc();
+        }
+        Self { heap }
+    }
+}
+
+impl Drop for DeferGC {
+    fn drop(&mut self) {
+        unsafe {
+            let heap = &mut *(self.heap as *mut Heap);
+            heap.gc.undefer_gc();
+        }
     }
 }

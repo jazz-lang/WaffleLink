@@ -1,5 +1,8 @@
 use object::*;
 use wafflelink::gc::*;
+use wafflelink::runtime::array::Array;
+use wafflelink::values::*;
+
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -21,11 +24,15 @@ impl Drop for Foo {
 
 fn main() {
     let mut heap = Heap::lazysweep();
-    let mut local = heap.new_local_scope();
-    for _ in 0..block::PAYLOAD_SIZE / 32 - 4 {
-        let __: Local<'_, i32> = local.allocate(42);
-    }
+    let mut scope = heap.new_local_scope();
 
-    heap.minor();
-    let __ = local.allocate(3);
+    let arr = Array::new_local(&mut scope, Value::undefined(), 16);
+
+    arr.for_each(|x| {
+        assert!(x.is_undefined());
+    });
+    let arr2 = Array::new_local(&mut scope, Value::new_int(42), 128);
+    arr2.for_each(|x| {
+        assert!(x.as_int32() == 42);
+    })
 }

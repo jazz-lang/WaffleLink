@@ -1,12 +1,14 @@
 use super::block::*;
 use super::precise_allocation::*;
 use super::*;
+use crate::isolate::Isolate;
 use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink, UnsafeRef};
 use std::collections::HashSet;
 
 intrusive_adapter!(AllocLink = UnsafeRef<LocalAllocator> : LocalAllocator {
     link: LinkedListLink
 });
+use std::sync::atomic::{AtomicU32, Ordering as A};
 
 /// Directory of blocks of the same cell size
 pub struct Directory {
@@ -30,7 +32,7 @@ impl LocalAllocator {
                 return self.allocate_slow();
             }
             let result = (&mut *self.current_block).allocate();
-            #[cold]
+
             if result.is_null() {
                 return self.allocate_slow();
             }
@@ -221,6 +223,8 @@ pub fn build_size_class_table(
     }
 }
 
+use parking_lot::{lock_api::RawMutex, RawMutex as Lock};
+
 /// Lazy sweep GC.
 pub struct LazySweepGC {
     allocator_for_size_step: [*mut LocalAllocator; NUM_SIZE_CLASSES],
@@ -231,12 +235,17 @@ pub struct LazySweepGC {
     scopes: Vec<*mut LocalScopeInner>,
     bytes_allocated: usize,
     bytes_allowed: usize,
+    lock: Lock,
+    ndefers: AtomicU32,
+    isolate: *mut Isolate,
 }
 
 impl LazySweepGC {
     /// Create new GC instance
     pub fn new() -> Self {
         Self {
+            ndefers: AtomicU32::new(0),
+            lock: Lock::INIT,
             allocator_for_size_step: [0 as *mut LocalAllocator; NUM_SIZE_CLASSES],
             directories: vec![],
             precise_allocation_set: HashSet::with_capacity(0),
@@ -245,6 +254,7 @@ impl LazySweepGC {
             scopes: vec![],
             bytes_allocated: 0,
             bytes_allowed: 8 * 1024,
+            isolate: core::ptr::null_mut(),
         }
     }
 
@@ -305,18 +315,49 @@ impl LazySweepGC {
     }
     /// Allocate raw memory of `size` bytes.
     pub unsafe fn allocate_raw(&mut self, size: usize) -> Address {
+        self.lock.lock();
+        self.collect_if_necessary(true);
         // this will be executed always if size <= LARGE_CUTOFF
         if let Some(alloc) = self.allocator_for(size) {
-            return (&mut *alloc).allocate();
+            let res = (&mut *alloc).allocate();
+            self.bytes_allocated += size;
+            self.lock.unlock();
+            return res;
         }
 
         // should not be executed if size > LARGE_CUTOFF
-        self.allocate_slow(size)
+        let res = self.allocate_slow(size);
+        self.bytes_allocated += size;
+        self.lock.unlock();
+        res
     }
+    /// Allocate raw memory of `size` bytes.
+    pub unsafe fn allocate_raw_no_gc(&mut self, size: usize) -> Address {
+        let lock = self.lock.lock();
+        // this will be executed always if size <= LARGE_CUTOFF
+        if let Some(alloc) = self.allocator_for(size) {
+            let res = (&mut *alloc).allocate();
+            self.lock.unlock();
+            return res;
+        }
 
-    fn collect(&mut self, full: bool) {
+        // should not be executed if size > LARGE_CUTOFF
+        let res = self.allocate_slow(size);
+        self.lock.unlock();
+        res
+    }
+    unsafe fn collect(&mut self, full: bool, locked: bool) {
+        if self.ndefers.load(A::Acquire) > 0 {
+            if GC_LOG {
+                eprintln!("--GC is deferred, can't start it");
+            }
+            return;
+        }
         if GC_LOG {
             eprintln!("--start marking cycle");
+        }
+        if !locked {
+            self.lock.lock();
         }
         let mut task = MarkingTask {
             gc: self,
@@ -333,11 +374,9 @@ impl LazySweepGC {
         let visited = task.bytes_visited;
         drop(task);
         for local in self.local_allocators.iter() {
-            unsafe {
-                let local = local as *const LocalAllocator as *mut LocalAllocator;
-                let local = &mut *local;
-                local.current_block = 0 as *mut _;
-            }
+            let local = local as *const LocalAllocator as *mut LocalAllocator;
+            let local = &mut *local;
+            local.current_block = 0 as *mut _;
         }
         if full {
             if GC_LOG {
@@ -346,7 +385,7 @@ impl LazySweepGC {
             let start = std::time::Instant::now();
             for dir in self.directories.iter_mut() {
                 dir.blocks.retain(|block| {
-                    let b = unsafe { &mut **block };
+                    let b = &mut **block;
                     if b.sweep() {
                         if GC_LOG {
                             eprintln!(
@@ -367,7 +406,7 @@ impl LazySweepGC {
             }
         } else {
             for dir in self.directories.iter_mut() {
-                dir.blocks.iter().for_each(|block| unsafe {
+                dir.blocks.iter().for_each(|block| {
                     let block = &mut **block;
                     block.unswept = true;
                     block.can_allocate = false;
@@ -375,7 +414,7 @@ impl LazySweepGC {
             }
         }
 
-        self.precise_allocations.retain(|precise| unsafe {
+        self.precise_allocations.retain(|precise| {
             let alloc = &mut **precise;
             if !alloc.is_marked() {
                 if GC_VERBOSE_LOG {
@@ -403,11 +442,12 @@ impl LazySweepGC {
                 );
             }
         }
+        self.lock.unlock();
     }
 
-    fn collect_if_necessary(&mut self) {
+    unsafe fn collect_if_necessary(&mut self, locked: bool) {
         if self.bytes_allocated > self.bytes_allowed {
-            self.collect(false);
+            self.collect(false, locked);
         }
     }
 
@@ -510,6 +550,9 @@ impl<'a> MarkingTask<'a> {
 }
 
 impl super::GarbageCollector for LazySweepGC {
+    fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate) {
+        self.isolate = isolate;
+    }
     fn new_local_scope(&mut self) -> LocalScope {
         let mut scope = Box::into_raw(Box::new(LocalScopeInner {
             gc: self as *mut Self,
@@ -519,18 +562,34 @@ impl super::GarbageCollector for LazySweepGC {
         self.scopes.push(scope);
         LocalScope { inner: scope }
     }
+    fn defer_gc(&mut self) {
+        self.ndefers.fetch_add(1, A::AcqRel);
+    }
 
+    fn undefer_gc(&mut self) {
+        self.ndefers.fetch_sub(1, A::AcqRel);
+    }
     fn full(&mut self) {
-        self.collect(true);
+        unsafe {
+            self.collect(true, false);
+        }
     }
 
     fn minor(&mut self) {
-        self.collect(false);
+        unsafe {
+            self.collect(false, false);
+        }
     }
 
     fn allocate(&mut self, size: usize) -> Address {
         let res = unsafe { self.allocate_raw(size) };
-        self.bytes_allocated += size;
+
+        res
+    }
+
+    fn allocate_no_gc(&mut self, size: usize) -> Address {
+        let res = unsafe { self.allocate_raw_no_gc(size) };
+
         res
     }
 }

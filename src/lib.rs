@@ -53,14 +53,16 @@ macro_rules! const_assert {
 
 /// GC modules
 pub mod gc;
+/// Isolate instance
+pub mod isolate;
 /// Timer implementation
 pub mod timer;
 /// Various utilities
 pub mod utils;
 /// Value representation
 pub mod values;
-/// VM instance
-pub mod vm;
+
+pub mod runtime;
 /*
 pub struct VM {
     heap: std::cell::UnsafeCell<heap::Heap>,

@@ -1,4 +1,6 @@
 #![allow(missing_docs)]
+use crate::gc::object::Handle;
+use crate::runtime::cell::Cell;
 lohi_struct!(
     struct AsBits {
         tag: i32,
@@ -11,7 +13,7 @@ pub union EncodedValueDescriptor {
     pub as_int64: i64,
     #[cfg(target_pointer_width = "32")]
     pub as_double: f64,
-    pub cell: *mut (),
+    pub cell: Handle<Cell>,
     pub as_bits: AsBits,
 }
 
@@ -36,10 +38,10 @@ pub const EMPTY_TAG: i32 = 0xfffffffau32 as i32;
 pub const SYM_TAG: i32 = 0xfffffff9u32 as i32;
 #[cfg(target_pointer_width = "32")]
 pub const LOWEST_TAG: i32 = SYM_TAG;
-impl<T> From<*const T> for Value {
-    fn from(x: *const T) -> Self {
+impl From<Handle<Cell>> for Value {
+    fn from(x: Handle<Cell>) -> Self {
         Self {
-            u: EncodedValueDescriptor { cell: x as *mut () },
+            u: EncodedValueDescriptor { cell: x },
         }
     }
 }
@@ -197,7 +199,7 @@ impl Value {
         self.payload() != 0
     }
     #[inline]
-    pub fn as_cell(self) -> Ref<u8> {
+    pub fn as_cell(self) -> Handle<Cell> {
         unsafe { core::mem::transmute(self.payload()) }
     }
 }
@@ -350,10 +352,10 @@ impl Value {
             },
         }
     }
-    pub fn as_cell(self) -> *mut () {
+    pub fn as_cell(self) -> Handle<Cell> {
         unsafe { self.u.cell }
     }
-    pub fn as_cell_ref<'a>(&'a self) -> &'a *mut () {
+    pub fn as_cell_ref<'a>(&'a self) -> &'a Handle<Cell> {
         unsafe { &self.u.cell }
     }
     pub fn is_number(self) -> bool {
@@ -647,4 +649,16 @@ pub mod pure_nan {
         }
         return value;
     }
+}
+
+/// Result value.
+pub enum VResult {
+    /// An Ok value is returned when nothing is happened
+    Ok(Value),
+    Action(Error),
+}
+
+/// Various error types that might be thrown.
+pub enum Error {
+    ExceptionThrown(Value),
 }
