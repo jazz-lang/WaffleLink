@@ -117,7 +117,6 @@ impl Block {
                 count += 1;
                 (&mut *memory).header().freelist.free(cell);
             });
-            println!("create {}", count);
             (&*memory).header()
         }
     }
@@ -236,6 +235,7 @@ impl BlockHeader {
         }
         self.unswept = false;
         self.can_allocate = count != 0;
+
         self.freelist = freelist;
         is_empty
     }

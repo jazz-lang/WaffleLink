@@ -63,6 +63,7 @@ impl LocalAllocator {
                 let block = Block::new(dir.cell_size);
                 dir.blocks.push(block as *mut _);
                 self.current_block = block as *mut _;
+
                 let res = block.allocate();
                 res
             } else {
@@ -347,6 +348,13 @@ impl LazySweepGC {
                 dir.blocks.retain(|block| {
                     let b = unsafe { &mut **block };
                     if b.sweep() {
+                        if GC_LOG {
+                            eprintln!(
+                                "--destroy block {:p}, cell size: {}",
+                                b.block,
+                                b.cell_size()
+                            );
+                        }
                         b.destroy();
                         false
                     } else {

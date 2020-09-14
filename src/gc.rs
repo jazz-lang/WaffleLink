@@ -212,7 +212,7 @@ pub trait GarbageCollector {
     #[allow(dead_code)]
     fn write_barrier(&mut self, object: *mut GcBox<()>, field: *mut GcBox<()>) {}
     /// Emit write barrier code.
-    // TODO: When we will have JIT this function should emit proper write barrier.
+    // TODO: When we will have JIT API this function should have proper signature
     fn emit_write_barrier(&self) {}
 }
 /// Heap is "wrapper" for `GarbageCollector`
