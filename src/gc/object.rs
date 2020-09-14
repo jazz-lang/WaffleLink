@@ -1,4 +1,6 @@
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+
+/// Object that can be handled by GC.
 pub trait GcObject {
     /// Returns size of current object. This is usually just `size_of_val(self)` but in case
     /// when you need dynamically sized type e.g array then this should return something like
@@ -6,47 +8,57 @@ pub trait GcObject {
     fn size(&self) -> usize {
         core::mem::size_of_val(self)
     }
-
+    /// Visit all references to GC objects in this object.
     fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
+    /// Finalization.
     fn finalize(&mut self) {
         //eprintln!("dead {:p}", self);
     }
 }
-
+/// GC object header.
 pub struct Header {
+    /// Pointer to vtable
     pub vtable: *mut (),
+    /// Cell state (color)
     pub cell_state: u8,
 }
 
 impl Header {
+    /// Return atomic pointer to cell state
     pub fn cell_state_atomic(&self) -> &AtomicU8 {
         unsafe { &*(&self.cell_state as *const u8 as *const AtomicU8) }
     }
+    /// Return atomic pointer to vtable
     pub fn vtable_atomic(&self) -> &AtomicUsize {
         unsafe { std::mem::transmute(&self.vtable) }
     }
-
+    /// Get vtable
     pub fn vtable(&self) -> *mut () {
         self.vtable
     }
+    /// Get vtable tag
     pub fn tag(&self) -> u8 {
         (self.vtable as usize & 0x03) as u8
     }
+    /// Load cell state
     pub fn cell_state(&self) -> u8 {
         self.cell_state_atomic().load(Ordering::Relaxed)
         //(self.vtable as usize & 0x03) as u8
     }
-
+    /// Set vtable
     pub fn set_vtable(&mut self, vtable: *mut ()) {
         self.vtable = (vtable as usize) as *mut ();
     }
+    /// Set vtable tag
     pub fn set_tag(&mut self, tag: u8) {
         self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
     }
+    /// Set cell state
     pub fn set_cell_state(&mut self, tag: u8) {
         self.cell_state_atomic().store(tag, Ordering::Relaxed);
         //self.vtable = (self.vtable() as usize | tag as usize) as *mut ();
     }
+    /// Atomically test and set tag.
     pub fn atomic_test_and_set_tag(&mut self, tag: u8) -> bool {
         let entry = self.cell_state_atomic();
         debug_assert!(tag <= super::GC_BLACK);
@@ -69,7 +81,7 @@ impl Header {
         }
         false
     }
-
+    /// Atomically convert cell from white to gray
     pub fn white_to_gray(&self) -> bool {
         let mut current = self.tag();
         let entry = self.cell_state_atomic();
@@ -107,6 +119,7 @@ impl Header {
             )
             .is_ok()*/
     }
+    /// Atomically convert cell from white to blue
     pub fn to_blue(&self) -> bool {
         let current = self.cell_state;
         let entry = self.cell_state_atomic();
@@ -122,6 +135,7 @@ impl Header {
             )
             .is_ok()
     }
+    ///  convert cell from white to gray
     pub fn white_to_gray_unsync(&mut self) -> bool {
         let current = self.cell_state;
         if current != super::GC_WHITE {
@@ -133,6 +147,7 @@ impl Header {
         self.cell_state = super::GC_GRAY;
         true
     }
+    /// Convert cell from gray to black
     pub fn gray_to_black_unsync(&mut self) -> bool {
         let current = self.cell_state;
         if current != super::GC_GRAY {
@@ -144,6 +159,7 @@ impl Header {
         self.cell_state = super::GC_BLACK;
         true
     }
+    /// Atomically convert cell from gray to black
     pub fn gray_to_black(&self) -> bool {
         let mut current = self.tag();
         let entry = self.cell_state_atomic();
@@ -181,39 +197,68 @@ impl Header {
             )
             .is_ok()*/
     }
-
+    /// Atomically load vtable tag
     pub fn atomic_tag(&self) -> u8 {
         (self.vtable_atomic().load(Ordering::Relaxed) & 0x03) as u8
     }
 }
 
+/// Header + GC value.
 #[repr(C)]
 pub struct GcBox<T: GcObject> {
+    /// GC header
     pub header: Header,
+    /// Value instance
     pub value: T,
 }
 
+/// The representation of a trait object like `&dyn SomeTrait`.
+///
+/// This struct has the same layout as types like `&dyn SomeTrait` and
+/// `Box<dyn AnotherTrait>`.
+///
+/// `TraitObject` is guaranteed to match layouts, but it is not the
+/// type of trait objects (e.g., the fields are not directly accessible
+/// on a `&dyn SomeTrait`) nor does it control that layout (changing the
+/// definition will not change the layout of a `&dyn SomeTrait`). It is
+/// only designed to be used by unsafe code that needs to manipulate
+/// the low-level details.
+///
+/// There is no way to refer to all trait objects generically, so the only
+/// way to create values of this type is with functions like
+/// [`std::mem::transmute`][transmute]. Similarly, the only way to create a true
+/// trait object from a `TraitObject` value is with `transmute`.
+///
+/// [transmute]: ../intrinsics/fn.transmute.html
+///
+/// Synthesizing a trait object with mismatched types—one where the
+/// vtable does not correspond to the type of the value to which the
+/// data pointer points—is highly likely to lead to undefined
+/// behavior.
+///
+
 #[repr(C)]
 pub struct TraitObject {
+    /// pointer to data
     pub data: *mut (),
+    /// pointer to vtable
     pub vtable: *mut (),
 }
 
 impl<T: GcObject> GcBox<T> {
+    /// Return true if this object is precie allocation
     pub fn is_precise_allocation(&self) -> bool {
         super::precise_allocation::PreciseAllocation::is_precise(self as *const _ as *mut _)
     }
-
+    /// Return precise allocation from this object
     pub fn precise_allocation(&self) -> *mut super::precise_allocation::PreciseAllocation {
-        unsafe {
-            super::precise_allocation::PreciseAllocation::from_cell(self as *const _ as *mut _)
-        }
+        super::precise_allocation::PreciseAllocation::from_cell(self as *const _ as *mut _)
     }
-
+    /// Return block where this cell was allocation
     pub fn block(&self) -> *mut super::block::Block {
         super::block::Block::from_cell(super::Address::from_ptr(self))
     }
-
+    /// Return trait object
     pub fn trait_object(&self) -> &mut dyn GcObject {
         unsafe {
             core::mem::transmute(TraitObject {
@@ -263,17 +308,22 @@ impl<T: fmt::Debug + GcObject> fmt::Debug for Handle<T> {
         write!(f, "{:?}", **self)
     }
 }
+/// Copy-able pointer to GC object.This struct *must* be reachable
+/// from locals or some other roots.
 pub struct Handle<T: GcObject> {
     pub(super) ptr: core::ptr::NonNull<GcBox<T>>,
 }
 
 impl<T: GcObject> Handle<T> {
+    /// Return raw gc ptr
     pub fn gc_ptr(&self) -> *mut GcBox<()> {
         self.ptr.cast::<_>().as_ptr()
     }
+    /// Compare two handles by pointer
     pub fn ptr_eq(this: Self, other: Self) -> bool {
         this.ptr == other.ptr
     }
+    /// Create from raw
     pub unsafe fn from_raw<U>(x: *const U) -> Self {
         Self {
             ptr: core::ptr::NonNull::new((x as *mut U).cast()).unwrap(),
@@ -341,25 +391,41 @@ impl<T: GcObject> GcObject for Option<T> {
         }
     }
 }
-
+/// Alias to *mut GcBox<()>
 pub type GCObjectRef = *mut GcBox<()>;
 
 impl<T: GcObject> GcBox<T> {
+    /// Zap object
     pub fn zap(&mut self, reason: u32) {
         self.header.vtable = 0 as *mut ();
     }
-
+    /// Check if object is zapped
     pub fn is_zapped(&self) -> bool {
         self.header.vtable.is_null()
     }
 }
 
+/// Local scope inner
 pub struct LocalScopeInner {
+    /// pointer to gc
     pub gc: *mut dyn super::GarbageCollector,
+    /// all locals
     pub locals: Vec<*mut GcBox<()>>,
+    /// is this scope dead?
     pub dead: bool,
 }
-
+/// A stack-allocated structure that governs a number of local handles.
+/// After a local scope has been created, all local handles will be
+/// allocated within that local scope until either the local scope is
+/// deleted or another local scope is created.  If there is already a
+/// local scope and a new one is created, all allocations will take
+/// place in the new local scope until it is deleted.  After that,
+/// new handles will again be allocated in the original local scope.
+///
+/// After the local scope of a local handle has been deleted the
+/// garbage collector will no longer track the object stored in the
+/// handle and may deallocate it.  The behavior of accessing a handle
+/// for which the local scope has been deleted is undefined.
 pub struct LocalScope {
     pub(crate) inner: *mut LocalScopeInner,
 }
@@ -371,6 +437,7 @@ impl LocalScope {
     fn gc(&self) -> &mut dyn super::GarbageCollector {
         unsafe { &mut *self.inner().gc }
     }
+    /// Allocate `value` in GC heap and return local handle
     pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<'a, T> {
         let gc = self.gc();
         let handle = unsafe { super::gc_alloc_handle(gc, value) };
@@ -380,7 +447,7 @@ impl LocalScope {
             _marker: Default::default(),
         }
     }
-
+    /// New local from handle
     pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<'a, T> {
         self.inner().locals.push(handle.ptr.as_ptr().cast());
         Local {
@@ -389,6 +456,35 @@ impl LocalScope {
         }
     }
 }
+/// An object reference managed by the WaffleLink garbage collector.
+///
+/// All objects returned from WaffleLink have to be tracked by the garbage
+/// collector so that it knows that the objects are still alive.  Also,
+/// because some of the garbage collectors may move objects, it is unsafe to
+/// point directly to an object.  Instead, all objects are stored in
+/// handles which are known by the garbage collector and updated
+/// whenever an object moves.  Handles should always be passed by value
+/// (except in cases like out-parameters) and they should never be
+/// allocated on the heap.
+///
+/// There are two types of handles: local and persistent handles.
+///
+/// Local handles are light-weight and transient and typically used in
+/// local operations.  They are managed by LocalScopes. That means that a
+/// LocalScope must exist on the stack when they are created and that they are
+/// only valid inside of the `LocalScope` active during their creation.
+/// For passing a local handle to an outer `LocalScope`, an
+/// `EscapableLocalScope` and its `Escape()` method must be used.
+///
+/// Persistent handles can be used when storing objects across several
+/// independent operations and have to be explicitly deallocated when they're no
+/// longer used.
+///
+/// It is safe to extract the object stored in the handle by
+/// dereferencing the handle (for instance, to extract the &i32 from
+/// a Local<i32>); the value will still be governed by a handle
+/// behind the scenes and the same rules apply to these values as to
+/// their handles.
 
 pub struct Local<'a, T: GcObject> {
     ptr: *mut *mut GcBox<()>,
@@ -396,10 +492,11 @@ pub struct Local<'a, T: GcObject> {
 }
 
 impl<'a, T: GcObject> Local<'a, T> {
+    /// Allocate `value` in GC heap and return local handle
     pub fn new(scope: &mut LocalScope, value: T) -> Self {
         scope.allocate(value)
     }
-
+    /// Convert to heap handle.
     pub fn to_heap(&self) -> Handle<T> {
         Handle {
             ptr: core::ptr::NonNull::new(unsafe { self.ptr.read().cast() }).unwrap(),

@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 use std::sync::atomic::{AtomicU32, Ordering};
 
 pub const fn fast_bit_vec_array_length(num_bits: usize) -> usize {

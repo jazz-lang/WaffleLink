@@ -1,4 +1,6 @@
+#![allow(missing_docs)]
 use super::block::*;
+
 use std::sync::atomic::Ordering;
 pub const BITMAP_SIZE: usize = ATOMS_PER_BLOCK;
 pub const BITS_IN_WORD: usize = core::mem::size_of::<usize>() * 8;

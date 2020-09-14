@@ -1,4 +1,3 @@
-use block::*;
 use object::*;
 use wafflelink::gc::*;
 #[global_allocator]
@@ -20,18 +19,13 @@ impl Drop for Foo {
     fn drop(&mut self) {}
 }
 
-struct VeryLarge([u8;10*1024]);
-
-impl GcObject for VeryLarge {}
-
 fn main() {
     let mut heap = Heap::lazysweep();
     let mut local = heap.new_local_scope();
-    println!("{}",block::PAYLOAD_SIZE/32);
-    for _ in 0..block::PAYLOAD_SIZE/32 - 4 {
-        let xx = local.allocate(42);
+    for _ in 0..block::PAYLOAD_SIZE / 32 - 4 {
+        let __: Local<'_, i32> = local.allocate(42);
     }
-    //drop(xx);
+
     heap.minor();
-    let yy = local.allocate(3);   
+    let __ = local.allocate(3);
 }

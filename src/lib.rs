@@ -1,9 +1,12 @@
-//#![no_std]
+#![deny(missing_docs)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(unused_mut, dead_code, unused_variables)]
 
+//! # WaffleLink
+
+/// Creates struct with layout suitable for big or little endian machine
 #[macro_export]
 macro_rules! lohi_struct {
     (struct $name : ident {
@@ -26,6 +29,7 @@ macro_rules! lohi_struct {
         }
     };
 }
+/// Mark unused variable
 #[macro_export]
 macro_rules! unused {
     ($($var: ident),*) => {
@@ -35,6 +39,7 @@ macro_rules! unused {
     };
 }
 
+/// Compile time assertion
 #[macro_export]
 macro_rules! const_assert {
     ($x:expr $(,)?) => {
@@ -45,10 +50,16 @@ macro_rules! const_assert {
         } as usize] = [];
     };
 }
+
+/// GC modules
 pub mod gc;
+/// Timer implementation
 pub mod timer;
+/// Various utilities
 pub mod utils;
+/// Value representation
 pub mod values;
+/// VM instance
 pub mod vm;
 /*
 pub struct VM {

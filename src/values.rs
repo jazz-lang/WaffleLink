@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 lohi_struct!(
     struct AsBits {
         tag: i32,

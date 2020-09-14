@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::sync::atomic::{fence, Ordering};
 
 pub fn compiler_fence() {

@@ -8,13 +8,11 @@ intrusive_adapter!(AllocLink = UnsafeRef<LocalAllocator> : LocalAllocator {
     link: LinkedListLink
 });
 
-/// Directory of blocks of the same cell size
 pub struct Directory {
     blocks: Vec<*mut BlockHeader>,
     cell_size: usize,
 }
 
-/// Allocator for single size class
 pub struct LocalAllocator {
     link: LinkedListLink,
     directory: *mut Directory,
@@ -22,8 +20,6 @@ pub struct LocalAllocator {
 }
 
 impl LocalAllocator {
-    /// Allocate memory from current block or find unswept block, sweep it
-    /// and try to allocate from it, if allocation fails request new block
     pub fn allocate(&mut self) -> Address {
         unsafe {
             if self.current_block.is_null() {
@@ -90,15 +86,15 @@ pub const LARGE_CUTOFF: usize = (BLOCK_PAYLOAD / 2) & !(SIZE_STEP - 1);
 
 /// We have an extra size class for size zero.
 pub const NUM_SIZE_CLASSES: usize = LARGE_CUTOFF / SIZE_STEP + 1;
-/// Converts size class to index
+
 pub const fn size_class_to_index(size_class: usize) -> usize {
     (size_class + SIZE_STEP - 1) / SIZE_STEP
 }
-/// Converts index to size class
+
 pub const fn index_to_size_class(index: usize) -> usize {
     index * SIZE_STEP
 }
-/// Return optimal allocation size
+
 pub fn optimal_size_for(bytes: usize) -> usize {
     if bytes <= PRECISE_CUTOFF {
         super::round_up_to_multiple_of(SIZE_STEP, bytes)
@@ -109,8 +105,6 @@ pub fn optimal_size_for(bytes: usize) -> usize {
     }
 }
 
-/// Size classes for size step
-
 pub static SIZE_CLASSES_FOR_SIZE_STEP: once_cell::sync::Lazy<[usize; NUM_SIZE_CLASSES]> =
     once_cell::sync::Lazy::new(|| {
         let mut result = [0; NUM_SIZE_CLASSES];
@@ -119,7 +113,6 @@ pub static SIZE_CLASSES_FOR_SIZE_STEP: once_cell::sync::Lazy<[usize; NUM_SIZE_CL
         result
     });
 
-/// All size classes
 pub fn size_classes() -> Vec<usize> {
     let mut result = vec![];
     if super::GC_LOG {
@@ -199,7 +192,7 @@ pub fn size_classes() -> Vec<usize> {
 
     result
 }
-/// Build size class table
+
 pub fn build_size_class_table(
     table: &mut [usize],
     cons: impl Fn(usize) -> usize,
@@ -220,8 +213,7 @@ pub fn build_size_class_table(
     }
 }
 
-/// Lazy sweep GC.
-pub struct LazySweepGC {
+pub struct LazyGC {
     allocator_for_size_step: [*mut LocalAllocator; NUM_SIZE_CLASSES],
     directories: Vec<Box<Directory>>,
     pub(crate) precise_allocation_set: HashSet<*mut PreciseAllocation>,
@@ -232,8 +224,7 @@ pub struct LazySweepGC {
     bytes_allowed: usize,
 }
 
-impl LazySweepGC {
-    /// Create new GC instance
+impl LazyGC {
     pub fn new() -> Self {
         Self {
             allocator_for_size_step: [0 as *mut LocalAllocator; NUM_SIZE_CLASSES],
@@ -302,7 +293,7 @@ impl LazySweepGC {
         self.allocator_for_size_step[index] = last;
         Some(last)
     }
-    /// Allocate raw memory of `size` bytes.
+
     pub unsafe fn allocate_raw(&mut self, size: usize) -> Address {
         // this will be executed always if size <= LARGE_CUTOFF
         if let Some(alloc) = self.allocator_for(size) {
@@ -414,7 +405,7 @@ impl LazySweepGC {
         self.precise_allocations.push(allocation);
         Address::from_ptr((&*allocation).cell())
     }
-    /// Mark if this cell is unmarked.
+
     pub fn test_and_set_marked(&mut self, cell: *mut GcBox<()>) -> bool {
         unsafe {
             let c = &mut *cell;
@@ -432,7 +423,7 @@ impl LazySweepGC {
 
 use std::collections::VecDeque;
 struct MarkingTask<'a> {
-    gc: &'a mut LazySweepGC,
+    gc: &'a mut LazyGC,
     gray: VecDeque<*mut GcBox<()>>,
     bytes_visited: usize,
 }
@@ -501,7 +492,7 @@ impl<'a> MarkingTask<'a> {
     }
 }
 
-impl super::GarbageCollector for LazySweepGC {
+impl super::GarbageCollector for LazyGC {
     fn new_local_scope(&mut self) -> LocalScope {
         let mut scope = Box::into_raw(Box::new(LocalScopeInner {
             gc: self as *mut Self,
