@@ -12,3 +12,5 @@ pub mod callframe;
 
 /// Array implementation
 pub mod array;
+
+pub mod properties;

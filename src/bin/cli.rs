@@ -31,6 +31,7 @@ fn main() {
     arr.for_each(|x| {
         assert!(x.is_undefined());
     });
+
     let arr2 = Array::new_local(&mut scope, Value::new_int(42), 128);
     arr2.for_each(|x| {
         assert!(x.as_int32() == 42);

@@ -20,6 +20,18 @@ impl Cell {
 
 use crate::gc::object::*;
 
+impl Handle<Cell> {
+    pub fn cast<T: GcObject>(&self) -> Handle<T> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
+impl Local<Cell> {
+    pub fn cast<T: GcObject>(&self) -> Local<T> {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 impl GcObject for Cell {
     fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
 }

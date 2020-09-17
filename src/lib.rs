@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -61,8 +61,9 @@ pub mod timer;
 pub mod utils;
 /// Value representation
 pub mod values;
-
 pub mod runtime;
+pub mod bytecode;
+
 /*
 pub struct VM {
     heap: std::cell::UnsafeCell<heap::Heap>,

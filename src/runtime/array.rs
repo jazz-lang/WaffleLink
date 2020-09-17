@@ -26,7 +26,7 @@ impl GcObject for Array {
 
 impl Array {
     /// Create new array in local scope
-    pub fn new_local<'a>(scope: &mut LocalScope, default_init: Value, len: u32) -> Local<'a, Self> {
+    pub fn new_local<'a>(scope: &mut LocalScope, default_init: Value, len: u32) -> Local<Self> {
         let mut val = scope.allocate(Self {
             ty: CellType::Array,
             length: len,

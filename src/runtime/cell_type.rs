@@ -13,4 +13,5 @@ pub enum CellType {
     Regex,
     /// Executable function
     Function,
+    Property,
 }

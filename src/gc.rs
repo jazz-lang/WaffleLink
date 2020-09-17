@@ -212,7 +212,8 @@ pub trait GarbageCollector {
 
     /// Create new local scope.
     fn new_local_scope(&mut self) -> LocalScope;
-
+    unsafe fn local_scopes(&mut self) -> *mut LocalScopeInner;
+    fn last_local_scope(&mut self) -> Option<UndropLocalScope>;
     /// Perform write barrier operation.
     #[allow(dead_code)]
     fn write_barrier(&mut self, object: *mut GcBox<()>, field: *mut GcBox<()>) {}

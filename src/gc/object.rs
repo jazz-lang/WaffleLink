@@ -1,5 +1,5 @@
+use crate::utils::segmented_vec::SegmentedVec;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
-
 /// Object that can be handled by GC.
 pub trait GcObject {
     /// Returns size of current object. This is usually just `size_of_val(self)` but in case
@@ -407,10 +407,12 @@ impl<T: GcObject> GcBox<T> {
 
 /// Local scope inner
 pub struct LocalScopeInner {
+    pub prev: *mut Self,
+    pub next: *mut Self,
     /// pointer to gc
     pub gc: *mut dyn super::GarbageCollector,
     /// all locals
-    pub locals: Vec<*mut GcBox<()>>,
+    pub locals: SegmentedVec<*mut GcBox<()>>,
     /// is this scope dead?
     pub dead: bool,
 }
@@ -438,9 +440,10 @@ impl LocalScope {
         unsafe { &mut *self.inner().gc }
     }
     /// Allocate `value` in GC heap and return local handle
-    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<'a, T> {
+    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<T> {
         let gc = self.gc();
         let handle = unsafe { super::gc_alloc_handle(gc, value) };
+
         self.inner().locals.push(handle.ptr.as_ptr().cast());
         Local {
             ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
@@ -448,7 +451,39 @@ impl LocalScope {
         }
     }
     /// New local from handle
-    pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<'a, T> {
+    pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
+        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        Local {
+            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            _marker: Default::default(),
+        }
+    }
+}
+
+pub struct UndropLocalScope {
+    pub(crate) inner: *mut LocalScopeInner,
+}
+
+impl UndropLocalScope {
+    fn inner(&self) -> &mut LocalScopeInner {
+        unsafe { &mut *self.inner }
+    }
+    fn gc(&self) -> &mut dyn super::GarbageCollector {
+        unsafe { &mut *self.inner().gc }
+    }
+    /// Allocate `value` in GC heap and return local handle
+    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<T> {
+        let gc = self.gc();
+        let handle = unsafe { super::gc_alloc_handle(gc, value) };
+
+        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        Local {
+            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            _marker: Default::default(),
+        }
+    }
+    /// New local from handle
+    pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
         self.inner().locals.push(handle.ptr.as_ptr().cast());
         Local {
             ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
@@ -486,12 +521,12 @@ impl LocalScope {
 /// behind the scenes and the same rules apply to these values as to
 /// their handles.
 
-pub struct Local<'a, T: GcObject> {
+pub struct Local<T: GcObject> {
     ptr: *mut *mut GcBox<()>,
-    _marker: core::marker::PhantomData<&'a T>,
+    _marker: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: GcObject> Local<'a, T> {
+impl<T: GcObject> Local<T> {
     /// Allocate `value` in GC heap and return local handle
     pub fn new(scope: &mut LocalScope, value: T) -> Self {
         scope.allocate(value)
@@ -504,7 +539,7 @@ impl<'a, T: GcObject> Local<'a, T> {
     }
 }
 
-impl<'a, T: GcObject> Drop for Local<'a, T> {
+impl<'a, T: GcObject> Drop for Local<T> {
     fn drop(&mut self) {
         unsafe {
             self.ptr.write(core::ptr::null_mut());
@@ -514,19 +549,34 @@ impl<'a, T: GcObject> Drop for Local<'a, T> {
 
 impl Drop for LocalScope {
     fn drop(&mut self) {
+        unsafe {
+            let prev = self.inner().prev;
+            let next = self.inner().next;
+            if !prev.is_null() {
+                (&mut *prev).next = next;
+            }
+            if !next.is_null() {
+                (&mut *next).prev = prev;
+            }
+        }
         self.inner().locals.clear();
         self.inner().dead = true;
     }
 }
 
-impl<T: GcObject> std::ops::Deref for Local<'_, T> {
+impl<T: GcObject> std::ops::Deref for Local<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         unsafe { &(&*(&*self.ptr).cast::<GcBox<T>>()).value }
     }
 }
-impl<T: GcObject> std::ops::DerefMut for Local<'_, T> {
+impl<T: GcObject> std::ops::DerefMut for Local<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut (&mut *(&mut *self.ptr).cast::<GcBox<T>>()).value }
     }
+}
+
+pub struct Buffer {
+    locals: [*mut GcBox<()>; 32],
+    ix: usize,
 }

@@ -232,7 +232,8 @@ pub struct LazySweepGC {
     pub(crate) precise_allocation_set: HashSet<*mut PreciseAllocation>,
     pub(crate) precise_allocations: Vec<*mut PreciseAllocation>,
     local_allocators: LinkedList<AllocLink>,
-    scopes: Vec<*mut LocalScopeInner>,
+    scopes: *mut LocalScopeInner,
+    persistent: crate::utils::segmented_vec::SegmentedVec<*mut GcBox<()>>,
     bytes_allocated: usize,
     bytes_allowed: usize,
     lock: Lock,
@@ -251,8 +252,9 @@ impl LazySweepGC {
             precise_allocation_set: HashSet::with_capacity(0),
             precise_allocations: vec![],
             local_allocators: LinkedList::new(AllocLink::new()),
-            scopes: vec![],
+            scopes: core::ptr::null_mut(),
             bytes_allocated: 0,
+            persistent: crate::utils::segmented_vec::SegmentedVec::with_chunk_size(32),
             bytes_allowed: 8 * 1024,
             isolate: core::ptr::null_mut(),
         }
@@ -506,7 +508,7 @@ impl<'a> MarkingTask<'a> {
         unsafe {
             let this = self as *mut Self;
             let this = &mut *this;
-            self.gc.scopes.retain(|scope| {
+            /*self.gc.scopes.retain(|scope| {
                 if (&**scope).dead {
                     let _ = Box::from_raw(*scope);
                     false
@@ -521,7 +523,20 @@ impl<'a> MarkingTask<'a> {
                     });
                     true
                 }
-            });
+            });*/
+            let mut head = self.gc.scopes;
+            while !head.is_null() {
+                let prev = (&*head).prev;
+                (&mut *head).locals.retain(|local| {
+                    if local.is_null() {
+                        false
+                    } else {
+                        this.mark(*local);
+                        true
+                    }
+                });
+                head = prev;
+            }
         }
     }
 
@@ -553,13 +568,32 @@ impl super::GarbageCollector for LazySweepGC {
     fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate) {
         self.isolate = isolate;
     }
+    unsafe fn local_scopes(&mut self) -> *mut LocalScopeInner {
+        self.scopes
+    }
+
+    fn last_local_scope(&mut self) -> Option<UndropLocalScope> {
+        if self.scopes.is_null() {
+            None
+        } else {
+            Some(UndropLocalScope { inner: self.scopes })
+        }
+    }
+
     fn new_local_scope(&mut self) -> LocalScope {
         let mut scope = Box::into_raw(Box::new(LocalScopeInner {
+            prev: core::ptr::null_mut(),
+            next: self.scopes,
             gc: self as *mut Self,
-            locals: vec![],
+            locals: crate::utils::segmented_vec::SegmentedVec::with_chunk_size(32),
             dead: false,
         }));
-        self.scopes.push(scope);
+        if !self.scopes.is_null() {
+            unsafe {
+                (&mut *self.scopes).prev = scope;
+            }
+        }
+        self.scopes = scope;
         LocalScope { inner: scope }
     }
     fn defer_gc(&mut self) {
