@@ -8,11 +8,14 @@ pub mod lazysweep;
 //#[cfg(feature = "pmarking")]
 //pub mod pmarking;
 //pub mod cmarking;
+pub mod block_set;
+pub mod conservative_roots;
 /// Object repr
 pub mod object;
 /// Page allocator
 pub mod pagealloc;
 pub mod precise_allocation;
+pub mod tiny_bloom_filter;
 use object::*;
 /// GC didn't seen this object.
 pub const GC_WHITE: u8 = 0;
@@ -31,7 +34,7 @@ pub const GC_NONE: u8 = 3;
 /// Remembered old object
 pub const GC_OLD_REMEMBERED: u8 = 2;
 /// Enable verbose logging
-pub const GC_VERBOSE_LOG: bool = true;
+pub const GC_VERBOSE_LOG: bool = !true;
 /// Enable logging
 pub const GC_LOG: bool = true;
 /// Enable time logging

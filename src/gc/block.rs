@@ -94,6 +94,27 @@ use std::alloc::{alloc, dealloc, Layout};
 pub struct Block {}
 
 impl Block {
+    /// Get block header
+    pub fn header(&self) -> &mut BlockHeader {
+        unsafe { &mut *self.atoms().offset(END_ATOM as _).cast() }
+    }
+    /// Atom offset from pointer
+    pub fn atom_number(&self, p: Address) -> u32 {
+        let atom_n = self.candidate_atom_number(p);
+        atom_n as _
+    }
+    /// Atom offset from pointer, might be wrong
+    pub fn candidate_atom_number(&self, p: Address) -> usize {
+        return (p.to_usize() - self as *const Self as usize) / ATOM_SIZE;
+    }
+    /// Pointer to atoms
+    pub fn atoms(&self) -> *mut Atom {
+        self as *const Self as *mut Atom
+    }
+    /// Is pointer aligned to atom size?
+    pub const fn is_atom_aligned(p: Address) -> bool {
+        (p.to_usize() & ATOM_ALIGNMENT_MASK) == 0
+    }
     /// Try to get block from pointer
     pub fn from_cell(p: Address) -> *mut Self {
         (p.to_usize() & (!(BLOCK_SIZE - 1))) as *mut Self
@@ -119,27 +140,6 @@ impl Block {
             });
             (&*memory).header()
         }
-    }
-    /// Get block header
-    pub fn header(&self) -> &mut BlockHeader {
-        unsafe { &mut *self.atoms().offset(END_ATOM as _).cast() }
-    }
-    /// Atom offset from pointer
-    pub fn atom_number(&self, p: Address) -> u32 {
-        let atom_n = self.candidate_atom_number(p);
-        atom_n as _
-    }
-    /// Atom offset from pointer, might be wrong
-    pub fn candidate_atom_number(&self, p: Address) -> usize {
-        return (p.to_usize() - self as *const Self as usize) / ATOM_SIZE;
-    }
-    /// Pointer to atoms
-    pub fn atoms(&self) -> *mut Atom {
-        self as *const Self as *mut Atom
-    }
-    /// Is pointer aligned to atom size?
-    pub const fn is_atom_aligned(p: Address) -> bool {
-        (p.to_usize() & ATOM_ALIGNMENT_MASK) == 0
     }
 }
 
@@ -204,6 +204,7 @@ impl BlockHeader {
         let mut is_empty = true;
         let mut freelist = FreeList::new();
         let mut count = 0;
+
         if GC_LOG {
             eprintln!(
                 "--Sweep block {:p}, sie class: {}",

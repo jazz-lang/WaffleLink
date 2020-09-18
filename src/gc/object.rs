@@ -404,7 +404,7 @@ impl<T: GcObject> GcBox<T> {
         self.header.vtable.is_null()
     }
 }
-
+use crate::utils::linked_list::LinkedList;
 /// Local scope inner
 pub struct LocalScopeInner {
     pub prev: *mut Self,
@@ -412,7 +412,7 @@ pub struct LocalScopeInner {
     /// pointer to gc
     pub gc: *mut dyn super::GarbageCollector,
     /// all locals
-    pub locals: SegmentedVec<*mut GcBox<()>>,
+    pub locals: LinkedList<*mut GcBox<()>>,
     /// is this scope dead?
     pub dead: bool,
 }
@@ -444,17 +444,17 @@ impl LocalScope {
         let gc = self.gc();
         let handle = unsafe { super::gc_alloc_handle(gc, value) };
 
-        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
-            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            ptr: self.inner().locals.back_mut().unwrap() as *mut *mut _,
             _marker: Default::default(),
         }
     }
     /// New local from handle
     pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
-        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
-            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            ptr: self.inner().locals.back_mut().unwrap() as *mut *mut _,
             _marker: Default::default(),
         }
     }
@@ -476,17 +476,17 @@ impl UndropLocalScope {
         let gc = self.gc();
         let handle = unsafe { super::gc_alloc_handle(gc, value) };
 
-        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
-            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            ptr: self.inner().locals.back_mut().unwrap() as *mut *mut _,
             _marker: Default::default(),
         }
     }
     /// New local from handle
     pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
-        self.inner().locals.push(handle.ptr.as_ptr().cast());
+        self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
-            ptr: self.inner().locals.last_mut().unwrap() as *mut *mut _,
+            ptr: self.inner().locals.back_mut().unwrap() as *mut *mut _,
             _marker: Default::default(),
         }
     }
@@ -533,8 +533,11 @@ impl<T: GcObject> Local<T> {
     }
     /// Convert to heap handle.
     pub fn to_heap(&self) -> Handle<T> {
-        Handle {
-            ptr: core::ptr::NonNull::new(unsafe { self.ptr.read().cast() }).unwrap(),
+        unsafe {
+            let ptr = *self.ptr;
+            Handle {
+                ptr: core::ptr::NonNull::new(ptr.cast()).unwrap(),
+            }
         }
     }
 }

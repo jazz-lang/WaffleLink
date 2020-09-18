@@ -90,8 +90,12 @@ impl<T> SegmentedVec<T> {
 
         use super::RetainMut;
         self.chunks.retain_mut(|chunk| {
-            chunk.retain(|elem| closure(elem));
-            chunk.is_empty()
+            let mut is_empty = true;
+            chunk.iter().for_each(|elem| {
+                is_empty = !closure(elem);
+            });
+            //chunk.retain(|elem| closure(elem));
+            is_empty
         });
     }
     /// Returns a reference to an element at the provided index if it exists.

@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 pub mod atomics;
 pub mod fast_bitvec;
+pub mod linked_list;
 pub mod segmented_vec;
 pub mod uniset;
 pub trait Bool {

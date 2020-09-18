@@ -1,14 +1,20 @@
 use super::block::*;
+use super::block_set::BlockSet;
 use super::precise_allocation::*;
 use super::*;
 use crate::isolate::Isolate;
 use intrusive_collections::{intrusive_adapter, LinkedList, LinkedListLink, UnsafeRef};
 use std::collections::HashSet;
-
 intrusive_adapter!(AllocLink = UnsafeRef<LocalAllocator> : LocalAllocator {
     link: LinkedListLink
 });
 use std::sync::atomic::{AtomicU32, Ordering as A};
+
+#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum CollectionScope {
+    Full,
+    Minor,
+}
 
 /// Directory of blocks of the same cell size
 pub struct Directory {
@@ -26,36 +32,45 @@ pub struct LocalAllocator {
 impl LocalAllocator {
     /// Allocate memory from current block or find unswept block, sweep it
     /// and try to allocate from it, if allocation fails request new block
-    pub fn allocate(&mut self) -> Address {
+    pub fn allocate(&mut self, heap: &mut LazySweepGC) -> Address {
         unsafe {
+            if !self.current_block.is_null() && (&*self.current_block).unswept {
+                (&mut *self.current_block).sweep();
+            }
             if self.current_block.is_null() {
-                return self.allocate_slow();
+                return self.allocate_slow(heap);
             }
             let result = (&mut *self.current_block).allocate();
 
             if result.is_null() {
-                return self.allocate_slow();
+                return self.allocate_slow(heap);
             }
-
+            heap.bytes_allocated_this_cycle += (&mut *self.current_block).cell_size() as usize;
             result
         }
     }
 
-    fn allocate_slow(&mut self) -> Address {
+    fn allocate_slow(&mut self, heap: &mut LazySweepGC) -> Address {
         unsafe {
             let dir = &mut *self.directory;
             let mut ptr = Address::null();
             for i in 0..dir.blocks.len() {
+                if dir.blocks[i] == self.current_block {
+                    continue;
+                }
                 if (&*dir.blocks[i]).can_allocate {
                     ptr = (&mut *dir.blocks[i]).allocate();
                     if ptr.is_non_null() {
+                        heap.bytes_allocated_this_cycle += (&*dir.blocks[i]).cell_size() as usize;
                         self.current_block = dir.blocks[i];
                         break;
                     }
                 } else if (&*dir.blocks[i]).unswept {
                     (&mut *dir.blocks[i]).sweep();
                     ptr = (&mut *dir.blocks[i]).allocate();
+
                     if ptr.is_non_null() {
+                        heap.bytes_allocated_this_cycle += (&*dir.blocks[i]).cell_size() as usize;
                         self.current_block = dir.blocks[i];
                         break;
                     }
@@ -65,8 +80,9 @@ impl LocalAllocator {
                 let block = Block::new(dir.cell_size);
                 dir.blocks.push(block as *mut _);
                 self.current_block = block as *mut _;
-
+                heap.blocks.add(block.block);
                 let res = block.allocate();
+                heap.bytes_allocated_this_cycle += block.cell_size() as usize;
                 res
             } else {
                 ptr
@@ -234,13 +250,32 @@ pub struct LazySweepGC {
     local_allocators: LinkedList<AllocLink>,
     scopes: *mut LocalScopeInner,
     persistent: crate::utils::segmented_vec::SegmentedVec<*mut GcBox<()>>,
-    bytes_allocated: usize,
-    bytes_allowed: usize,
+
     lock: Lock,
     ndefers: AtomicU32,
     isolate: *mut Isolate,
-}
+    blocks: BlockSet,
 
+    collection_scope: Option<CollectionScope>,
+    max_eden_size: usize,
+    max_heap_size: usize,
+    min_bytes_per_cycle: usize,
+    size_after_last_collect: usize,
+    size_after_last_full_collect: usize,
+    size_before_last_full_collect: usize,
+    size_before_last_eden_collect: usize,
+    size_after_last_eden_collect: usize,
+    bytes_allocated_this_cycle: usize,
+    should_do_full_collection: bool,
+    total_bytes_visited_this_cycle: usize,
+    total_bytes_visited: usize,
+    ram_size: usize,
+    /// Mark stack for write barrier
+    mark_stack: Vec<*mut GcBox<()>>,
+}
+fn proportional_heap_size(heap_size: usize) -> usize {
+    (heap_size as f64 * 1.27) as usize
+}
 impl LazySweepGC {
     /// Create new GC instance
     pub fn new() -> Self {
@@ -253,10 +288,25 @@ impl LazySweepGC {
             precise_allocations: vec![],
             local_allocators: LinkedList::new(AllocLink::new()),
             scopes: core::ptr::null_mut(),
-            bytes_allocated: 0,
+
             persistent: crate::utils::segmented_vec::SegmentedVec::with_chunk_size(32),
-            bytes_allowed: 8 * 1024,
             isolate: core::ptr::null_mut(),
+            blocks: BlockSet::new(),
+            collection_scope: None,
+            should_do_full_collection: false,
+            max_eden_size: 8 * 1024,
+            max_heap_size: 32 * 1024,
+            bytes_allocated_this_cycle: 0,
+            size_after_last_collect: 0,
+            size_after_last_eden_collect: 0,
+            size_after_last_full_collect: 0,
+            size_before_last_eden_collect: 0,
+            size_before_last_full_collect: 0,
+            min_bytes_per_cycle: 1024 * 1024,
+            ram_size: 8 * 1024 * 1024 * 1024,
+            total_bytes_visited: 0,
+            total_bytes_visited_this_cycle: 0,
+            mark_stack: vec![],
         }
     }
 
@@ -321,15 +371,15 @@ impl LazySweepGC {
         self.collect_if_necessary(true);
         // this will be executed always if size <= LARGE_CUTOFF
         if let Some(alloc) = self.allocator_for(size) {
-            let res = (&mut *alloc).allocate();
-            self.bytes_allocated += size;
+            let res = (&mut *alloc).allocate(self);
+            //self.bytes_allocated += size;
             self.lock.unlock();
             return res;
         }
 
         // should not be executed if size > LARGE_CUTOFF
         let res = self.allocate_slow(size);
-        self.bytes_allocated += size;
+        self.bytes_allocated_this_cycle += size;
         self.lock.unlock();
         res
     }
@@ -338,7 +388,7 @@ impl LazySweepGC {
         let lock = self.lock.lock();
         // this will be executed always if size <= LARGE_CUTOFF
         if let Some(alloc) = self.allocator_for(size) {
-            let res = (&mut *alloc).allocate();
+            let res = (&mut *alloc).allocate(self);
             self.lock.unlock();
             return res;
         }
@@ -348,6 +398,31 @@ impl LazySweepGC {
         self.lock.unlock();
         res
     }
+    fn should_do_full_collection(&self) -> bool {
+        self.should_do_full_collection
+    }
+    fn will_start_collection(&mut self) {
+        if self.should_do_full_collection() {
+            self.collection_scope = Some(CollectionScope::Full);
+            self.should_do_full_collection = false;
+            if GC_LOG {
+                eprintln!("FullCollection");
+            }
+        } else {
+            self.collection_scope = Some(CollectionScope::Minor);
+            if GC_LOG {
+                eprintln!("EdenCollection");
+            }
+        }
+        if let Some(CollectionScope::Full) = self.collection_scope {
+            self.size_before_last_full_collect =
+                self.size_after_last_collect + self.bytes_allocated_this_cycle;
+        } else {
+            self.size_before_last_eden_collect =
+                self.size_after_last_collect + self.bytes_allocated_this_cycle;
+        }
+    }
+
     unsafe fn collect(&mut self, full: bool, locked: bool) {
         if self.ndefers.load(A::Acquire) > 0 {
             if GC_LOG {
@@ -355,19 +430,33 @@ impl LazySweepGC {
             }
             return;
         }
-        if GC_LOG {
-            eprintln!("--start marking cycle");
-        }
+
         if !locked {
             self.lock.lock();
+        }
+        self.will_start_collection();
+        if let Some(CollectionScope::Full) = self.collection_scope {
+            self.mark_stack.clear();
+            self.precise_allocations.iter().for_each(|precise| {
+                (&mut **precise).flip();
+            });
+            for dir in self.directories.iter_mut() {
+                for block in dir.blocks.iter() {
+                    (&mut **block).bitmap.clear_all();
+                }
+            }
+        }
+        if GC_LOG {
+            eprintln!("--start marking cycle");
         }
         let mut task = MarkingTask {
             gc: self,
             bytes_visited: 0,
             gray: Default::default(),
         };
+
         let start = std::time::Instant::now();
-        task.run();
+        task.run(full);
         let end = start.elapsed();
         eprintln!("--marking finished");
         if GC_LOG_TIMINGS {
@@ -380,11 +469,14 @@ impl LazySweepGC {
             let local = &mut *local;
             local.current_block = 0 as *mut _;
         }
-        if full {
+
+        self.update_object_counts(visited);
+        if let Some(CollectionScope::Full) = self.collection_scope {
             if GC_LOG {
                 eprintln!("--start full sweep cycle");
             }
             let start = std::time::Instant::now();
+            let this = &mut *(self as *mut Self);
             for dir in self.directories.iter_mut() {
                 dir.blocks.retain(|block| {
                     let b = &mut **block;
@@ -396,6 +488,7 @@ impl LazySweepGC {
                                 b.cell_size()
                             );
                         }
+                        this.blocks.remove(b.block);
                         b.destroy();
                         false
                     } else {
@@ -411,7 +504,7 @@ impl LazySweepGC {
                 dir.blocks.iter().for_each(|block| {
                     let block = &mut **block;
                     block.unswept = true;
-                    block.can_allocate = false;
+                    block.can_allocate = !block.freelist.is_empty();
                 });
             }
         }
@@ -419,7 +512,7 @@ impl LazySweepGC {
         self.precise_allocations.retain(|precise| {
             let alloc = &mut **precise;
             if !alloc.is_marked() {
-                if GC_VERBOSE_LOG {
+                if GC_LOG {
                     eprintln!(
                         "--sweep precise allocation {:p}, size: {}",
                         alloc,
@@ -432,25 +525,76 @@ impl LazySweepGC {
                 true
             }
         });
-        self.bytes_allocated = visited;
-        if self.bytes_allocated >= self.bytes_allowed {
-            let prev = self.bytes_allowed;
+        self.update_allocation_limits();
 
-            self.bytes_allowed = (self.bytes_allocated as f64 / 0.75) as usize;
-            if GC_LOG {
-                eprintln!(
-                    "--Change threshold from {} bytes to {} bytes",
-                    prev, self.bytes_allowed
-                );
-            }
-        }
         self.lock.unlock();
     }
-
-    unsafe fn collect_if_necessary(&mut self, locked: bool) {
-        if self.bytes_allocated > self.bytes_allowed {
-            self.collect(false, locked);
+    fn update_object_counts(&mut self, bytes_visited: usize) {
+        if let Some(CollectionScope::Full) = self.collection_scope {
+            self.total_bytes_visited = 0;
         }
+        self.total_bytes_visited_this_cycle = bytes_visited;
+        self.total_bytes_visited += self.total_bytes_visited_this_cycle;
+    }
+
+    fn update_allocation_limits(&mut self) {
+        // Calculate our current heap size threshold for the purpose of figuring out when we should
+        // run another collection. This isn't the same as either size() or capacity(), though it should
+        // be somewhere between the two. The key is to match the size calculations involved calls to
+        // didAllocate(), while never dangerously underestimating capacity(). In extreme cases of
+        // fragmentation, we may have size() much smaller than capacity().
+        let mut current_heap_size = 0;
+        current_heap_size += self.total_bytes_visited;
+
+        if let Some(CollectionScope::Full) = self.collection_scope {
+            self.max_heap_size = proportional_heap_size(current_heap_size).max(32 * 1024);
+            self.max_eden_size = self.max_heap_size - current_heap_size;
+            self.size_after_last_full_collect = current_heap_size;
+            if GC_LOG {
+                eprintln!("Full: currentHeapSize = {}", current_heap_size);
+                eprintln!("Full: maxHeapSize = {}\nFull: maxEdenSize = {}\nFull: sizeAfterLastFullCollect = {}",self.max_heap_size,self.max_eden_size,self.size_after_last_full_collect);
+            }
+        } else {
+            assert!(current_heap_size >= self.size_after_last_collect);
+
+            // Theoretically, we shouldn't ever scan more memory than the heap size we planned to have.
+            // But we are sloppy, so we have to defend against the overflow.
+            self.max_eden_size = if current_heap_size > self.max_heap_size {
+                0
+            } else {
+                self.max_heap_size - current_heap_size
+            };
+            self.size_after_last_eden_collect = current_heap_size;
+            let eden_to_old_gen_ratio = self.max_eden_size as f64 / self.max_heap_size as f64;
+            let min_eden_to_old_gen_ratio = 1.0 / 3.0;
+            if eden_to_old_gen_ratio < min_eden_to_old_gen_ratio {
+                self.should_do_full_collection = true;
+            }
+            // This seems suspect at first, but what it does is ensure that the nursery size is fixed.
+            self.max_heap_size += current_heap_size - self.size_after_last_collect;
+            self.max_eden_size = self.max_heap_size - current_heap_size;
+            if GC_LOG {
+                eprintln!(
+                    "Eden: eden to old generation ratio: {}\nEden: minimum eden to old generation ratio {}",
+                    eden_to_old_gen_ratio,min_eden_to_old_gen_ratio
+                );
+                eprintln!("Eden: maxEdenSize = {}", self.max_eden_size);
+                eprintln!("Eden: maxHeapSize = {}", self.max_heap_size);
+                eprintln!(
+                    "Eden: shouldDoFullCollection = {}",
+                    self.should_do_full_collection
+                );
+                eprintln!("Eden: currentHeapSize = {}", current_heap_size);
+            }
+        }
+        self.size_after_last_collect = current_heap_size;
+        self.bytes_allocated_this_cycle = 0;
+    }
+    unsafe fn collect_if_necessary(&mut self, locked: bool) {
+        if self.bytes_allocated_this_cycle <= self.max_eden_size {
+            return;
+        }
+        self.collect(false, locked);
     }
 
     unsafe fn allocate_slow(&mut self, size: usize) -> Address {
@@ -487,20 +631,8 @@ struct MarkingTask<'a> {
     bytes_visited: usize,
 }
 impl<'a> MarkingTask<'a> {
-    pub fn run(&mut self) {
-        self.gc
-            .precise_allocations
-            .iter()
-            .for_each(|precise| unsafe {
-                (&mut **precise).flip();
-            });
-        for dir in self.gc.directories.iter_mut() {
-            for block in dir.blocks.iter() {
-                unsafe {
-                    (&mut **block).bitmap.clear_all();
-                }
-            }
-        }
+    pub fn run(&mut self, full: bool) {
+        if full {}
         self.process_roots();
         self.process_gray();
     }
@@ -541,23 +673,38 @@ impl<'a> MarkingTask<'a> {
     }
 
     fn process_gray(&mut self) {
+        while let Some(item) = self.gc.mark_stack.pop() {
+            unsafe {
+                let obj = &mut *item;
+                if obj.header.cell_state == GC_WHITE {
+                    obj.header.cell_state = GC_GRAY;
+                    self.gray.push_back(item);
+                }
+            }
+        }
         while let Some(item) = self.gray.pop_front() {
+            unsafe {
+                (&mut *item).header.cell_state = GC_BLACK;
+            }
             self.visit_value(item);
         }
     }
 
     fn visit_value(&mut self, val: *mut GcBox<()>) {
         let obj = unsafe { &mut *val };
+
         obj.trait_object().visit_references(&mut |item| {
             self.mark(item as *mut _);
         });
     }
     fn mark(&mut self, object: *mut GcBox<()>) {
         let obj = unsafe { &mut *object };
+
         if !self.gc.test_and_set_marked(object) {
             if GC_VERBOSE_LOG {
                 eprintln!("---mark {:p}", object);
             }
+            obj.header.cell_state = GC_GRAY;
             self.bytes_visited += obj.trait_object().size() + core::mem::size_of::<Header>();
             self.gray.push_back(object);
         }
@@ -585,9 +732,12 @@ impl super::GarbageCollector for LazySweepGC {
             prev: core::ptr::null_mut(),
             next: self.scopes,
             gc: self as *mut Self,
-            locals: crate::utils::segmented_vec::SegmentedVec::with_chunk_size(32),
+            locals: crate::utils::linked_list::LinkedList::with_capacity(1),
             dead: false,
         }));
+        unsafe {
+            (&mut *scope).locals.set_chunk_size(16);
+        }
         if !self.scopes.is_null() {
             unsafe {
                 (&mut *self.scopes).prev = scope;
@@ -617,7 +767,6 @@ impl super::GarbageCollector for LazySweepGC {
 
     fn allocate(&mut self, size: usize) -> Address {
         let res = unsafe { self.allocate_raw(size) };
-
         res
     }
 
@@ -625,5 +774,21 @@ impl super::GarbageCollector for LazySweepGC {
         let res = unsafe { self.allocate_raw_no_gc(size) };
 
         res
+    }
+
+    fn write_barrier(&mut self, object: *mut GcBox<()>, field: *mut GcBox<()>) {
+        unsafe {
+            let obj = &mut *object;
+            if obj.header.cell_state != GC_BLACK {
+                if (&*field).header.cell_state != GC_WHITE {
+                    return;
+                }
+            }
+            if GC_VERBOSE_LOG {
+                eprintln!("WriteBarrier: {:p}<-{:p}", object, field);
+            }
+            obj.header.cell_state = GC_GRAY;
+            self.mark_stack.push(object);
+        }
     }
 }

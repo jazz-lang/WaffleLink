@@ -98,7 +98,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::new();
     /// assert!(set.is_empty());
@@ -116,7 +116,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(1024);
     /// assert!(set.is_empty());
@@ -133,7 +133,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(64);
     /// assert!(set.is_empty());
@@ -152,7 +152,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::new();
     /// assert!(set.is_empty());
@@ -167,7 +167,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     /// set.set(1);
@@ -192,7 +192,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(1024);
     ///
@@ -214,7 +214,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let set = BitSet::with_capacity(1024);
     ///
@@ -232,7 +232,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(64);
     ///
@@ -262,7 +262,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(64);
     ///
@@ -293,7 +293,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(64);
     ///
@@ -321,7 +321,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     /// let mut set = BitSet::with_capacity(128);
     /// assert_eq!(128, set.capacity());
     /// set.reserve(250);
@@ -373,7 +373,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     /// set.set(127);
@@ -387,7 +387,7 @@ impl BitSet {
     /// Draining one bit at a time.
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     ///
@@ -404,7 +404,7 @@ impl BitSet {
     /// Saving the state of the draining iterator.
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     ///
@@ -445,7 +445,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     ///
@@ -471,7 +471,7 @@ impl BitSet {
     /// Trying to snapshot from an empty draining iterator:
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     ///
@@ -502,7 +502,7 @@ impl BitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(128);
     /// set.set(127);
@@ -762,7 +762,7 @@ impl AtomicBitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::AtomicBitSet;
+    /// use wafflelink::utils::uniset::AtomicBitSet;
     ///
     /// let set = AtomicBitSet::new();
     /// let set = set.into_local();
@@ -789,7 +789,7 @@ impl AtomicBitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let set = BitSet::with_capacity(1024).into_atomic();
     /// set.set(1000);
@@ -824,7 +824,7 @@ impl AtomicBitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::new();
     /// set.reserve(1024);
@@ -853,7 +853,7 @@ impl AtomicBitSet {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let mut set = BitSet::with_capacity(1024).into_atomic();
     ///
@@ -906,7 +906,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// assert_eq!(vec![0usize; 4], Layer::with_capacity(4));
     /// ```
@@ -925,7 +925,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     ///
@@ -950,7 +950,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     /// assert_eq!(vec![0, 0], layer);
@@ -967,7 +967,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     /// assert_eq!(vec![0, 0], layer);
@@ -985,7 +985,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(0);
     /// assert_eq!(vec![], layer);
@@ -1017,7 +1017,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     /// layer.set(0, 63);
@@ -1032,7 +1032,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     /// layer.set(0, 63);
@@ -1050,7 +1050,7 @@ impl Layer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::Layer;
+    /// use wafflelink::utils::uniset::Layer;
     ///
     /// let mut layer = Layer::with_capacity(2);
     /// assert!(!layer.test(0, 63));
@@ -1198,7 +1198,7 @@ impl AtomicLayer {
     /// # Examples
     ///
     /// ```rust
-    /// use uniset::BitSet;
+    /// use wafflelink::utils::uniset::BitSet;
     ///
     /// let set = BitSet::with_capacity(64);
     ///
