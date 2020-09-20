@@ -596,3 +596,5 @@ impl<T: GcObject> std::ops::DerefMut for Local<T> {
         unsafe { &mut (&mut *(&mut *self.ptr).cast::<GcBox<T>>()).value }
     }
 }
+
+impl GcObject for String {}

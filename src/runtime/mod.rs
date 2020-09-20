@@ -14,3 +14,5 @@ pub mod callframe;
 pub mod array;
 
 pub mod properties;
+
+pub mod class;

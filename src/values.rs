@@ -662,3 +662,13 @@ pub enum VResult {
 pub enum Error {
     ExceptionThrown(Value),
 }
+
+use crate::gc::object::*;
+
+impl GcObject for Value {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+        if self.is_cell() && !self.is_empty() {
+            trace(self.as_cell_ref().gc_ptr());
+        }
+    }
+}
