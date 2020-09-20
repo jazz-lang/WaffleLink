@@ -249,7 +249,7 @@ pub struct LazySweepGC {
     pub(crate) precise_allocations: Vec<*mut PreciseAllocation>,
     local_allocators: LinkedList<AllocLink>,
     scopes: *mut LocalScopeInner,
-    persistent: crate::utils::segmented_vec::SegmentedVec<*mut GcBox<()>>,
+    persistent: *mut LocalScopeInner,
 
     lock: Lock,
     ndefers: AtomicU32,
@@ -278,8 +278,8 @@ fn proportional_heap_size(heap_size: usize) -> usize {
 }
 impl LazySweepGC {
     /// Create new GC instance
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Box<Self> {
+        let mut this = Box::new(Self {
             ndefers: AtomicU32::new(0),
             lock: Lock::INIT,
             allocator_for_size_step: [0 as *mut LocalAllocator; NUM_SIZE_CLASSES],
@@ -289,7 +289,13 @@ impl LazySweepGC {
             local_allocators: LinkedList::new(AllocLink::new()),
             scopes: core::ptr::null_mut(),
 
-            persistent: crate::utils::segmented_vec::SegmentedVec::with_chunk_size(32),
+            persistent: Box::into_raw(Box::new(LocalScopeInner {
+                next: 0 as *mut _,
+                prev: 0 as *mut _,
+                locals: crate::utils::linked_list::LinkedList::with_capacity(2),
+                dead: false,
+                gc: unsafe { std::mem::transmute([0usize; 2]) },
+            })),
             isolate: core::ptr::null_mut(),
             blocks: BlockSet::new(),
             collection_scope: None,
@@ -307,7 +313,10 @@ impl LazySweepGC {
             total_bytes_visited: 0,
             total_bytes_visited_this_cycle: 0,
             mark_stack: vec![],
-        }
+        });
+        let raw = &mut *this as &mut dyn GarbageCollector;
+        unsafe { &mut *this.persistent }.gc = raw as *mut dyn GarbageCollector;
+        this
     }
 
     fn allocator_for(&mut self, size: usize) -> Option<*mut LocalAllocator> {
@@ -712,6 +721,11 @@ impl<'a> MarkingTask<'a> {
 }
 
 impl super::GarbageCollector for LazySweepGC {
+    fn persistent_scope(&mut self) -> UndropLocalScope {
+        UndropLocalScope {
+            inner: self.persistent,
+        }
+    }
     fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate) {
         self.isolate = isolate;
     }

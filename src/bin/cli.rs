@@ -14,7 +14,7 @@ struct Foo {
 }
 
 impl GcObject for Foo {
-    fn visit_references(&self, _trace: &mut dyn FnMut(*const GcBox<()>)) {
+    fn visit_references(&self, _trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
         self.next.visit_references(_trace);
     }
 }
@@ -216,11 +216,8 @@ fn main() {
     arr1.for_each(|x| {
         assert!(x.as_int32() == 42);
     });
-    let arr2 = Array::new_local(&mut scope, Value::new_int(42), 64);
-    arr2.for_each(|x| {
-        assert!(x.as_int32() == 42);
-    });
-    heap.write_barrier(arr_old.to_heap(), arr1.to_heap());
+
+    heap.write_barrier(arr_old.to_heap(), arr2.to_heap());
     heap.minor();
     drop(scope);
     heap.minor();

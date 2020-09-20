@@ -9,7 +9,7 @@ pub trait GcObject {
         core::mem::size_of_val(self)
     }
     /// Visit all references to GC objects in this object.
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {}
     /// Finalization.
     fn finalize(&mut self) {
         //eprintln!("dead {:p}", self);
@@ -316,8 +316,8 @@ pub struct Handle<T: GcObject> {
 
 impl<T: GcObject> Handle<T> {
     /// Return raw gc ptr
-    pub fn gc_ptr(&self) -> *mut GcBox<()> {
-        self.ptr.cast::<_>().as_ptr()
+    pub fn gc_ptr(&self) -> *const *mut GcBox<()> {
+        unsafe { std::mem::transmute(&self.ptr) }
     }
     /// Compare two handles by pointer
     pub fn ptr_eq(this: Self, other: Self) -> bool {
@@ -332,7 +332,7 @@ impl<T: GcObject> Handle<T> {
 }
 
 impl<T: GcObject> GcObject for Handle<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
         trace(self.gc_ptr());
     }
 }
@@ -373,7 +373,7 @@ simple!(
 );
 
 impl<T: GcObject> GcObject for Vec<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
         for elem in self.iter() {
             elem.visit_references(trace);
         }
@@ -385,7 +385,7 @@ impl<T: GcObject> GcObject for Vec<T> {
 }
 
 impl<T: GcObject> GcObject for Option<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
         if let Some(val) = self {
             val.visit_references(trace);
         }
@@ -450,6 +450,24 @@ impl LocalScope {
             _marker: Default::default(),
         }
     }
+
+    /// Try to escape value from current scope. If there are previous scope
+    /// then this will return local created in previous scope otherwise null is returned.
+    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Option<Local<T>> {
+        let inner = self.inner();
+        if inner.prev.is_null() {
+            return None;
+        }
+        unsafe {
+            let prev = &mut *inner.prev;
+            prev.locals.push_back(*value.to_heap().gc_ptr());
+            Some(Local {
+                ptr: prev.locals.back_mut().unwrap() as *mut *mut _,
+                _marker: Default::default(),
+            })
+        }
+    }
+
     /// New local from handle
     pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
         self.inner().locals.push_back(handle.ptr.as_ptr().cast());
@@ -577,9 +595,4 @@ impl<T: GcObject> std::ops::DerefMut for Local<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut (&mut *(&mut *self.ptr).cast::<GcBox<T>>()).value }
     }
-}
-
-pub struct Buffer {
-    locals: [*mut GcBox<()>; 32],
-    ix: usize,
 }

@@ -15,7 +15,7 @@ impl GcObject for Array {
         Array::compute_size(self.length as _)
     }
 
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
         self.for_each(|value| {
             if value.is_cell() && !value.is_empty() {
                 trace(value.as_cell().gc_ptr());
@@ -37,8 +37,29 @@ impl Array {
         });
         val
     }
-    /// Allocate new array in Isolate heap.
-    pub fn new<'a>(isolate: &mut Isolate, default_init: Value, len: u32) -> Handle<Self> {
+    /// Allocate new array in Isolate's heap.
+    ///
+    ///
+    /// NOTE: This function will create local handle in current local scope if it exists or
+    /// in persistent local scope.
+    pub fn new<'a>(isolate: &mut Isolate, default_init: Value, len: u32) -> Local<Self> {
+        let mut val = isolate
+            .heap()
+            .gc
+            .last_local_scope()
+            .unwrap_or(isolate.heap().gc.persistent_scope())
+            .allocate(Self {
+                ty: CellType::Array,
+                length: len,
+                data: 0,
+            });
+        val.for_each_mut(|val| {
+            *val = default_init;
+        });
+        val
+    }
+
+    pub fn new_unrooted(isolate: &mut Isolate, default_init: Value, len: u32) -> Handle<Self> {
         let mut val = isolate.heap().allocate(Self {
             ty: CellType::Array,
             length: len,

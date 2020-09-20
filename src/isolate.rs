@@ -1,9 +1,14 @@
 use crate::gc::*;
-use crate::gc::*;
-use std::collections::VecDeque;
+
 /// An isolated WaffleLink execution context.
 ///
-/// All WaffleLink code runs in an isolate, and code can access classes and values only from the same isolate. Different isolates can communicate by sending values through ports.
+/// All WaffleLink code runs in an isolate, and code can access classes and values only from the same isolate.
+/// Different isolates can communicate by sending values through ports.
+///
+///
+///
+///
+///
 pub struct Isolate {
     heap: *mut Heap,
 }

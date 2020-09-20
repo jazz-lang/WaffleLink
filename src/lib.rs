@@ -1,4 +1,3 @@
-
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
@@ -51,18 +50,18 @@ macro_rules! const_assert {
     };
 }
 
+pub mod bytecode;
 /// GC modules
 pub mod gc;
 /// Isolate instance
 pub mod isolate;
+pub mod runtime;
 /// Timer implementation
 pub mod timer;
 /// Various utilities
 pub mod utils;
 /// Value representation
 pub mod values;
-pub mod runtime;
-pub mod bytecode;
 
 /*
 pub struct VM {

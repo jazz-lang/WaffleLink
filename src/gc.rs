@@ -34,7 +34,7 @@ pub const GC_NONE: u8 = 3;
 /// Remembered old object
 pub const GC_OLD_REMEMBERED: u8 = 2;
 /// Enable verbose logging
-pub const GC_VERBOSE_LOG: bool = !true;
+pub const GC_VERBOSE_LOG: bool = true;
 /// Enable logging
 pub const GC_LOG: bool = true;
 /// Enable time logging
@@ -229,16 +229,18 @@ pub trait GarbageCollector {
     fn undefer_gc(&mut self);
     /// Allow GC to collect roots from isolate.
     fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate);
+
+    fn persistent_scope(&mut self) -> UndropLocalScope;
 }
 /// Heap is "wrapper" for `GarbageCollector`
 pub struct Heap {
-    gc: Box<dyn GarbageCollector>,
+    pub gc: Box<dyn GarbageCollector>,
 }
 
 impl Heap {
     /// Create new GC instance `T`
-    pub fn new<T: GarbageCollector + 'static>(gc: T) -> Self {
-        Self { gc: Box::new(gc) }
+    pub fn new<T: GarbageCollector + 'static>(gc: Box<T>) -> Self {
+        Self { gc }
     }
     /// Create new Lazy sweep GC instance.
     pub fn lazysweep() -> Self {
@@ -251,6 +253,12 @@ impl Heap {
     /// Allocate `T` on GC heap.
     pub fn allocate<T: GcObject>(&mut self, value: T) -> Handle<T> {
         unsafe { gc_alloc_handle(&mut *self.gc, value) }
+    }
+    fn allocate_persistent<T: GcObject>(&mut self, value: T) -> Local<T> {
+        self.gc.persistent_scope().allocate(value)
+    }
+    fn new_persistent_local<T: GcObject>(&mut self, value: Handle<T>) -> Local<T> {
+        self.gc.persistent_scope().new_local(value)
     }
     /// Perform major GC.
     pub fn major(&mut self) {
@@ -266,8 +274,9 @@ impl Heap {
     }
     /// Execute write barrier.
     pub fn write_barrier<T: GcObject, U: GcObject>(&mut self, object: Handle<T>, field: Handle<U>) {
-        self.gc
-            .write_barrier(object.gc_ptr().cast(), field.gc_ptr().cast());
+        unsafe {
+            self.gc.write_barrier(*object.gc_ptr(), *field.gc_ptr());
+        }
     }
 }
 

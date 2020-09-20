@@ -33,5 +33,5 @@ impl Local<Cell> {
 }
 
 impl GcObject for Cell {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const GcBox<()>)) {}
+    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {}
 }
