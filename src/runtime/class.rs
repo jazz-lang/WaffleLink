@@ -50,3 +50,9 @@ impl GcObject for Instance {
             + (self.class.nmembers as usize * core::mem::size_of::<Value>())
     }
 }
+
+pub struct Slot {
+    pub value: Option<Value>,
+    pub object: Option<Handle<Instance>>,
+    pub ix: u32,
+}

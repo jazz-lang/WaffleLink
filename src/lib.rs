@@ -49,6 +49,9 @@ macro_rules! const_assert {
         } as usize] = [];
     };
 }
+#[macro_use]
+/// Various utilities
+pub mod utils;
 
 pub mod bytecode;
 /// GC modules
@@ -58,8 +61,7 @@ pub mod isolate;
 pub mod runtime;
 /// Timer implementation
 pub mod timer;
-/// Various utilities
-pub mod utils;
+
 /// Value representation
 pub mod values;
 

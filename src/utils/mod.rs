@@ -54,3 +54,16 @@ impl<T> RetainMut<T> for Vec<T> {
         }
     }
 }
+#[macro_export]
+macro_rules! cfor {
+    (($var : expr; $cond : expr; $after : expr) $e: expr) => {
+        $var;
+        loop {
+            if !($cond) {
+                break;
+            }
+            $e;
+            $after
+        }
+    };
+}

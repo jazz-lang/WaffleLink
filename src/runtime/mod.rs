@@ -16,3 +16,7 @@ pub mod array;
 pub mod properties;
 
 pub mod class;
+
+pub mod map;
+
+pub mod async_rt;
