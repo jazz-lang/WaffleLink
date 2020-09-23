@@ -28,3 +28,30 @@ impl TaskId {
         TaskId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
+
+unsafe impl Send for Task {}
+unsafe impl Sync for Task {}
+
+#[must_use = "yield_now does nothing unless polled/`await`-ed"]
+pub async fn yield_now() {
+    /// Yield implementation
+    struct YieldNow {
+        yielded: bool,
+    }
+
+    impl Future for YieldNow {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+            if self.yielded {
+                return Poll::Ready(());
+            }
+
+            self.yielded = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
+
+    YieldNow { yielded: false }.await
+}

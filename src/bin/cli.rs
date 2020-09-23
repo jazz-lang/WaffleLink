@@ -1,7 +1,6 @@
 use object::*;
 use wafflelink::gc::*;
-use wafflelink::runtime::array::Array;
-use wafflelink::values::*;
+use wafflelink::isolate::Isolate;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -21,7 +20,19 @@ impl GcObject for Foo {
 impl Drop for Foo {
     fn drop(&mut self) {}
 }
-
+use wafflelink::runtime::async_rt::*;
 fn main() {
-    println!("{}", wafflelink::bytecode::ISBX_MIN);
+    let isolate = Isolate::new();
+    isolate.run(|isolate| {
+        isolate.spawn(async {
+            println!("task #1: Hello,World!");
+            yield_now().await;
+            println!("task #1: end");
+        });
+        isolate.spawn(async {
+            println!("task #2: hi!");
+            yield_now().await;
+            println!("task #2: end");
+        });
+    });
 }
