@@ -13,10 +13,8 @@ pub mod callframe;
 /// Array implementation
 pub mod array;
 
-pub mod properties;
-
 pub mod class;
 
 pub mod map;
 
-pub mod async_rt;
+pub mod string;

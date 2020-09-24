@@ -1,4 +1,3 @@
-use crate::utils::segmented_vec::SegmentedVec;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 /// Object that can be handled by GC.
 pub trait GcObject {
@@ -323,6 +322,9 @@ impl<T: GcObject> Handle<T> {
     pub fn ptr_eq(this: Self, other: Self) -> bool {
         this.ptr == other.ptr
     }
+    pub fn raw(&self) -> *mut GcBox<T> {
+        self.ptr.as_ptr()
+    }
     /// Create from raw
     pub unsafe fn from_raw<U>(x: *const U) -> Self {
         Self {
@@ -452,8 +454,28 @@ impl LocalScope {
     }
 
     /// Try to escape value from current scope. If there are previous scope
-    /// then this will return local created in previous scope otherwise null is returned.
-    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Option<Local<T>> {
+    /// then this will return local created in previous scope otherwise local is placed in persistent scope
+    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Local<T> {
+        let inner = self.inner();
+        if inner.prev.is_null() {
+            return unsafe {
+                (&mut *inner.gc)
+                    .persistent_scope()
+                    .new_local(value.to_heap())
+            };
+        }
+        unsafe {
+            let prev = &mut *inner.prev;
+            prev.locals.push_back(*value.to_heap().gc_ptr());
+            Local {
+                ptr: prev.locals.back_mut().unwrap() as *mut *mut _,
+                _marker: Default::default(),
+            }
+        }
+    }
+    /// Try to escape value from current scope. If there are previous scope
+    /// then this will return local created in previous scope otherwise None is returned.
+    pub fn try_escape<T: GcObject>(&mut self, value: Local<T>) -> Option<Local<T>> {
         let inner = self.inner();
         if inner.prev.is_null() {
             return None;
@@ -467,7 +489,6 @@ impl LocalScope {
             })
         }
     }
-
     /// New local from handle
     pub fn new_local<'a, T: GcObject>(&mut self, handle: Handle<T>) -> Local<T> {
         self.inner().locals.push_back(handle.ptr.as_ptr().cast());
@@ -508,6 +529,42 @@ impl UndropLocalScope {
             _marker: Default::default(),
         }
     }
+    /// Try to escape value from current scope. If there are previous scope
+    /// then this will return local created in previous scope otherwise local is placed in persistent scope
+    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Local<T> {
+        let inner = self.inner();
+        unsafe {
+            if inner.prev.is_null() {
+                return (&mut *inner.gc)
+                    .persistent_scope()
+                    .new_local(value.to_heap());
+            }
+        }
+        unsafe {
+            let prev = &mut *inner.prev;
+            prev.locals.push_back(*value.to_heap().gc_ptr());
+            Local {
+                ptr: prev.locals.back_mut().unwrap() as *mut *mut _,
+                _marker: Default::default(),
+            }
+        }
+    }
+    /// Try to escape value from current scope. If there are previous scope
+    /// then this will return local created in previous scope otherwise None is returned.
+    pub fn try_escape<T: GcObject>(&mut self, value: Local<T>) -> Option<Local<T>> {
+        let inner = self.inner();
+        if inner.prev.is_null() {
+            return None;
+        }
+        unsafe {
+            let prev = &mut *inner.prev;
+            prev.locals.push_back(*value.to_heap().gc_ptr());
+            Some(Local {
+                ptr: prev.locals.back_mut().unwrap() as *mut *mut _,
+                _marker: Default::default(),
+            })
+        }
+    }
 }
 /// An object reference managed by the WaffleLink garbage collector.
 ///
@@ -527,7 +584,7 @@ impl UndropLocalScope {
 /// LocalScope must exist on the stack when they are created and that they are
 /// only valid inside of the `LocalScope` active during their creation.
 /// For passing a local handle to an outer `LocalScope`, an
-/// `EscapableLocalScope` and its `Escape()` method must be used.
+/// `escape()` or `try_escape()` methods must be used.
 ///
 /// Persistent handles can be used when storing objects across several
 /// independent operations and have to be explicitly deallocated when they're no

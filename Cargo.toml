@@ -17,13 +17,15 @@ once_cell = "1.4.1"
 libc = "0.2"
 fxhash = "0.2"
 flume = "0.9"
+lasso = {version = "0.3",features = ["multi-threaded"]}
 parking_lot = "0.11"
 [[bin]]
 name = "cli"
 
 [features]
 default = []
-
+# This will check more things at runtime for safety reasons.
+assertions = []
 [profile.release]
 lto = "fat"
 codegen-units = 1

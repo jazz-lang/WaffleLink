@@ -67,3 +67,12 @@ macro_rules! cfor {
         }
     };
 }
+
+#[macro_export]
+macro_rules! assert_if_debug_or_feature {
+    ($feature : literal;$($rest:tt)*) => {
+        if cfg!(feature=$feature) || cfg!(debug_assertions) {
+            assert!($($rest)*);
+        }
+    };
+}

@@ -228,7 +228,7 @@ pub trait GarbageCollector {
     /// Enable GC.
     fn undefer_gc(&mut self);
     /// Allow GC to collect roots from isolate.
-    fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate);
+    fn set_isolate(&mut self, isolate: std::sync::Arc<crate::isolate::Isolate>);
 
     fn persistent_scope(&mut self) -> UndropLocalScope;
 }

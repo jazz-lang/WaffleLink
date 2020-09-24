@@ -20,19 +20,4 @@ impl GcObject for Foo {
 impl Drop for Foo {
     fn drop(&mut self) {}
 }
-use wafflelink::runtime::async_rt::*;
-fn main() {
-    let isolate = Isolate::new();
-    isolate.run(|isolate| {
-        isolate.spawn(async {
-            println!("task #1: Hello,World!");
-            yield_now().await;
-            println!("task #1: end");
-        });
-        isolate.spawn(async {
-            println!("task #2: hi!");
-            yield_now().await;
-            println!("task #2: end");
-        });
-    });
-}
+fn main() {}

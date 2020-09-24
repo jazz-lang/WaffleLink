@@ -253,7 +253,7 @@ pub struct LazySweepGC {
 
     lock: Lock,
     ndefers: AtomicU32,
-    isolate: *mut Isolate,
+    isolate: Option<std::sync::Arc<Isolate>>,
     blocks: BlockSet,
 
     collection_scope: Option<CollectionScope>,
@@ -296,7 +296,7 @@ impl LazySweepGC {
                 dead: false,
                 gc: unsafe { std::mem::transmute([0usize; 2]) },
             })),
-            isolate: core::ptr::null_mut(),
+            isolate: None,
             blocks: BlockSet::new(),
             collection_scope: None,
             should_do_full_collection: false,
@@ -722,18 +722,20 @@ impl<'a> MarkingTask<'a> {
 
 impl super::GarbageCollector for LazySweepGC {
     fn persistent_scope(&mut self) -> UndropLocalScope {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         UndropLocalScope {
             inner: self.persistent,
         }
     }
-    fn set_isolate(&mut self, isolate: *mut crate::isolate::Isolate) {
-        self.isolate = isolate;
+    fn set_isolate(&mut self, isolate: std::sync::Arc<crate::isolate::Isolate>) {
+        self.isolate = Some(isolate);
     }
     unsafe fn local_scopes(&mut self) -> *mut LocalScopeInner {
         self.scopes
     }
 
     fn last_local_scope(&mut self) -> Option<UndropLocalScope> {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         if self.scopes.is_null() {
             None
         } else {
@@ -742,6 +744,7 @@ impl super::GarbageCollector for LazySweepGC {
     }
 
     fn new_local_scope(&mut self) -> LocalScope {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         let mut scope = Box::into_raw(Box::new(LocalScopeInner {
             prev: core::ptr::null_mut(),
             next: self.scopes,
@@ -768,18 +771,21 @@ impl super::GarbageCollector for LazySweepGC {
         self.ndefers.fetch_sub(1, A::AcqRel);
     }
     fn full(&mut self) {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         unsafe {
             self.collect(true, false);
         }
     }
 
     fn minor(&mut self) {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         unsafe {
             self.collect(false, false);
         }
     }
 
     fn allocate(&mut self, size: usize) -> Address {
+        assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
         let res = unsafe { self.allocate_raw(size) };
         res
     }
@@ -792,6 +798,7 @@ impl super::GarbageCollector for LazySweepGC {
 
     fn write_barrier(&mut self, object: *mut GcBox<()>, field: *mut GcBox<()>) {
         unsafe {
+            assert_if_debug_or_feature!("assertions";self.isolate.as_ref().unwrap().current_thread() == crate::isolate::current_thread_id());
             let obj = &mut *object;
             if obj.header.cell_state != GC_BLACK {
                 if (&*field).header.cell_state != GC_WHITE {

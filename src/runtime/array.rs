@@ -2,6 +2,7 @@ use super::cell_type::*;
 use crate::gc::object::*;
 use crate::isolate::Isolate;
 use crate::values::*;
+use std::sync::Arc;
 /// Immutable array value
 #[repr(C, align(8))]
 pub struct Array {
@@ -42,7 +43,7 @@ impl Array {
     ///
     /// NOTE: This function will create local handle in current local scope if it exists or
     /// in persistent local scope.
-    pub fn new<'a>(isolate: &mut Isolate, default_init: Value, len: u32) -> Local<Self> {
+    pub fn new<'a>(isolate: &Arc<Isolate>, default_init: Value, len: u32) -> Local<Self> {
         let mut val = isolate
             .heap()
             .gc
@@ -59,7 +60,7 @@ impl Array {
         val
     }
 
-    pub fn new_unrooted(isolate: &mut Isolate, default_init: Value, len: u32) -> Handle<Self> {
+    pub fn new_unrooted(isolate: &Arc<Isolate>, default_init: Value, len: u32) -> Handle<Self> {
         let mut val = isolate.heap().allocate(Self {
             ty: CellType::Array,
             length: len,

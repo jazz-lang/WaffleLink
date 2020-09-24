@@ -1,9 +1,8 @@
-use super::cell::*;
 use super::cell_type::*;
 use crate::gc::object::*;
 use crate::isolate::*;
 use crate::values::Value;
-
+use std::sync::Arc;
 #[repr(C)]
 pub struct Proto {
     pub cell_type: CellType,
@@ -74,10 +73,10 @@ pub struct NativeClosure {
     pub argc: i32,
 }
 
-pub type NativeFunc0 = fn(&mut Isolate) -> Result<Value, Value>;
-pub type NativeFunc1 = fn(&mut Isolate, Value) -> Result<Value, Value>;
-pub type NativeFunc2 = fn(&mut Isolate, Value, Value) -> Result<Value, Value>;
-pub type NativeFunc3 = fn(&mut Isolate, Value, Value, Value) -> Result<Value, Value>;
-pub type NativeFunc4 = fn(&mut Isolate, Value, Value, Value, Value) -> Result<Value, Value>;
-pub type NativeFunc5 = fn(&mut Isolate, Value, Value, Value, Value, Value) -> Result<Value, Value>;
-pub type NativeFuncVaArg = fn(&mut Isolate, &[Value]) -> Result<Value, Value>;
+pub type NativeFunc0 = fn(&Arc<Isolate>) -> Result<Value, Value>;
+pub type NativeFunc1 = fn(&Arc<Isolate>, Value) -> Result<Value, Value>;
+pub type NativeFunc2 = fn(&Arc<Isolate>, Value, Value) -> Result<Value, Value>;
+pub type NativeFunc3 = fn(&Arc<Isolate>, Value, Value, Value) -> Result<Value, Value>;
+pub type NativeFunc4 = fn(&Arc<Isolate>, Value, Value, Value, Value) -> Result<Value, Value>;
+pub type NativeFunc5 = fn(&Arc<Isolate>, Value, Value, Value, Value, Value) -> Result<Value, Value>;
+pub type NativeFuncVaArg = fn(&Arc<Isolate>, &[Value]) -> Result<Value, Value>;
