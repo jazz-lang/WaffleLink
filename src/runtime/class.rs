@@ -3,12 +3,38 @@ use crate::prelude::*;
 #[repr(C)]
 pub struct Class {
     pub cell_type: CellType,
-    pub name: Handle<String>,
-    pub super_class: Option<Handle<Self>>,
+    pub name: Value,
+    pub(crate) super_class: Option<Handle<Self>>,
     pub(crate) members: Handle<Map>,
 }
 
 impl Class {
+    pub fn super_class(&self) -> Option<&Handle<Self>> {
+        self.super_class.as_ref()
+    }
+    pub fn new(
+        isolate: &RCIsolate,
+        name: Value,
+        fields: &[&str],
+        super_class: Option<Handle<Self>>,
+    ) -> Local<Self> {
+        let map = Map::new(
+            isolate,
+            compute_hash_default,
+            iseq_default,
+            fields.len() as _,
+        );
+        let mut this = isolate.new_local(Self {
+            cell_type: CellType::Class,
+            name,
+            super_class,
+            members: map.to_heap(),
+        });
+        for field in fields {
+            this.add_member(isolate, field);
+        }
+        this
+    }
     /// Get offset of field in class.
     /// return: field offset
     pub fn member(&self, isolate: &RCIsolate, name: &str) -> Option<u32> {
@@ -19,7 +45,7 @@ impl Class {
     }
     /// Add field to class.
     /// return: field offset
-    pub fn add_member(&mut self, isolate: &RCIsolate, name: &str) -> u32 {
+    fn add_member(&mut self, isolate: &RCIsolate, name: &str) -> u32 {
         let interned = Value::new_sym(isolate.intern_str(name));
         if let Some(val) = self.members.lookup(isolate, interned) {
             return val.as_int32() as _;
@@ -120,12 +146,12 @@ impl Handle<Instance> {
 }
 
 impl GcObject for Instance {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         self.members()
             .iter()
-            .for_each(|val| val.visit_references(trace));
-        self.class.visit_references(trace);
-        self.super_.visit_references(trace);
+            .for_each(|val| val.visit_references(tracer));
+        self.class.visit_references(tracer);
+        self.super_.visit_references(tracer);
     }
 
     fn size(&self) -> usize {
@@ -140,6 +166,9 @@ pub struct Slot {
 }
 
 impl Slot {
+    pub fn found(&self) -> bool {
+        self.ix != u32::MAX
+    }
     pub fn not_found() -> Self {
         Self {
             value: None,
@@ -150,9 +179,9 @@ impl Slot {
 }
 
 impl GcObject for Class {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
-        self.name.visit_references(trace);
-        self.super_class.visit_references(trace);
-        self.members.visit_references(trace);
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
+        self.name.visit_references(tracer);
+        self.super_class.visit_references(tracer);
+        self.members.visit_references(tracer);
     }
 }

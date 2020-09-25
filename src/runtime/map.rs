@@ -1,4 +1,5 @@
 use super::cell_type::CellType;
+use crate::prelude::*;
 use crate::{gc::object::*, isolate::Isolate, values::Value};
 use std::sync::Arc;
 pub type ComputeHash = fn(isolate: &Arc<Isolate>, seed: u64, value: Value) -> u64;
@@ -207,7 +208,21 @@ impl Drop for Map {
 }
 
 impl GcObject for Map {}
-
+pub fn iseq_default(isolate: &Arc<Isolate>, lhs: Value, rhs: Value) -> bool {
+    if lhs.is_number() && rhs.is_number() {
+        lhs.to_number() == rhs.to_number()
+    } else if lhs.is_undefined_or_null() || rhs.is_undefined_or_null() {
+        false
+    } else {
+        if lhs.is_cell() && rhs.is_cell() {
+            if lhs.as_cell().ty() == CellType::String && rhs.as_cell().ty() == CellType::String {
+                return lhs.as_cell().cast::<WString>().string
+                    == rhs.as_cell().cast::<WString>().string;
+            }
+        }
+        lhs == rhs
+    }
+}
 pub fn compute_hash_default(isolate: &Arc<Isolate>, seed: u64, key: Value) -> u64 {
     let mut hash = seed;
     if key.is_int32() {

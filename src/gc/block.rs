@@ -260,6 +260,16 @@ impl BlockHeader {
         let atom_n = self.candidate_atom_number(p);
         atom_n as _
     }
+    pub fn is_atom(&self, p: Address) -> bool {
+        let an = self.candidate_atom_number(p);
+        if an % self.atoms_per_cell() != 0 {
+            return false;
+        }
+        if an >= self.end_atom() {
+            return false;
+        }
+        true
+    }
     /// Atom number
     pub fn candidate_atom_number(&self, p: Address) -> usize {
         return (p.to_usize() - self.begin().to_usize()) / ATOM_SIZE;
@@ -267,5 +277,13 @@ impl BlockHeader {
     /// Atoms pointer
     pub fn atoms(&self) -> *mut Atom {
         self.begin().to_mut_ptr()
+    }
+    pub fn cell_align(&self, p: *const ()) -> *const () {
+        let base = self.atoms() as usize;
+        let mut bits = p as usize;
+        bits -= base;
+        bits -= bits % self.cell_size() as usize;
+        bits += base;
+        bits as *const ()
     }
 }

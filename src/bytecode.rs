@@ -1,3 +1,5 @@
+use crate::prelude::*;
+
 pub enum Op {
     Add(u8, u8, u8, u32),
     Sub(u8, u8, u8, u32),
@@ -45,6 +47,33 @@ pub enum Op {
     Catch(u8, u8, u8),
     Raise(u8, u8, u8),
     Class(u32),
+}
+
+#[repr(C)]
+pub union Instruction {
+    pub label: u32,
+    pub u32: [u32; 2],
+    pub i32: [i32; 2],
+    pub i16: [i16; 4],
+    pub u16: [u16; 4],
+    pub ssw: ([i16; 2], u32),
+    pub jump: ([i16; 2], i32),
+    pub u64: u64,
+    pub class: Handle<Class>,
+    pub slot: *mut PolyICSlot,
+}
+
+pub struct PolyICSlot {
+    pub class: Handle<Class>,
+    pub ix: u32,
+}
+
+impl GcObject for Instruction {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
+        unsafe {
+            self.class.visit_references(tracer);
+        }
+    }
 }
 
 #[rustfmt::skip]

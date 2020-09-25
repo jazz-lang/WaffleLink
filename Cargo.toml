@@ -30,3 +30,4 @@ assertions = []
 lto = "fat"
 codegen-units = 1
 opt-level = 'z'
+debug = true

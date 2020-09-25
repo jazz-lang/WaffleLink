@@ -279,12 +279,12 @@ fn proportional_heap_size(heap_size: usize) -> usize {
 impl LazySweepGC {
     /// Create new GC instance
     pub fn new() -> Box<Self> {
-        let mut this = Box::new(Self {
+        let mut this = Self {
             ndefers: AtomicU32::new(0),
             lock: Lock::INIT,
             allocator_for_size_step: [0 as *mut LocalAllocator; NUM_SIZE_CLASSES],
             directories: vec![],
-            precise_allocation_set: HashSet::with_capacity(0),
+            precise_allocation_set: HashSet::new(),
             precise_allocations: vec![],
             local_allocators: LinkedList::new(AllocLink::new()),
             scopes: core::ptr::null_mut(),
@@ -292,9 +292,8 @@ impl LazySweepGC {
             persistent: Box::into_raw(Box::new(LocalScopeInner {
                 next: 0 as *mut _,
                 prev: 0 as *mut _,
-                locals: crate::utils::linked_list::LinkedList::with_capacity(2),
+                locals: crate::utils::linked_list::LinkedList::new(),
                 dead: false,
-                gc: unsafe { std::mem::transmute([0usize; 2]) },
             })),
             isolate: None,
             blocks: BlockSet::new(),
@@ -313,9 +312,10 @@ impl LazySweepGC {
             total_bytes_visited: 0,
             total_bytes_visited_this_cycle: 0,
             mark_stack: vec![],
-        });
-        let raw = &mut *this as &mut dyn GarbageCollector;
-        unsafe { &mut *this.persistent }.gc = raw as *mut dyn GarbageCollector;
+        };
+        let mut this = Box::new(this);
+        //let raw = &mut *this as &mut dyn GarbageCollector;
+        //unsafe { &mut *this.persistent }.gc = raw as *mut dyn GarbageCollector;
         this
     }
 
@@ -631,6 +631,65 @@ impl LazySweepGC {
             }
         }
     }
+    fn find_gc_object_pointers_for_marking(
+        &mut self,
+        filter: tiny_bloom_filter::TinyBloomFilter,
+        ptr: *mut u8,
+        vec: &mut Vec<*mut GcBox<()>>,
+    ) {
+        unsafe {
+            let set = &self.blocks.set;
+
+            if !self.precise_allocations.is_empty() {
+                if (&**self.precise_allocations.first().unwrap()).above_lower_bound(ptr.cast())
+                    && (&**self.precise_allocations.last().unwrap()).below_upper_bound(ptr.cast())
+                {
+                    let result = self
+                        .precise_allocations
+                        .binary_search_by(|x| PreciseAllocation::from_cell(ptr.cast()).cmp(x));
+                    if let Ok(x) = result {
+                        let allocation = &*self.precise_allocations[x];
+                        if allocation.contains(ptr.cast()) {
+                            vec.push(ptr.cast());
+                        }
+                    }
+                }
+            }
+
+            let mut candidate = Block::from_cell(Address::from_ptr(ptr));
+            /*if ptr <= candidate.cast::<u8>().offset(8) {
+                let previous_pointer = (ptr as isize - 8 - 1) as *mut u8;
+                let prev_candidate = Block::from_cell(Address::from_ptr(previous_pointer));
+                if !filter.rule_out(prev_candidate as _) && set.contains(&prev_candidate) {
+                    prev_candidate
+                }
+            }*/
+            if filter.rule_out(candidate as _) {
+                assert!(candidate.is_null() || !set.contains(&candidate));
+                return;
+            }
+            if !set.contains(&candidate) {
+                return;
+            }
+
+            let mut try_pointer = |ptr: *mut u8| {
+                let cell = ptr.cast::<GcBox<()>>();
+                if (&*cell).is_zapped() || !(&*candidate).header().is_atom(Address::from_ptr(cell))
+                {
+                    return false;
+                }
+                vec.push(ptr.cast());
+                true
+            };
+            if Block::is_atom_aligned(Address::from_ptr(ptr)) {
+                if try_pointer(ptr) {
+                    return;
+                }
+            }
+            let aligned = (&*candidate).header().cell_align(ptr.cast());
+            try_pointer(aligned as *mut u8);
+        }
+    }
 }
 
 use std::collections::VecDeque;
@@ -678,6 +737,27 @@ impl<'a> MarkingTask<'a> {
                 });
                 head = prev;
             }
+            if let Some(isolate) = self.gc.isolate.clone() {
+                let mut start = isolate.stack_begin.load(A::Relaxed) as *const *mut u8;
+                let mut end = conservative_roots::approximate_sp().cast::<*mut u8>();
+                if start > end {
+                    std::mem::swap(&mut start, &mut end);
+                }
+
+                let filter = self.gc.blocks.filter;
+                let mut roots = vec![];
+                while start < end {
+                    self.gc
+                        .find_gc_object_pointers_for_marking(filter, start.read(), &mut roots);
+                    start = start.offset(1);
+                }
+                for r in roots {
+                    if GC_VERBOSE_LOG {
+                        eprintln!("--cons root {:p}", r);
+                    }
+                    self.mark(r);
+                }
+            }
         }
     }
 
@@ -701,10 +781,43 @@ impl<'a> MarkingTask<'a> {
 
     fn visit_value(&mut self, val: *mut GcBox<()>) {
         let obj = unsafe { &mut *val };
+        unsafe {
+            let filter = self.gc.blocks.filter;
+            let mut roots = vec![];
+            //let mut proots = vec![];
+            let this = self as *mut Self;
+            let this = &mut *this;
+            obj.trait_object().visit_references(&mut Tracer {
+                cons_roots: &mut |from, to| {
+                    let mut start = from.cast::<usize>();
+                    let mut end = to.cast::<usize>();
+                    if start > end {
+                        std::mem::swap(&mut start, &mut end);
+                    }
 
-        obj.trait_object().visit_references(&mut |item| {
-            self.mark(item as *mut _);
-        });
+                    while start < end {
+                        let ptr = *start;
+
+                        self.gc.find_gc_object_pointers_for_marking(
+                            filter,
+                            ptr as *mut _,
+                            &mut roots,
+                        );
+                        start = start.offset(1);
+                    }
+                },
+                precise: &mut |cell| {
+                    this.mark(*cell);
+                },
+            });
+
+            for r in roots {
+                self.mark(r);
+            }
+            /*for r in proots {
+                self.mark(r);
+            }*/
+        }
     }
     fn mark(&mut self, object: *mut GcBox<()>) {
         let obj = unsafe { &mut *object };
@@ -748,7 +861,7 @@ impl super::GarbageCollector for LazySweepGC {
         let mut scope = Box::into_raw(Box::new(LocalScopeInner {
             prev: core::ptr::null_mut(),
             next: self.scopes,
-            gc: self as *mut Self,
+
             locals: crate::utils::linked_list::LinkedList::with_capacity(1),
             dead: false,
         }));

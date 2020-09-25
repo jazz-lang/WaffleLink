@@ -16,10 +16,10 @@ impl GcObject for Array {
         Array::compute_size(self.length as _)
     }
 
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         self.for_each(|value| {
             if value.is_cell() && !value.is_empty() {
-                trace(value.as_cell().gc_ptr());
+                tracer.trace(value.as_cell_ref().gc_ptr());
             }
         });
     }
@@ -27,12 +27,20 @@ impl GcObject for Array {
 
 impl Array {
     /// Create new array in local scope
-    pub fn new_local<'a>(scope: &mut LocalScope, default_init: Value, len: u32) -> Local<Self> {
-        let mut val = scope.allocate(Self {
-            ty: CellType::Array,
-            length: len,
-            data: 0,
-        });
+    pub fn new_local<'a>(
+        scope: &mut LocalScope,
+        isolate: &Isolate,
+        default_init: Value,
+        len: u32,
+    ) -> Local<Self> {
+        let mut val = scope.allocate(
+            &*isolate,
+            Self {
+                ty: CellType::Array,
+                length: len,
+                data: 0,
+            },
+        );
         val.for_each_mut(|val| {
             *val = default_init;
         });
@@ -49,11 +57,14 @@ impl Array {
             .gc
             .last_local_scope()
             .unwrap_or(isolate.heap().gc.persistent_scope())
-            .allocate(Self {
-                ty: CellType::Array,
-                length: len,
-                data: 0,
-            });
+            .allocate(
+                &*isolate,
+                Self {
+                    ty: CellType::Array,
+                    length: len,
+                    data: 0,
+                },
+            );
         val.for_each_mut(|val| {
             *val = default_init;
         });

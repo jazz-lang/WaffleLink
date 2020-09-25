@@ -254,8 +254,12 @@ impl Heap {
     pub fn allocate<T: GcObject>(&mut self, value: T) -> Handle<T> {
         unsafe { gc_alloc_handle(&mut *self.gc, value) }
     }
-    fn allocate_persistent<T: GcObject>(&mut self, value: T) -> Local<T> {
-        self.gc.persistent_scope().allocate(value)
+    fn allocate_persistent<T: GcObject>(
+        &mut self,
+        isolate: &crate::isolate::Isolate,
+        value: T,
+    ) -> Local<T> {
+        self.gc.persistent_scope().allocate(isolate, value)
     }
     fn new_persistent_local<T: GcObject>(&mut self, value: Handle<T>) -> Local<T> {
         self.gc.persistent_scope().new_local(value)

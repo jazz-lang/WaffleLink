@@ -9,4 +9,5 @@ pub struct CallFrame {
     pub(crate) this: Value,
     pub(crate) arguments: *const Value,
     pub(crate) argc: u32,
+    pub(crate) callee: Value,
 }

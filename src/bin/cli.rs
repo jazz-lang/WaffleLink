@@ -13,11 +13,17 @@ struct Foo {
 }
 
 impl GcObject for Foo {
-    fn visit_references(&self, _trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
-        self.next.visit_references(_trace);
+    fn visit_references(&self, tracer: &mut Tracer) {
+        self.next.visit_references(tracer);
     }
 }
 impl Drop for Foo {
     fn drop(&mut self) {}
 }
-fn main() {}
+fn main() {
+    let isolate = Isolate::new();
+
+    let val = isolate.new_local(42).to_heap();
+
+    isolate.heap().minor();
+}

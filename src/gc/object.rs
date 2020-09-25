@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 /// Object that can be handled by GC.
 pub trait GcObject {
@@ -8,7 +9,7 @@ pub trait GcObject {
         core::mem::size_of_val(self)
     }
     /// Visit all references to GC objects in this object.
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {}
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {}
     /// Finalization.
     fn finalize(&mut self) {
         //eprintln!("dead {:p}", self);
@@ -334,8 +335,8 @@ impl<T: GcObject> Handle<T> {
 }
 
 impl<T: GcObject> GcObject for Handle<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
-        trace(self.gc_ptr());
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
+        tracer.trace(self.gc_ptr());
     }
 }
 
@@ -375,9 +376,9 @@ simple!(
 );
 
 impl<T: GcObject> GcObject for Vec<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         for elem in self.iter() {
-            elem.visit_references(trace);
+            elem.visit_references(tracer);
         }
     }
 
@@ -387,9 +388,9 @@ impl<T: GcObject> GcObject for Vec<T> {
 }
 
 impl<T: GcObject> GcObject for Option<T> {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         if let Some(val) = self {
-            val.visit_references(trace);
+            val.visit_references(tracer);
         }
     }
 }
@@ -412,7 +413,7 @@ pub struct LocalScopeInner {
     pub prev: *mut Self,
     pub next: *mut Self,
     /// pointer to gc
-    pub gc: *mut dyn super::GarbageCollector,
+    //pub gc: *mut dyn super::GarbageCollector,
     /// all locals
     pub locals: LinkedList<*mut GcBox<()>>,
     /// is this scope dead?
@@ -438,13 +439,11 @@ impl LocalScope {
     fn inner(&self) -> &mut LocalScopeInner {
         unsafe { &mut *self.inner }
     }
-    fn gc(&self) -> &mut dyn super::GarbageCollector {
-        unsafe { &mut *self.inner().gc }
-    }
+
     /// Allocate `value` in GC heap and return local handle
-    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<T> {
-        let gc = self.gc();
-        let handle = unsafe { super::gc_alloc_handle(gc, value) };
+    pub fn allocate<'a, T: GcObject + 'a>(&mut self, isolate: &Isolate, value: T) -> Local<T> {
+        let gc = isolate.heap();
+        let handle = unsafe { super::gc_alloc_handle(&mut *gc.gc, value) };
 
         self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
@@ -455,11 +454,13 @@ impl LocalScope {
 
     /// Try to escape value from current scope. If there are previous scope
     /// then this will return local created in previous scope otherwise local is placed in persistent scope
-    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Local<T> {
+    pub fn escape<T: GcObject>(&mut self, isolate: &Isolate, value: Local<T>) -> Local<T> {
         let inner = self.inner();
         if inner.prev.is_null() {
             return unsafe {
-                (&mut *inner.gc)
+                isolate
+                    .heap()
+                    .gc
                     .persistent_scope()
                     .new_local(value.to_heap())
             };
@@ -507,13 +508,11 @@ impl UndropLocalScope {
     fn inner(&self) -> &mut LocalScopeInner {
         unsafe { &mut *self.inner }
     }
-    fn gc(&self) -> &mut dyn super::GarbageCollector {
-        unsafe { &mut *self.inner().gc }
-    }
+
     /// Allocate `value` in GC heap and return local handle
-    pub fn allocate<'a, T: GcObject + 'a>(&mut self, value: T) -> Local<T> {
-        let gc = self.gc();
-        let handle = unsafe { super::gc_alloc_handle(gc, value) };
+    pub fn allocate<'a, T: GcObject + 'a>(&mut self, isolate: &Isolate, value: T) -> Local<T> {
+        let gc = isolate.heap();
+        let handle = unsafe { super::gc_alloc_handle(&mut *gc.gc, value) };
 
         self.inner().locals.push_back(handle.ptr.as_ptr().cast());
         Local {
@@ -531,11 +530,11 @@ impl UndropLocalScope {
     }
     /// Try to escape value from current scope. If there are previous scope
     /// then this will return local created in previous scope otherwise local is placed in persistent scope
-    pub fn escape<T: GcObject>(&mut self, value: Local<T>) -> Local<T> {
+    pub fn escape<T: GcObject>(&mut self, isolate: &Isolate, value: Local<T>) -> Local<T> {
         let inner = self.inner();
         unsafe {
             if inner.prev.is_null() {
-                return (&mut *inner.gc)
+                return (&mut *isolate.heap().gc)
                     .persistent_scope()
                     .new_local(value.to_heap());
             }
@@ -603,8 +602,8 @@ pub struct Local<T: GcObject> {
 
 impl<T: GcObject> Local<T> {
     /// Allocate `value` in GC heap and return local handle
-    pub fn new(scope: &mut LocalScope, value: T) -> Self {
-        scope.allocate(value)
+    pub fn new(scope: &mut LocalScope, isolate: &Isolate, value: T) -> Self {
+        scope.allocate(isolate, value)
     }
     /// Convert to heap handle.
     pub fn to_heap(&self) -> Handle<T> {
@@ -655,3 +654,18 @@ impl<T: GcObject> std::ops::DerefMut for Local<T> {
 }
 
 impl GcObject for String {}
+
+pub struct Tracer<'a> {
+    pub(crate) cons_roots: &'a mut dyn FnMut(*const u8, *const u8),
+    pub(crate) precise: &'a mut dyn FnMut(*const *mut GcBox<()>),
+}
+
+impl<'a> Tracer<'a> {
+    pub fn add_conservative_roots(&mut self, from: *const u8, to: *const u8) {
+        (self.cons_roots)(from, to);
+    }
+
+    pub fn trace(&mut self, object: *const *mut GcBox<()>) {
+        (self.precise)(object);
+    }
+}

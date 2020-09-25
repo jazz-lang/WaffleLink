@@ -666,9 +666,9 @@ pub enum Error {
 use crate::gc::object::*;
 
 impl GcObject for Value {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         if self.is_cell() && !self.is_empty() {
-            trace(self.as_cell_ref().gc_ptr());
+            tracer.trace(self.as_cell_ref().gc_ptr());
         }
     }
 }

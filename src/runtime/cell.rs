@@ -42,12 +42,12 @@ impl Local<Cell> {
 }
 
 impl GcObject for Cell {
-    fn visit_references(&self, trace: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
         match self.ty() {
-            CellType::Proto => self.cast::<Proto>().visit_references(trace),
-            CellType::Array => self.cast::<Array>().visit_references(trace),
+            CellType::Proto => self.cast::<Proto>().visit_references(tracer),
+            CellType::Array => self.cast::<Array>().visit_references(tracer),
             CellType::Function | CellType::Closure => {
-                self.cast::<Closure>().visit_references(trace)
+                self.cast::<Closure>().visit_references(tracer)
             }
             _ => todo!(),
         }
@@ -63,18 +63,10 @@ pub struct FFIObject {
     pub finalize: Option<extern "C" fn(*mut u8)>,
 }
 
-pub struct Tracer<'a> {
-    closure: &'a mut dyn FnMut(*const *mut GcBox<()>),
-}
-
-pub extern "C" fn wafflelink_tracer_trace(tracer: &mut Tracer<'_>, obj: &Handle<()>) {
-    (tracer.closure)(obj.gc_ptr());
-}
-
 impl GcObject for FFIObject {
-    fn visit_references(&self, v: &mut dyn FnMut(*const *mut GcBox<()>)) {
+    fn visit_references(&self, tracer: &mut crate::gc::object::Tracer<'_>) {
         if let Some(trace) = self.trace {
-            trace(self.data, &mut Tracer { closure: v })
+            trace(self.data, tracer)
         }
     }
 
