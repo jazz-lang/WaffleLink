@@ -110,6 +110,32 @@ impl Map {
         }
         false
     }
+    pub fn insert_by_hash(&mut self, key: Value, value: Value, hash: u64) -> bool {
+        let mut position = hash % self.size as u64;
+        unsafe {
+            let mut node = *(self.nodes.offset(position as _));
+            while !node.is_null() {
+                if (&*node).hash == hash {
+                    (&mut *node).val = value;
+                    return false;
+                }
+                node = (&*node).next;
+            }
+
+            if self.count >= (self.size as f64 * 0.75) as u32 {
+                unreachable!();
+            }
+            node = Box::into_raw(Box::new(MapNode {
+                hash,
+                key,
+                val: value,
+                next: self.nodes.offset(position as _).read(),
+            }));
+            self.nodes.offset(position as _).write(node);
+            self.count += 1;
+            true
+        }
+    }
     pub fn insert(&mut self, isolate: &Arc<Isolate>, key: Value, value: Value) -> bool {
         let hash = (self.compute)(isolate, HASH_SEED_VALUE, key);
         let mut position = hash % self.size as u64;
@@ -207,6 +233,34 @@ impl Drop for Map {
     }
 }
 
+impl Clone for Map {
+    fn clone(&self) -> Self {
+        unsafe {
+            let layout = calc_layout_for_nodes(self.size);
+            let mut nodes = alloc::alloc_zeroed(layout);
+            let mut this = Self {
+                cell_type: CellType::Map,
+                nodes: nodes.cast(),
+                compute: self.compute,
+                iseq: self.iseq,
+                size: self.size,
+                count: self.count,
+            };
+            for n in 0..self.size {
+                let mut node = self.nodes.offset(n as _).read();
+                self.nodes.offset(n as _).write(0 as *mut _);
+                while !node.is_null() {
+                    let old_node = node;
+                    node = (&*node).next;
+                    let n = &*old_node;
+                    this.insert_by_hash(n.key, n.val, n.hash);
+                }
+            }
+            this
+        }
+    }
+}
+
 impl GcObject for Map {}
 pub fn iseq_default(isolate: &Arc<Isolate>, lhs: Value, rhs: Value) -> bool {
     if lhs.is_number() && rhs.is_number() {
@@ -264,6 +318,9 @@ pub fn compute_hash_default(isolate: &Arc<Isolate>, seed: u64, key: Value) -> u6
     hash
 }
 
+impl CellTrait for Map {
+    const TYPE: CellType = CellType::Map;
+}
 pub mod murmur3 {
     //! The murmur hash is a relatively fast non-cryptographic hash function for platforms with efficient multiplication.
     //!
@@ -347,5 +404,33 @@ pub mod murmur3 {
             2832214938,
             murmur3_32("I will not buy this record, it is scratched.".as_bytes())
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_clone() {
+        let isolate = Isolate::new();
+        let mut map = Map::new(&isolate, compute_hash_default, iseq_default, 8);
+        let m1 = (*map).clone();
+        assert_ne!(map.nodes, m1.nodes);
+        let m2 = m1.clone();
+        assert_ne!(m2.nodes, m1.nodes);
+    }
+
+    #[test]
+    fn test_insert() {
+        let isolate = Isolate::new();
+        let mut map = Map::new(&isolate, compute_hash_default, iseq_default, 8);
+        map.insert(&isolate, Value::new_int(1), Value::new_int(2));
+        let k = map.lookup(&isolate, Value::new_int(1)).unwrap();
+        map.insert(&isolate, k, Value::new_int(3));
+        let res = map.lookup(&isolate, Value::new_int(2));
+        assert!(res.is_some());
+        let res = res.unwrap();
+        assert!(res.is_int32());
+        assert!(res.as_int32() == 3);
     }
 }

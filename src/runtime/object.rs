@@ -1,17 +1,15 @@
-use super::cell_type::*;
-use crate::bytecode::*;
-use crate::gc::object::*;
-use crate::isolate::*;
-use crate::values::Value;
+use crate::prelude::*;
 use std::sync::Arc;
 #[repr(C)]
 pub struct Proto {
     pub cell_type: CellType,
     pub nstack: u32,
-    pub argc: u32,
-    pub constants: Vec<Value>,
-    pub code: Vec<Op>,
-    pub upvaldesc: Vec<UpvalDesc>,
+    pub argc: i32,
+    pub name: Value, //pub upvaldesc: Vec<UpvalDesc>,
+}
+
+impl CellTrait for Proto {
+    const TYPE: CellType = CellType::Proto;
 }
 
 pub struct UpvalDesc {
@@ -21,7 +19,7 @@ pub struct UpvalDesc {
 impl GcObject for Proto {
     fn visit_references(&self, tracer: &mut Tracer<'_>) {
         //self.ptab.visit_references(trace);
-        self.constants.visit_references(tracer);
+        self.name.visit_references(tracer);
     }
 }
 
@@ -50,8 +48,12 @@ impl GcObject for Upvalue {
 #[repr(C)]
 pub struct Closure {
     pub cell_type: CellType,
-    pub upvals: Vec<Upvalue>,
+    pub upvals: Vec<Value>,
     pub proto: Handle<Proto>,
+}
+
+impl CellTrait for Closure {
+    const TYPE: CellType = CellType::Closure;
 }
 
 impl GcObject for Closure {
@@ -65,7 +67,18 @@ impl GcObject for Closure {
 pub struct NativeClosure {
     pub cell_type: CellType,
     pub addr: NativeFunc,
+    pub name: Value,
     pub argc: i32,
 }
 
+impl CellTrait for NativeClosure {
+    const TYPE: CellType = CellType::NativeClosure;
+}
+
 pub type NativeFunc = fn(&Arc<Isolate>) -> Result<Value, Value>;
+
+impl GcObject for NativeClosure {
+    fn visit_references(&self, tracer: &mut Tracer<'_>) {
+        self.name.visit_references(tracer);
+    }
+}

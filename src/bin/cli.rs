@@ -1,6 +1,9 @@
+#[macro_use]
+extern crate wafflelink;
 use object::*;
 use wafflelink::gc::*;
 use wafflelink::isolate::Isolate;
+use wafflelink::prelude::*;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -23,7 +26,11 @@ impl Drop for Foo {
 fn main() {
     let isolate = Isolate::new();
 
-    let val = isolate.new_local(42).to_heap();
-
-    isolate.heap().minor();
+    let mut map = Map::new(
+        &isolate,
+        wafflelink::runtime::map::compute_hash_default,
+        wafflelink::runtime::map::iseq_default,
+        8,
+    );
+    let m1 = (*map).clone();
 }

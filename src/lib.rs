@@ -92,7 +92,7 @@ pub mod prelude {
     pub use super::{
         gc::object::*,
         isolate::*,
-        runtime::{cell_type::*, class::*, map::*, object::*, string::*},
+        runtime::{cell::*, cell_type::*, class::*, map::*, object::*, string::*},
         values::*,
     };
     pub use std::sync::Arc;

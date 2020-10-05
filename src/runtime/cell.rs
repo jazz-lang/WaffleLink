@@ -19,10 +19,12 @@ impl Cell {
         self.ty
     }
 
-    pub fn cast<T>(&self) -> &T {
+    pub fn cast<T: CellTrait>(&self) -> &T {
+        assert_eq!(self.ty(), T::TYPE);
         unsafe { std::mem::transmute(self) }
     }
-    pub fn cast_mut<T>(&mut self) -> &mut T {
+    pub fn cast_mut<T: CellTrait>(&mut self) -> &mut T {
+        assert_eq!(self.ty(), T::TYPE);
         unsafe { std::mem::transmute(self) }
     }
 }
@@ -75,4 +77,12 @@ impl GcObject for FFIObject {
             finalize(self.data);
         }
     }
+}
+
+pub trait CellTrait {
+    const TYPE: CellType;
+}
+
+impl CellTrait for FFIObject {
+    const TYPE: CellType = CellType::ComObj;
 }

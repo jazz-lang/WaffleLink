@@ -126,3 +126,7 @@ impl Array {
         unsafe { std::slice::from_raw_parts_mut(self.as_ptr(), self.length as _) }
     }
 }
+
+impl super::cell::CellTrait for Array {
+    const TYPE: CellType = CellType::Array;
+}

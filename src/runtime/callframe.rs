@@ -5,7 +5,7 @@ use crate::values::*;
 /// important things
 pub struct CallFrame {
     pub(crate) try_catch: Vec<u32>,
-    pub(crate) registers: Vec<Value>,
+    pub stack: Vec<Value>,
     pub(crate) this: Value,
     pub(crate) arguments: *const Value,
     pub(crate) argc: u32,

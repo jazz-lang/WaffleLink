@@ -38,13 +38,7 @@ pub const EMPTY_TAG: i32 = 0xfffffffau32 as i32;
 pub const SYM_TAG: i32 = 0xfffffff9u32 as i32;
 #[cfg(target_pointer_width = "32")]
 pub const LOWEST_TAG: i32 = SYM_TAG;
-impl From<Handle<Cell>> for Value {
-    fn from(x: Handle<Cell>) -> Self {
-        Self {
-            u: EncodedValueDescriptor { cell: x },
-        }
-    }
-}
+
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum JSTag {
     Null,
@@ -669,6 +663,16 @@ impl GcObject for Value {
     fn visit_references(&self, tracer: &mut Tracer<'_>) {
         if self.is_cell() && !self.is_empty() {
             tracer.trace(self.as_cell_ref().gc_ptr());
+        }
+    }
+}
+
+impl<T: GcObject> From<Handle<T>> for Value {
+    fn from(x: Handle<T>) -> Self {
+        Self {
+            u: EncodedValueDescriptor {
+                cell: unsafe { std::mem::transmute(x) },
+            },
         }
     }
 }

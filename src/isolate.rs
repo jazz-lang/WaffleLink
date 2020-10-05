@@ -1,3 +1,4 @@
+use super::values::*;
 use crate::gc::{self, *};
 use crate::runtime::callframe::*;
 use gc::object::*;
@@ -28,7 +29,13 @@ pub struct Isolate {
 
 pub struct LocalData {
     heap: Heap,
-    callstack: Vec<CallFrame>,
+    callstack: Vec<Box<CallFrame>>,
+}
+
+impl LocalData {
+    pub fn frame(&mut self) -> &mut CallFrame {
+        self.callstack.last_mut().unwrap()
+    }
 }
 
 pub fn current_thread_id() -> u64 {
@@ -90,3 +97,52 @@ unsafe impl Send for Isolate {}
 unsafe impl Sync for Isolate {}
 
 pub type RCIsolate = Arc<Isolate>;
+
+pub trait FromLiteral<T> {
+    fn from_lit(isolate: &RCIsolate, val: T) -> Value;
+}
+
+impl FromLiteral<i32> for Value {
+    fn from_lit(isolate: &RCIsolate, val: i32) -> Value {
+        Value::new_int(val)
+    }
+}
+impl FromLiteral<u32> for Value {
+    fn from_lit(isolate: &RCIsolate, val: u32) -> Value {
+        Value::new_int(val as _)
+    }
+}
+impl FromLiteral<f32> for Value {
+    fn from_lit(isolate: &RCIsolate, val: f32) -> Value {
+        Value::new_double(val as _)
+    }
+}
+impl FromLiteral<f64> for Value {
+    fn from_lit(isolate: &RCIsolate, val: f64) -> Value {
+        Value::new_double(val as _)
+    }
+}
+
+impl FromLiteral<String> for Value {
+    fn from_lit(isolate: &RCIsolate, val: String) -> Value {
+        Value::new_sym(isolate.intern_str(&val))
+    }
+}
+
+impl FromLiteral<&str> for Value {
+    fn from_lit(isolate: &RCIsolate, val: &str) -> Value {
+        Value::new_sym(isolate.intern_str(&val))
+    }
+}
+
+impl FromLiteral<Value> for Value {
+    fn from_lit(isolate: &RCIsolate, val: Value) -> Value {
+        val
+    }
+}
+use crate::runtime::cell::Cell;
+impl FromLiteral<Handle<Cell>> for Value {
+    fn from_lit(isolate: &RCIsolate, val: Handle<Cell>) -> Value {
+        Value::from(val)
+    }
+}
