@@ -1,25 +1,6 @@
-/// Block size must be at least as large as the system page size.
-pub const BLOCK_SIZE: usize = 16 * 1024;
-/// Single atom size
-pub const ATOM_SIZE: usize = 16;
-/// Numbers of atoms per block
-pub const ATOMS_PER_BLOCK: usize = BLOCK_SIZE / ATOM_SIZE;
-/// Lower tiers maximum
-pub const MAX_NUMBER_OF_LOWER_TIER_CELLS: usize = 8;
-/// End atom offset
-pub const END_ATOM: usize = (BLOCK_SIZE - core::mem::size_of::<BlockHeader>()) / ATOM_SIZE;
-/// Block payload size
-pub const PAYLOAD_SIZE: usize = END_ATOM * ATOM_SIZE;
-/// Block header size
-pub const FOOTER_SIZE: usize = BLOCK_SIZE - PAYLOAD_SIZE;
-/// Atom alignment mask
-pub const ATOM_ALIGNMENT_MASK: usize = ATOM_SIZE - 1;
-const_assert!(
-    PAYLOAD_SIZE == (BLOCK_SIZE - core::mem::size_of::<BlockHeader>()) & !(ATOM_SIZE - 1)
-);
-
-use crate::gc::*;
-
+use super::bitmap::*;
+use super::constants::*;
+use crate::heap::*;
 /// Single freelist cell.
 #[repr(C)]
 pub struct FreeCell {
@@ -64,9 +45,16 @@ impl FreeList {
     }
 }
 
+pub(crate) fn zap_addr(addr: Address) {
+    unsafe {
+        addr.to_mut_ptr::<u64>().write(0);
+    }
+}
+pub(crate) fn is_zapped(addr: Address) -> bool {
+    unsafe { addr.to_mut_ptr::<u64>().read() == 0 }
+}
 /// Atom representation
 pub type Atom = [u8; ATOM_SIZE];
-
 /// Heap allocated block header
 pub struct BlockHeader {
     cell_size: u32,
@@ -77,7 +65,7 @@ pub struct BlockHeader {
     /// If true we didn't sweep this block
     pub unswept: bool,
     /// Mark bitmap
-    pub bitmap: bitmap::BitMap,
+    pub bitmap: BitMap,
     /// Pointer to block.
     pub block: *mut Block,
 }
@@ -94,6 +82,15 @@ use std::alloc::{alloc, dealloc, Layout};
 pub struct Block {}
 
 impl Block {
+    pub fn destroy(&mut self) {
+        unsafe {
+            core::ptr::drop_in_place(self.header());
+            dealloc(
+                self as *mut Self as *mut u8,
+                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE),
+            );
+        }
+    }
     /// Get block header
     pub fn header(&self) -> &mut BlockHeader {
         unsafe { &mut *self.atoms().offset(END_ATOM as _).cast() }
@@ -134,7 +131,7 @@ impl Block {
             });
             let mut count = 0;
             (&*memory).header().for_each_cell(|cell| {
-                cell.to_mut_obj().zap(1);
+                zap_addr(cell);
                 count += 1;
                 (&mut *memory).header().freelist.free(cell);
             });
@@ -191,49 +188,38 @@ impl BlockHeader {
         addr
     }
     /// Destroy this block
-    pub fn destroy(&mut self) {
-        unsafe {
-            dealloc(
-                self.block.cast(),
-                Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE),
-            );
-        }
-    }
+
     /// Sweep this block.
-    pub fn sweep(&mut self) -> bool {
+    pub fn sweep(&mut self, full: bool) -> bool {
         let mut is_empty = true;
         let mut freelist = FreeList::new();
         let mut count = 0;
 
-        if GC_LOG {
-            eprintln!(
-                "--Sweep block {:p}, sie class: {}",
-                self.block, self.cell_size
-            );
-        }
         let mut zcount = 0;
-        let mut freed = 0;
         self.for_each_cell(|cell| {
             let object = cell.to_mut_obj();
             if !self.is_marked(cell) {
                 count += 1;
-                if !object.is_zapped() {
+                if !is_zapped(cell) {
                     zcount += 1;
-                    freed += object.trait_object().size() + core::mem::size_of::<Header>();
+                    //freed += object.as_dyn().real_size() + core::mem::size_of::<Object>();
                     unsafe {
-                        core::ptr::drop_in_place(object.trait_object());
+                        core::ptr::drop_in_place(object.as_dyn());
                     }
-                    object.zap(1);
+                    zap_addr(cell);
                 }
                 freelist.free(cell);
             } else {
                 is_empty = false;
+
                 debug_assert!(self.is_marked(cell));
+                if full {
+                    unsafe {
+                        object.set_tag(GC_WHITE);
+                    }
+                }
             }
         });
-        if GC_LOG {
-            eprintln!("--sweeped {} objects ({} bytes)", zcount, freed);
-        }
         self.unswept = false;
         self.can_allocate = count != 0;
 

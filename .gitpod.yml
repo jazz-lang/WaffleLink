@@ -1,0 +1,3 @@
+tasks:
+  - init: rustup default nightly
+    command: cargo watch -x run

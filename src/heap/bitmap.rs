@@ -1,10 +1,5 @@
-#![allow(missing_docs)]
-use super::block::*;
-
+use super::constants::*;
 use std::sync::atomic::Ordering;
-pub const BITMAP_SIZE: usize = ATOMS_PER_BLOCK;
-pub const BITS_IN_WORD: usize = core::mem::size_of::<usize>() * 8;
-pub const NUMBER_OF_WORDS: usize = (BITMAP_SIZE + BITS_IN_WORD - 1) / BITS_IN_WORD;
 
 pub struct BitMap {
     bits: [usize; NUMBER_OF_WORDS],
@@ -49,6 +44,10 @@ impl BitMap {
         let result = self.bits[index] & mask;
         self.bits[index] &= !mask;
         return result != 0;
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.bits.iter().all(|x| *x == 0)
     }
 
     #[inline]
