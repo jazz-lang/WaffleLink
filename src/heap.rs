@@ -3,7 +3,7 @@ use std::cmp::{Ord, Ordering as FOrdering, PartialOrd};
 use std::fmt;
 use std::sync::atomic::Ordering;
 #[cfg(target_family = "windows")]
-use winapi::um::{memoryapi::*, sysinfoapi::*, winnt::*};
+use winapi::um::sysinfoapi::*;
 
 pub mod bitmap;
 pub mod block;

@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicI8, Ordering};
-
 pub struct TLSState {
     pub safepoint: *mut usize,
     // Whether it is safe to execute GC at the same time.
@@ -67,3 +67,53 @@ pub(crate) fn set_gc_and_wait() {
     crate::safepoint::safepoint_wait_gc();
     ptls.atomic_gc_state().store(state, Ordering::Release);
 }
+
+pub struct Threads {
+    pub threads: Mutex<Vec<*mut TLSState>>,
+}
+
+impl Threads {
+    pub fn new() -> Self {
+        Self {
+            threads: Mutex::new(Vec::with_capacity(2)),
+        }
+    }
+}
+
+pub static THREADS: once_cell::sync::Lazy<Threads> = once_cell::sync::Lazy::new(|| Threads::new());
+
+pub fn spawn_rt_thread<F, R>(f: F) -> std::thread::JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    std::thread::spawn(|| {
+        let threads = &*THREADS;
+        let mut lock = threads.threads.lock();
+        prepare_thread();
+        let tls = get_tls_state() as *mut _;
+        lock.push(get_tls_state() as *mut _);
+        drop(lock);
+        let result = f();
+        let mut lock = threads.threads.lock();
+        lock.retain(|x| *x != tls);
+        result
+    })
+}
+
+static HAS_MAIN: AtomicI8 = AtomicI8::new(0);
+
+pub fn register_main_thread() {
+    assert!(
+        HAS_MAIN.load(Ordering::Relaxed) != 1,
+        "main thread already registered"
+    );
+    prepare_thread();
+    let mut lock = THREADS.threads.lock();
+    prepare_thread();
+    //let tls = get_tls_state() as *mut _;
+    lock.push(get_tls_state() as *mut _);
+}
+
+unsafe impl Send for Threads {}
+unsafe impl Sync for Threads {}
