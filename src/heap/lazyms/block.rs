@@ -57,6 +57,7 @@ pub(crate) fn is_zapped(addr: Address) -> bool {
 pub type Atom = [u8; ATOM_SIZE];
 /// Heap allocated block header
 pub struct BlockHeader {
+    pub next: *mut BlockHeader,
     cell_size: u32,
     /// Free list for allocation
     pub freelist: FreeList,
@@ -122,10 +123,11 @@ impl Block {
             let memory =
                 alloc(Layout::from_size_align_unchecked(BLOCK_SIZE, BLOCK_SIZE)).cast::<Self>();
             ((&*memory).header() as *mut BlockHeader).write(BlockHeader {
+                next: std::ptr::null_mut(),
                 unswept: false,
                 can_allocate: true,
                 cell_size: cell_size as _,
-                bitmap: bitmap::BitMap::new(),
+                bitmap: BitMap::new(),
                 freelist: FreeList::new(),
                 block: memory,
             });
@@ -187,7 +189,6 @@ impl BlockHeader {
         }
         addr
     }
-    /// Destroy this block
 
     /// Sweep this block.
     pub fn sweep(&mut self, full: bool) -> bool {
@@ -200,14 +201,6 @@ impl BlockHeader {
             let object = cell.to_mut_obj();
             if !self.is_marked(cell) {
                 count += 1;
-                if !is_zapped(cell) {
-                    zcount += 1;
-                    //freed += object.as_dyn().real_size() + core::mem::size_of::<Object>();
-                    unsafe {
-                        core::ptr::drop_in_place(object.as_dyn());
-                    }
-                    zap_addr(cell);
-                }
                 freelist.free(cell);
             } else {
                 is_empty = false;

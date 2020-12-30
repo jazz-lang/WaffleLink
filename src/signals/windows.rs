@@ -10,14 +10,17 @@ pub unsafe extern "cdecl" fn crt_sig_handler(sig: i32, _num: i32) {
 pub unsafe extern "system" fn exception_handler(
     exception_info: *mut EXCEPTION_POINTERS,
 ) -> libc::c_long {
+    let sp = false;
     let ei = &mut *exception_info;
     let er = &*ei.ExceptionRecord;
     if er.ExceptionFlags == 0 {
         match er.ExceptionCode {
             EXCEPTION_ACCESS_VIOLATION => {
                 if er.ExceptionInformation[1] == crate::safepoint::SAFEPOINT_PAGE as _ {
+                    let tls = get_tls_state();
+                    tls.stack_end = &sp as *const bool as *mut u8;
                     set_gc_and_wait();
-                    println!("caught");
+
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
             }

@@ -57,3 +57,38 @@ impl<T> VolatileCell<T> {
 
 unsafe impl<T> Sync for VolatileCell<T> {}
 unsafe impl<T> Send for VolatileCell<T> {}
+
+pub mod segmented_vec;
+
+use instant::Instant;
+use std::time::Duration;
+
+// Option::unchecked_unwrap
+pub trait UncheckedOptionExt<T> {
+    unsafe fn unchecked_unwrap(self) -> T;
+}
+
+impl<T> UncheckedOptionExt<T> for Option<T> {
+    #[inline]
+    unsafe fn unchecked_unwrap(self) -> T {
+        match self {
+            Some(x) => x,
+            None => unreachable(),
+        }
+    }
+}
+
+// hint::unreachable_unchecked() in release mode
+#[inline]
+pub fn unreachable() -> ! {
+    if cfg!(debug_assertions) {
+        unreachable!();
+    } else {
+        unsafe { core::hint::unreachable_unchecked() }
+    }
+}
+
+#[inline]
+pub fn to_deadline(timeout: Duration) -> Option<Instant> {
+    Instant::now().checked_add(timeout)
+}

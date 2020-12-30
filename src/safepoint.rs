@@ -1,12 +1,12 @@
 use crate::heap::*;
-use crate::mutex::Mutex;
+use crate::mutex::*;
 use crate::threading::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_family = "windows")]
 use winapi::um::{memoryapi::*, winnt::*};
 pub static mut SAFEPOINT_PAGE: *mut u8 = 0 as *mut _;
 pub static mut SAFEPOINT_ENABLE_CNT: i8 = 0;
-pub static SAFEPOINT_LOCK: Mutex = Mutex::new();
+pub static SAFEPOINT_LOCK: ReentrantMutex = ReentrantMutex::new();
 pub static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 unsafe fn enable_safepoint() {

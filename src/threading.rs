@@ -1,10 +1,12 @@
 use parking_lot::Mutex;
-use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicI8, Ordering};
+use std::{cell::UnsafeCell, ptr::null_mut};
 pub struct TLSState {
     pub safepoint: *mut usize,
     // Whether it is safe to execute GC at the same time.
     pub gc_state: i8,
+    pub stack_start: *mut u8,
+    pub stack_end: *mut u8,
     //pub alloc: *mut ThreadLocalAllocator,
 }
 // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -42,17 +44,23 @@ impl TLSState {
     }
 }
 
+static OK_LOAD: usize = 0;
+
 #[thread_local]
-static TLS: UnsafeCell<TLSState> = unsafe {
+static TLS: UnsafeCell<TLSState> = {
     UnsafeCell::new(TLSState {
-        safepoint: crate::safepoint::SAFEPOINT_PAGE.cast(),
+        // if some thread puts yieldpoint but is not registered in GC we do not want to access SAFEPOINT_PAGE here.
+        safepoint: &OK_LOAD as *const usize as _,
         gc_state: 0,
-        //alloc: 0 as *mut _,
+        stack_end: null_mut(),
+        stack_start: null_mut(), //alloc: 0 as *mut _,
     })
 };
 
-pub fn prepare_thread() {
+#[inline(never)]
+pub fn prepare_thread(stack: *const bool) {
     get_tls_state().safepoint = unsafe { crate::safepoint::SAFEPOINT_PAGE.cast() };
+    get_tls_state().stack_start = stack as *mut u8;
 }
 
 pub fn get_tls_state() -> &'static mut TLSState {
@@ -88,9 +96,10 @@ where
     R: Send + 'static,
 {
     std::thread::spawn(|| {
+        let begin = false;
         let threads = &*THREADS;
         let mut lock = threads.threads.lock();
-        prepare_thread();
+        prepare_thread(&begin);
         let tls = get_tls_state() as *mut _;
         lock.push(get_tls_state() as *mut _);
         drop(lock);
@@ -103,14 +112,14 @@ where
 
 static HAS_MAIN: AtomicI8 = AtomicI8::new(0);
 
-pub fn register_main_thread() {
+pub fn register_main_thread(begin: *const bool) {
     assert!(
-        HAS_MAIN.load(Ordering::Relaxed) != 1,
+        HAS_MAIN.compare_exchange(0, 1, Ordering::Relaxed, Ordering::Relaxed) == Ok(1),
         "main thread already registered"
     );
-    prepare_thread();
+
     let mut lock = THREADS.threads.lock();
-    prepare_thread();
+    prepare_thread(begin);
     //let tls = get_tls_state() as *mut _;
     lock.push(get_tls_state() as *mut _);
 }

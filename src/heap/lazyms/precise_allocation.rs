@@ -83,7 +83,7 @@ impl PreciseAllocation {
     }
     /// Return cell address, it is always aligned to `Self::HALF_ALIGNMENT`.
     pub fn cell(&self) -> *mut RawGc {
-        let addr = super::Address::from_ptr(self).offset(Self::header_size());
+        let addr = super::super::Address::from_ptr(self).offset(Self::header_size());
         addr.to_mut_ptr()
     }
     /// Return true if raw_ptr is above lower bound
@@ -121,13 +121,9 @@ impl PreciseAllocation {
     pub fn is_empty(&self) -> bool {
         !self.is_marked() //&& !self.is_newly_allocated
     }
-    /// Derop cell if this allocation is not marked.
+    /// Drop cell if this allocation is not marked.
     pub fn sweep(&mut self) {
         if self.has_valid_cell && !self.is_live() {
-            unsafe {
-                let cell = self.cell();
-                std::ptr::drop_in_place((&mut *cell).as_dyn());
-            }
             self.has_valid_cell = false;
         }
     }
@@ -171,8 +167,6 @@ impl PreciseAllocation {
             Self::header_size() + self.cell_size + Self::HALF_ALIGNMENT;
         let base = self.base_pointer();
         unsafe {
-            let cell = self.cell();
-            core::ptr::drop_in_place((&mut *cell).as_dyn());
             dealloc(
                 base.cast(),
                 Layout::from_size_align(adjusted_alignment_allocation_size, Self::ALIGNMENT)

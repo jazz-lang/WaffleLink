@@ -1,25 +1,42 @@
+#![feature(test)]
+
 use wafflelink::safepoint::*;
 use wafflelink::signals::*;
 use wafflelink::threading::*;
-fn main() {
-    install_default_signal_handlers();
-    unsafe {
-        safepoint_init();
+static FOO: i32 = 0;
+use std::sync::atomic::*;
+
+#[derive(Debug)]
+pub struct Node {
+    x: i32,
+    next: Option<Box<Self>>,
+}
+pub struct List {
+    head: Option<Box<Node>>,
+}
+impl List {
+    pub fn new() -> Self {
+        Self { head: None }
     }
-    register_main_thread();
 
-    let t = spawn_rt_thread(|| {
-        let tls = get_tls_state();
-        loop {
-            tls.yieldpoint();
+    pub fn push(&mut self, x: i32) {
+        let node = Box::new(Node {
+            x,
+            next: self.head.take(),
+        });
+        self.head = Some(node);
+    }
+
+    pub fn pop(&mut self) -> Option<Box<Node>> {
+        let mut head = self.head.take();
+        if head.is_none() {
+            return None;
         }
-    });
+        self.head = head.as_mut().unwrap().next.take();
+        head
+    }
+}
 
-    std::thread::sleep(std::time::Duration::from_millis(50));
-
-    safepoint_start_gc();
-
-    let _lock = safepoint_wait_for_the_world();
-    println!("suspended {} threads(s)", _lock.len());
-    safepoint_end_gc();
+fn main() {
+    println!("{}", wafflelink::heap::lazyms::constants::END_ATOM * 16);
 }

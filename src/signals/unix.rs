@@ -20,7 +20,10 @@ unsafe extern "C" fn sigdie_handler(sig: i32, _info: *mut siginfo_t, _context: *
 }
 
 unsafe extern "C" fn segv_handler(sig: i32, info: *mut siginfo_t, context: *mut c_void) {
+    let sp = false;
     if addr_in_safepoint((&*info).si_addr() as _) {
+        let tls = get_tls_state();
+        tls.stack_end = &sp as *const bool as *mut u8;
         set_gc_and_wait();
         return;
     }

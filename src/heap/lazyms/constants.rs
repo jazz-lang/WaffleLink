@@ -1,7 +1,7 @@
 use super::block::*;
 
 /// Block size must be at least as large as the system page size.
-pub const BLOCK_SIZE: usize = 16 * 1024;
+pub const BLOCK_SIZE: usize = 32 * 1024;
 /// Single atom size
 pub const ATOM_SIZE: usize = 16;
 /// Numbers of atoms per block

@@ -10,11 +10,14 @@ edition = "2018"
 memmap = "0.7"
 atomic = "0.5"
 errno = "*"
+flume = "0.10"
 mopa = "0.2"
 parking_lot = "0.11"
 libc = "*"
 bit-set = "*"
+parking_lot_core = "0.8"
 once_cell = "1.5"
+instant = "0.1"
 vec_map = "*"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
@@ -35,3 +38,10 @@ lto = "fat"
 codegen-units = 1
 opt-level = 'z'
 debug = true
+
+[dev-dependencies]
+criterion = "*"
+
+[[bench]]
+name = "bench_atomic"
+harness = false

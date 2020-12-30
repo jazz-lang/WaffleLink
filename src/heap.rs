@@ -5,13 +5,8 @@ use std::sync::atomic::Ordering;
 #[cfg(target_family = "windows")]
 use winapi::um::sysinfoapi::*;
 
-pub mod bitmap;
-pub mod block;
-pub mod block_directory;
-pub mod block_set;
-pub mod constants;
-pub mod precise_allocation;
-pub mod tiny_bloom_filter;
+pub mod accounting;
+pub mod lazyms;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Address(usize);
@@ -253,12 +248,20 @@ impl RawGc {
 }
 
 pub trait HeapObject: mopa::Any {
-    fn visit_references(&self) {
+    #[allow(unused_variables)]
+    fn visit_references(&self, tracer: &mut dyn Tracer) {
         // no-op by default
     }
+    /// Finalizer for heap object.
+    /// This method is not invoked right now...
+    unsafe fn finalize(&self) {}
 
     fn heap_size(&self) -> usize {
         std::mem::size_of_val(self)
+    }
+    #[inline(always)]
+    fn needs_finalization(&self) -> bool {
+        false
     }
 }
 
@@ -282,9 +285,10 @@ pub fn object_ty_of_type<T: HeapObject + Sized>() -> usize {
 
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-pub const GC_WHITE: u8 = 0x0;
-pub const GC_BLACK: u8 = 0x1;
-pub const GC_GRAY: u8 = 0x2;
+pub const GC_WHITE: u8 = 0b00;
+pub const GC_BLACK: u8 = 0b01;
+pub const GC_GRAY: u8 = 0b10;
+pub const GC_FORWARDED: u8 = 0b11;
 
 #[repr(C)]
 pub struct RawGc {
@@ -313,15 +317,21 @@ impl<T: HeapObject> DerefMut for Gc<T> {
 impl RawGc {
     /// Return true if this object is precie allocation
     pub fn is_precise_allocation(&self) -> bool {
-        crate::heap::precise_allocation::PreciseAllocation::is_precise(self as *const _ as *mut _)
+        crate::heap::lazyms::precise_allocation::PreciseAllocation::is_precise(
+            self as *const _ as *mut _,
+        )
     }
     /// Return precise allocation from this object
-    pub fn precise_allocation(&self) -> *mut crate::heap::precise_allocation::PreciseAllocation {
-        crate::heap::precise_allocation::PreciseAllocation::from_cell(self as *const _ as *mut _)
+    pub fn precise_allocation(
+        &self,
+    ) -> *mut crate::heap::lazyms::precise_allocation::PreciseAllocation {
+        crate::heap::lazyms::precise_allocation::PreciseAllocation::from_cell(
+            self as *const _ as *mut _,
+        )
     }
     /// Return block where this cell was allocated
-    pub fn block(&self) -> *mut crate::heap::block::Block {
-        crate::heap::block::Block::from_cell(crate::heap::Address::from_ptr(self))
+    pub fn block(&self) -> *mut crate::heap::lazyms::block::Block {
+        crate::heap::lazyms::block::Block::from_cell(crate::heap::Address::from_ptr(self))
     }
     pub fn vtable(&self) -> usize {
         (self.vtable & (!0x03)) as usize
@@ -381,3 +391,23 @@ pub static PAGESIZE: once_cell::sync::Lazy<usize> = once_cell::sync::Lazy::new(|
         page_size as _
     }
 });
+
+pub trait Tracer {
+    fn trace(&mut self, reference: *const *mut RawGc);
+}
+
+pub trait HeapImpl {
+    fn allocate(&self, size: usize) -> usize;
+    fn major_gc(&self);
+    fn minor_gc(&self);
+    fn gc(&self);
+    #[allow(unused_variables)]
+    fn write_barrier(&self, object: *mut RawGc, field: *mut RawGc) {
+        // no-op
+    }
+}
+
+/// Rounds up `x` to multiple of `divisor`
+pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
+    (x + (divisor - 1)) & !(divisor - 1)
+}
