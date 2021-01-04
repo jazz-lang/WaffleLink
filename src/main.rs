@@ -1,42 +1,40 @@
-#![feature(test)]
+#[macro_use]
+extern crate wafflelink;
 
-use wafflelink::safepoint::*;
-use wafflelink::signals::*;
-use wafflelink::threading::*;
-static FOO: i32 = 0;
-use std::sync::atomic::*;
-
-#[derive(Debug)]
-pub struct Node {
-    x: i32,
-    next: Option<Box<Self>>,
-}
-pub struct List {
-    head: Option<Box<Node>>,
-}
-impl List {
-    pub fn new() -> Self {
-        Self { head: None }
-    }
-
-    pub fn push(&mut self, x: i32) {
-        let node = Box::new(Node {
-            x,
-            next: self.head.take(),
-        });
-        self.head = Some(node);
-    }
-
-    pub fn pop(&mut self) -> Option<Box<Node>> {
-        let mut head = self.head.take();
-        if head.is_none() {
-            return None;
-        }
-        self.head = head.as_mut().unwrap().next.take();
-        head
-    }
-}
+new_const_bitmap!(MyBitmap, 16, 32 * 1024);
 
 fn main() {
-    println!("{}", wafflelink::heap::lazyms::constants::END_ATOM * 16);
+    println!(
+        "{}",
+        wafflelink::heap::align_usize(core::mem::size_of::<MyBitmap>() * 2 + 8 + 2, 16)
+    );
+    let mut heap = Box::new([0u8; 16 * 1024]);
+    let raw = &heap[0] as *const u8 as *mut u8;
+    let mut bitmap = MyBitmap::new(raw);
+    let mut live = MyBitmap::new(raw);
+    bitmap.set(&heap[16 * 32] as *const u8 as *mut u8 as _);
+    live.set(&heap[16 * 3] as *const u8 as usize);
+    live.set(&heap[16 * 36] as *const u8 as usize);
+    live.set(&heap[16 * 32] as *const u8 as usize);
+    live.set(&heap[16 * 38] as *const u8 as *mut u8 as _);
+    unsafe {
+        MyBitmap::sweep_walk(
+            &live,
+            &bitmap,
+            raw as _,
+            heap.last().unwrap() as *const u8 as usize,
+            |cnt, objects| {
+                println!("{:p}", &heap[16 * 36]);
+                let objects = objects as *mut *mut u8;
+                println!(
+                    "free {}:{:p}->{:p}",
+                    cnt,
+                    objects.read(),
+                    objects.offset(cnt as isize - 1).read()
+                );
+            },
+        );
+    }
+
+    drop(heap);
 }

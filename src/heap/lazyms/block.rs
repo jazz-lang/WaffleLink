@@ -1,13 +1,15 @@
-use super::bitmap::*;
 use super::constants::*;
 use crate::heap::*;
+
+new_const_bitmap!(BlockBitmap, ATOM_SIZE, 32 * 1024);
+
 /// Single freelist cell.
 #[repr(C)]
 pub struct FreeCell {
     bytes: u64,
     next: *mut Self,
 }
-
+#[derive(Copy, Clone)]
 /// Singly linked list used as free-list
 pub struct FreeList {
     head: *mut FreeCell,
@@ -66,7 +68,9 @@ pub struct BlockHeader {
     /// If true we didn't sweep this block
     pub unswept: bool,
     /// Mark bitmap
-    pub bitmap: BitMap,
+    pub mark_bitmap: BlockBitmap,
+    /// Live bitmap (cells allocated after last GC).
+    pub live_bitmap: BlockBitmap,
     /// Pointer to block.
     pub block: *mut Block,
 }
@@ -127,7 +131,8 @@ impl Block {
                 unswept: false,
                 can_allocate: true,
                 cell_size: cell_size as _,
-                bitmap: BitMap::new(),
+                mark_bitmap: BlockBitmap::new(memory.cast()),
+                live_bitmap: BlockBitmap::new(memory.cast()),
                 freelist: FreeList::new(),
                 block: memory,
             });
@@ -187,16 +192,16 @@ impl BlockHeader {
         if addr.is_null() {
             self.can_allocate = false;
         }
+        self.live_bitmap.set(addr.to_usize());
         addr
     }
 
     /// Sweep this block.
     pub fn sweep(&mut self, full: bool) -> bool {
-        let mut is_empty = true;
+        /*let mut is_empty = true;
         let mut freelist = FreeList::new();
         let mut count = 0;
 
-        let mut zcount = 0;
         self.for_each_cell(|cell| {
             let object = cell.to_mut_obj();
             if !self.is_marked(cell) {
@@ -217,22 +222,47 @@ impl BlockHeader {
         self.can_allocate = count != 0;
 
         self.freelist = freelist;
-        is_empty
+        is_empty*/
+        let mut freelist = self.freelist;
+        self.unswept = false;
+
+        unsafe {
+            BlockBitmap::sweep_walk(
+                &self.live_bitmap,
+                &self.mark_bitmap,
+                self.block as usize,
+                self.block as usize + BLOCK_SIZE,
+                |count, objects| {
+                    let objects = objects as *mut usize;
+                    for i in 0..count {
+                        let ptr = objects.offset(i as _).read();
+                        if ptr == 0 {
+                            continue;
+                        }
+                        freelist.free(Address::from(ptr));
+                    }
+                },
+            )
+        }
+        self.freelist = freelist;
+        self.can_allocate = !freelist.is_empty();
+        true
     }
     /// Test and set marked.
     pub fn test_and_set_marked(&mut self, p: Address) -> bool {
         /*self.bitmap
         .concurrent_test_and_set(self.atom_number(p) as _)*/
-        let n = self.atom_number(p) as usize;
+        /*let n = self.atom_number(p) as usize;
         if self.bitmap.get(n) {
             return true;
         }
         self.bitmap.set(n);
-        false
+        false*/
+        self.mark_bitmap.atomic_test_and_set(p.to_usize())
     }
     /// Is pointer marked?
     pub fn is_marked(&self, p: Address) -> bool {
-        self.bitmap.get(self.atom_number(p) as _)
+        self.mark_bitmap.test(self.atom_number(p) as _)
     }
     /// Atom number
     pub fn atom_number(&self, p: Address) -> u32 {

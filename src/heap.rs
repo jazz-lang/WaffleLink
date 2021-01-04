@@ -4,9 +4,23 @@ use std::fmt;
 use std::sync::atomic::Ordering;
 #[cfg(target_family = "windows")]
 use winapi::um::sysinfoapi::*;
+#[macro_export]
+macro_rules! round_down_ {
+    ($x: expr,$n: expr) => {
+        $x & !$n
+    };
+}
+#[macro_export]
+macro_rules! round_up_ {
+    ($x: expr,$n: expr) => {{
+        let x = $x;
+        let n = $n;
+        round_down_!(x + n - 1, n)
+    }};
+}
 
 pub mod accounting;
-pub mod lazyms;
+//pub mod lazyms;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Address(usize);
@@ -214,6 +228,7 @@ impl fmt::Display for FormattedSize {
 pub fn formatted_size(size: usize) -> FormattedSize {
     FormattedSize { size }
 }
+
 pub const fn round_down(x: u64, n: u64) -> u64 {
     x & !n
 }
@@ -244,6 +259,49 @@ impl RawGc {
         unsafe {
             (self as *const Self as *const u8).offset(core::mem::size_of::<Self>() as _) as *mut u8
         }
+    }
+}
+impl<T: HeapObject + ?Sized> Copy for Gc<T> {}
+impl<T: HeapObject + ?Sized> Clone for Gc<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: HeapObject + ?Sized> Gc<T> {
+    #[inline(always)]
+    pub unsafe fn raw(&self) -> &mut RawGc {
+        &mut *self.ptr.as_ptr()
+    }
+}
+
+impl Gc<dyn HeapObject> {
+    /// Unchecked downcast from dyn Any to T. For checked cast use `try_downcast`.
+    #[inline(always)]
+    pub unsafe fn downcast<T: ?Sized + HeapObject>(&self) -> Gc<T> {
+        {
+            Gc {
+                ptr: self.ptr,
+                marker: Default::default(),
+            }
+        }
+    }
+    /// Tries to downcast dyn type to T, if this GC object is same as T then returns downcasted pointer,
+    /// otherwise None is returned.
+    #[inline]
+    pub fn try_downcast<T: Sized + HeapObject>(&self) -> Option<Gc<T>> {
+        unsafe {
+            let raw = self.raw();
+            if raw.vtable() == object_ty_of_type::<T>() {
+                return Some(self.downcast::<T>());
+            }
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub fn is<T: Sized + HeapObject>(&self) -> bool {
+        unsafe { self.raw().vtable() == object_ty_of_type::<T>() }
     }
 }
 
@@ -295,7 +353,7 @@ pub struct RawGc {
     vtable: u64,
 }
 
-pub struct Gc<T: HeapObject> {
+pub struct Gc<T: HeapObject + ?Sized> {
     ptr: NonNull<RawGc>,
     marker: PhantomData<T>,
 }
@@ -396,7 +454,16 @@ pub trait Tracer {
     fn trace(&mut self, reference: *const *mut RawGc);
 }
 
+/// Trait for implementing GC.
+///
+///
 pub trait HeapImpl {
+    /// Invoked by runtime when thread is suspended.
+    ///
+    /// Might be used to push thread local write barrier buffers to global one.
+    fn on_thread_stopped_callback(&self) {}
+    fn on_thread_attach_callback(&self) {}
+    fn on_thread_detach_callback(&self) {}
     fn allocate(&self, size: usize) -> usize;
     fn major_gc(&self);
     fn minor_gc(&self);
@@ -410,4 +477,60 @@ pub trait HeapImpl {
 /// Rounds up `x` to multiple of `divisor`
 pub const fn round_up_to_multiple_of(divisor: usize, x: usize) -> usize {
     (x + (divisor - 1)) & !(divisor - 1)
+}
+
+impl<T: HeapObject + ?Sized> HeapObject for Gc<T> {
+    fn heap_size(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    fn visit_references(&self, tracer: &mut dyn Tracer) {
+        unsafe {
+            tracer.trace(std::mem::transmute(&self.ptr));
+        }
+    }
+}
+
+macro_rules! impl_heap_obj_prim {
+    ($($t:ident)*) => {
+        $(
+        impl HeapObject for $t {}
+        )*
+    };
+}
+
+impl_heap_obj_prim!(
+    isize usize i8 u8 i16 u16 i32 u32 i64 u64 i128 u128
+    bool char f32 f64
+);
+impl HeapObject for () {}
+
+/// rounds the given value `val` up to the nearest multiple
+/// of `align`
+pub fn align(value: u32, align: u32) -> u32 {
+    if align == 0 {
+        return value;
+    }
+
+    ((value + align - 1) / align) * align
+}
+
+/// rounds the given value `val` up to the nearest multiple
+/// of `align`
+pub fn align_i32(value: i32, align: i32) -> i32 {
+    if align == 0 {
+        return value;
+    }
+
+    ((value + align - 1) / align) * align
+}
+
+/// rounds the given value `val` up to the nearest multiple
+/// of `align`.
+pub fn align_usize(value: usize, align: usize) -> usize {
+    if align == 0 {
+        return value;
+    }
+
+    ((value + align - 1) / align) * align
 }

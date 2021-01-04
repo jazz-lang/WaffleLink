@@ -18,7 +18,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
     }
 
     pub const fn offset_to_index(offset: usize) -> usize {
-        offset / ALIGNMENT * (size_of::<usize>() * 8)
+        offset / ALIGNMENT / (size_of::<usize>() * 8)
     }
 
     pub const fn index_to_offset(index: usize) -> isize {
@@ -93,7 +93,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
             return;
         }
 
-        let buffer_size = size_of::<isize>() * (size_of::<isize>() * 8);
+        let buffer_size = core::mem::size_of::<isize>() * (core::mem::size_of::<isize>() * 8);
 
         let live = live_bitmap.bitmap_begin;
         let mark = mark_bitmap.bitmap_begin;
@@ -103,11 +103,11 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
         let mut pointer_buf = vec![0usize; buffer_size];
         let mut cur_pointer = pointer_buf.as_mut_ptr();
         let pointer_end =
-            cur_pointer.offset(buffer_size as isize - (size_of::<usize>() * 8) as isize);
+            cur_pointer.offset(buffer_size as isize - (core::mem::size_of::<usize>() * 8) as isize);
 
         for i in start..=end {
-            let mut garbage = (&*live.offset(i as _)).load(Ordering::Relaxed)
-                & !((&*mark.offset(i as _)).load(Ordering::Relaxed));
+            let mut garbage = (&*live.offset(i as _)).load(atomic::Ordering::Relaxed)
+                & !((&*mark.offset(i as _)).load(atomic::Ordering::Relaxed));
             if garbage != 0 {
                 let ptr_base = Self::index_to_offset(i) + live_bitmap.heap_begin as isize;
                 let ptr_base = ptr_base as usize;
@@ -118,9 +118,10 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                     cur_pointer = cur_pointer.offset(1);
                     garbage != 0
                 } {}
+
                 if cur_pointer >= pointer_end {
                     callback(
-                        cur_pointer as usize - pointer_buf.as_ptr() as usize,
+                        cur_pointer.offset_from(pointer_buf.as_ptr()) as _,
                         pointer_buf.as_ptr() as usize,
                     );
                     cur_pointer = pointer_buf.as_ptr() as *mut _;
@@ -128,13 +129,14 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
             }
         }
 
-        if cur_pointer >= pointer_end {
+        if cur_pointer >= &mut pointer_buf[0] as *mut _ {
             callback(
-                cur_pointer as usize - pointer_buf.as_ptr() as usize,
+                cur_pointer.offset_from(pointer_buf.as_ptr()) as _,
                 pointer_buf.as_ptr() as usize,
             );
         }
     }
+
     #[inline]
     pub fn atomic_test_and_set(&self, object: usize) -> bool {
         unsafe {
@@ -181,8 +183,8 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
             let index_start = Self::offset_to_index(offset_start);
             let index_end = Self::offset_to_index(offset_end);
 
-            let bit_start = (offset_start / ALIGNMENT) * (size_of::<usize>() * 8);
-            let bit_end = (offset_end / ALIGNMENT) * (size_of::<usize>() * 8);
+            let bit_start = (offset_start / ALIGNMENT) * (core::mem::size_of::<usize>() * 8);
+            let bit_end = (offset_end / ALIGNMENT) * (core::mem::size_of::<usize>() * 8);
 
             let mut left_edge = self
                 .bitmap_begin
@@ -200,20 +202,21 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                         let shift = left_edge.trailing_zeros() as usize;
                         let obj = ptr_base + shift * ALIGNMENT;
                         visitor(obj);
-                        left_edge ^= 1 << shift;
+                        left_edge ^= 1usize.wrapping_shl(shift as _);
                         left_edge != 0
                     } {}
                 }
 
                 for i in index_start + 1..index_end {
-                    let mut w = (&*self.bitmap_begin.offset(i as _)).load(Ordering::Relaxed);
+                    let mut w =
+                        (&*self.bitmap_begin.offset(i as _)).load(atomic::Ordering::Relaxed);
                     if w != 0 {
                         let ptr_base = Self::index_to_offset(i) as usize + self.heap_begin;
                         while {
                             let shift = w.trailing_zeros() as usize;
                             let obj = ptr_base + shift * ALIGNMENT;
                             visitor(obj);
-                            w ^= 1 << shift;
+                            w ^= 1usize.wrapping_shl(shift as _);
                             w != 0
                         } {}
                     }
@@ -232,7 +235,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                 right_edge = left_edge;
             }
 
-            right_edge &= (1 << bit_end) - 1;
+            right_edge &= (1usize.wrapping_shl(bit_end as _)) - 1;
 
             if right_edge != 0 {
                 let ptr_base = Self::index_to_offset(index_end) as usize + self.heap_begin;
@@ -240,7 +243,7 @@ impl<const ALIGNMENT: usize> SpaceBitmap<ALIGNMENT> {
                     let shift = right_edge.trailing_zeros() as usize;
                     let obj = ptr_base + shift * ALIGNMENT;
                     visitor(obj);
-                    right_edge ^= 1 << shift;
+                    right_edge ^= 1usize.wrapping_shl(shift as _);
                     right_edge != 0
                 } {}
             }

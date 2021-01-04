@@ -1,4 +1,4 @@
-#![feature(thread_local)]
+#![feature(thread_local, min_specialization, const_maybe_uninit_assume_init)]
 #[macro_use]
 extern crate mopa;
 pub trait IntoAtomic {
@@ -34,8 +34,34 @@ macro_rules! as_atomic {
     };
 }
 
+/// Creates struct with layout suitable for big or little endian machine
+#[macro_export]
+macro_rules! lohi_struct {
+    (struct $name : ident {
+        $field1: ident : $t: ty,
+        $field2: ident : $t2: ty,
+    }) => {
+        #[derive(Copy, Clone, PartialEq, Eq)]
+        #[repr(C)]
+        #[cfg(target_endian = "big")]
+        pub struct $name {
+            pub $field2: $t2,
+            pub $field1: $t,
+        }
+        #[derive(Copy, Clone, PartialEq, Eq)]
+        #[repr(C)]
+        #[cfg(target_endian = "little")]
+        pub struct $name {
+            pub $field1: $t,
+            pub $field2: $t,
+        }
+    };
+}
+
+pub mod callframe;
 pub mod heap;
 pub mod mutex;
+pub mod object;
 pub mod safepoint;
 pub mod signals;
 pub mod threading;

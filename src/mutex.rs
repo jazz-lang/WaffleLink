@@ -162,7 +162,7 @@ unsafe impl lock_api::RawMutex for Mutex {
             .compare_exchange_weak(0, LOCKED_BIT, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            self.lock_slow::<{ true }>(None);
+            self.lock_slow::<true>(None);
         }
         unsafe { deadlock::acquire_resource(self as *const _ as usize) };
     }
@@ -244,7 +244,7 @@ unsafe impl lock_api::RawMutexTimed for Mutex {
         {
             true
         } else {
-            self.lock_slow::<{ true }>(Some(timeout))
+            self.lock_slow::<true>(Some(timeout))
         };
         if result {
             unsafe { deadlock::acquire_resource(self as *const _ as usize) };
@@ -261,7 +261,7 @@ unsafe impl lock_api::RawMutexTimed for Mutex {
         {
             true
         } else {
-            self.lock_slow::<{ true }>(to_deadline(timeout))
+            self.lock_slow::<true>(to_deadline(timeout))
         };
         if result {
             unsafe { deadlock::acquire_resource(self as *const _ as usize) };
@@ -281,7 +281,7 @@ impl Mutex {
             .compare_exchange_weak(0, LOCKED_BIT, Ordering::Acquire, Ordering::Relaxed)
             .is_err()
         {
-            self.lock_slow::<{ false }>(None);
+            self.lock_slow::<false>(None);
         }
         unsafe { deadlock::acquire_resource(self as *const _ as usize) };
     }
