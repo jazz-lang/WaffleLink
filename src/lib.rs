@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use std::sync::atomic::AtomicU8;
+use std::{mem::size_of, sync::atomic::AtomicU8};
 #[macro_export]
 macro_rules! log {
     ($($arg: tt)*) => {
@@ -144,7 +144,7 @@ impl JITStubs {
 }
 pub static LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 impl VM {
-    pub fn new(_stack_start: *const bool) -> Self {
+    pub fn new(_stack_start: *const bool) -> Box<Self> {
         let mut this = Self {
             top_call_frame: std::ptr::null_mut(),
             exception: value::Value::undefined(),
@@ -180,7 +180,7 @@ impl VM {
         this.not_a_func_exc = value::Value::from(
             object::WaffleString::new(&mut this.heap, "function value expected").cast(),
         );
-        this
+        Box::new(this)
     }
     pub fn top_call_frame(&self) -> Option<&mut interpreter::callframe::CallFrame> {
         if self.top_call_frame.is_null() {
@@ -223,8 +223,8 @@ impl VM {
 
     pub fn allocate<T>(&mut self, val: T) -> object::Ref<T> {
         unsafe {
-            let mem = self.heap.allocate(std::mem::size_of::<T>());
-            mem.to_mut_ptr::<T>().write(val);
+            let mem = libc::malloc(size_of::<T>());
+            mem.cast::<T>().write(val);
             std::mem::transmute(mem)
         }
     }

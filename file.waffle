@@ -20,15 +20,8 @@ LinkedList.prototype.pop = function lpop(val) {
     return val
 }
 
-let ls = new LinkedList()
-var i = 0
-ls.push(42)
-ls.push(3)
-ls.push(4)
-while i  < 100 {
-    print(i)
-    ls.push(i)
-    i = i + 1
+
+let i = 0
+while (i < 1000) {
+   i = i + 1
 }
-print(ls)
-print(ls.pop())

@@ -57,7 +57,7 @@ impl Heap {
         }
     }
     pub fn allocate(&mut self, size: usize) -> Address {
-        let sc = Self::size_class_for(size);
+        /*let sc = Self::size_class_for(size);
         if sc == LARGE_SIZE {
             println!("{}", size);
             todo!("Large classes is not yet supported")
@@ -82,7 +82,8 @@ impl Heap {
             }
             self.size_classes[sc].push(block::HeapBlock::new(Self::size_class_size_for(sc)));
             (&mut **self.size_classes[sc].last_mut().unwrap()).allocate()
-        }
+        }*/
+        unsafe { Address::from_ptr(libc::malloc(size)) }
     }
 
     fn get_heap_block(object: Address) -> *mut block::HeapBlock {
@@ -223,6 +224,7 @@ impl Heap {
         mark_stack
     }
     pub fn collect(&mut self, sp: Address) {
+        return;
         log!("start gc after {} allocated bytes ", self.allocated);
         let mut mark_stack = self.collect_roots(sp);
         // marking

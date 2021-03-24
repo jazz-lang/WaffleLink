@@ -695,12 +695,13 @@ impl<'a> JIT<'a> {
                     self.masm.call_ptr_argc(store_global as _, 3);
                 }
                 Ins::LoadGlobal(dest, ix) => {
-                    extern "C" fn load_global(cf: &mut CallFrame, key: u32) -> WaffleResult {
+                    unsafe extern "C" fn load_global(cf: &mut CallFrame, key: u32) -> WaffleResult {
                         let c = cf.code_block.unwrap().get_constant(
                             virtual_register::VirtualRegister::new_constant_index(key as _),
                         );
+                        libc::printf(b"%p\n".as_ptr().cast(), c.as_cell().ptr);
                         if c.is_cell() && c.as_cell().is_string() {
-                            //     println!("cell {}", c.as_cell().cast::<WaffleString>().str());
+                            println!("cell {}", c.as_cell().cast::<WaffleString>().str());
                             let val = get_vm()
                                 .globals
                                 .lookup(c.as_cell().cast::<WaffleString>().str());

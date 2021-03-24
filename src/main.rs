@@ -52,7 +52,7 @@ fn main() {
     vm.verbose_alloc = opt.verbose_alloc;
     vm.jit_threshold = opt.jit_threshold as _;
     wafflelink::LOG.store(opt.verbose, std::sync::atomic::Ordering::Relaxed);
-    set_vm(&vm);
+    set_vm(&*vm);
     runtime::initialize();
     let reader = Reader::from_file(opt.input.as_os_str().to_str().unwrap()).unwrap();
     let mut ast = vec![];

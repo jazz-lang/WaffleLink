@@ -335,6 +335,7 @@ impl Value {
         }
     }
     pub fn as_cell(self) -> Ref<Obj> {
+        assert!(self.is_cell());
         unsafe { self.u.cell }
     }
     pub fn as_cell_ref<'a>(&'a self) -> &'a Ref<Obj> {
